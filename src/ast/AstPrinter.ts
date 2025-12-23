@@ -8,7 +8,7 @@ export class AstPrinter implements ExprVisitor<string> {
         return expr.accept(this);
     }
     visitAssignExpr(expr: AssignExpr): string {
-        return this.parenthesize("=", expr.name.lexeme, expr.value);
+        return this.parenthesize("=", expr.var.name.lexeme, expr.value);
     }
     visitConditionalExpr(expr: ConditionalExpr): string {
         return this.parenthesize("?", expr.condition, expr.trueExpr, expr.falseExpr);
@@ -53,7 +53,7 @@ export class AstPrinter implements ExprVisitor<string> {
     }
 
     visitVariableExpr(expr: VariableExpr): string {
-        return expr.name.lexeme;
+        return expr.var_.name.lexeme;
     }
 
     private parenthesize(name: string, ...exprs: (Expr | string)[]): string {

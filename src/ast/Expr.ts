@@ -1,4 +1,6 @@
+import { GrusType } from "./GrusType";
 import { GrusValue } from "./GrusValue";
+import { Variable } from "./Identifier";
 import { Token } from "./Token";
 
 
@@ -28,11 +30,11 @@ export interface ExprVisitor<R> {
  * 赋值表达式
  */
 export class AssignExpr extends Expr {
-    name: Token;
+    var_: Variable;
     value: Expr;
-    constructor(name: Token, value: Expr) {
+    constructor(name: Variable, value: Expr) {
         super();
-        this.name = name;
+        this.var_= name;
         this.value = value;
     }
     accept<R>(visitor: ExprVisitor<R>): R {
@@ -226,10 +228,10 @@ export class GroupingExpr extends Expr {
 
 
 export class VariableExpr extends Expr {
-    name: Token;
-    constructor(name: Token) {
+    var_: Variable;
+    constructor(var_: Variable) {
         super();
-        this.name = name;
+        this.var_ = var_;
     }
     accept<R>(visitor: ExprVisitor<R>): R {
         return visitor.visitVariableExpr(this);

@@ -1,6 +1,8 @@
 import { Token } from "@/ast/Token";
 import { Parser } from "./parser/Parser";
 import { Scanner } from "./parser/Scanner";
+import { Compiler } from "./execute/compiler";
+import { Resolver } from "./execute/Resolver";
 
 
 export class Grus {
@@ -16,15 +18,13 @@ export class Grus {
         const parser = new Parser(tokens, this.parserErrorHandler.bind(this));
         const statements = parser.parse();
         console.log(statements);
-        // const statements = parser.parse();
-        // console.log(statements);
-        // if (!statements) {
-        //     throw new Error('解析失败');
-        // }
-        // const interpreter = new Interpreter(this.interpreterErrorHandler.bind(this));
-        // const resolver = new Resolver(interpreter, this.resolverErrorHandler.bind(this));
-        // resolver.resolveAll(statements);
-        // interpreter.interpret(statements);
+        if (!statements) {
+            throw new Error('解析失败');
+        }
+        const resolver = new Resolver(this.resolverErrorHandler.bind(this));
+        resolver.resolveProgram(statements);
+        const compiler = new Compiler(this.compilerErrorHandler.bind(this));
+        compiler.compileProgram(statements);
     }
 
     scnnerErrorHandler(line: number, column: number, message: string) {
@@ -33,14 +33,20 @@ export class Grus {
     }
     parserErrorHandler(token: Token, message: string) {
         for (let i = 0; i < token.lexeme.length; i++) {
-            this.reportError(token.line, token.column -i);
+            this.reportError(token.line, token.column - i);
         }
         console.error(`parser error [${token.line}:${token.column}] ${message}`);
     }
     resolverErrorHandler(token: Token, message: string) {
         for (let i = 0; i < token.lexeme.length; i++) {
-            this.reportError(token.line, token.column -i);
+            this.reportError(token.line, token.column - i);
         }
         console.error(`resolver error [${token.line}:${token.column}] ${message}`);
+    }
+    compilerErrorHandler(token: Token, message: string) {
+        for (let i = 0; i < token.lexeme.length; i++) {
+            this.reportError(token.line, token.column - i);
+        }
+        console.error(`compiler error [${token.line}:${token.column}] ${message}`);
     }
 }

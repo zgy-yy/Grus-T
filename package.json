@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "ir": "/opt/homebrew/opt/llvm/bin/lli \"src/llvm ir/ir.ll\""
   },
   "devDependencies": {
     "@types/node": "^24.10.1",

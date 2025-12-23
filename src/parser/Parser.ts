@@ -2,10 +2,17 @@ import { Token } from "@/ast/Token";
 import { ParserErrorHandler } from "./ErrorHandler";
 import { TokenType } from "@/ast/TokenType";
 import { AssignExpr, BinaryExpr, Expr, LiteralExpr, PostfixExpr, ThisExpr, UnaryExpr, VariableExpr } from "@/ast/Expr";
-import { ExpressionStmt, Stmt, VarStmt } from "@/ast/Stmt";
+import { ExpressionStmt, FunctionStmt, Stmt, VarStmt } from "@/ast/Stmt";
 import { PrimitiveType, GrusType } from "@/ast/GrusType";
+import { Parameter, Variable } from "@/ast/Identifier";
 
-class ParseError extends Error { }
+class SyntaxError extends Error {
+    public token: Token;
+    constructor(token: Token, message: string) {
+        super(message);
+        this.token = token;
+    }
+}
 
 class TypeParseError extends Error { }
 
@@ -47,7 +54,7 @@ type ParseRule = [
 export class Parser {
     private current: number = 0;
     private readonly tokens: Token[];
-    public parseError: ParserErrorHandler;
+    public errorHandler: ParserErrorHandler;
 
     private rules: Record<TokenType, ParseRule> = {
         [TokenType.Dot]: [null, null, Precedence.NONE],//.
@@ -129,9 +136,9 @@ export class Parser {
         [TokenType.Return]: [null, null, Precedence.NONE],// return
     };
 
-    constructor(tokens: Token[], error: ParserErrorHandler) {
+    constructor(tokens: Token[], errorHandler: ParserErrorHandler) {
         this.tokens = tokens;
-        this.parseError = error;
+        this.errorHandler = errorHandler;
     }
 
     /**
@@ -144,12 +151,12 @@ export class Parser {
         const statements: Stmt[] = [];
         while (!this.isAtEnd()) {
             try {
-                const stmt = this.declaration();
+                const stmt = this.declaration(true);
                 if (stmt) {
-                    statements.push(stmt);
+                    statements.push(...stmt);
                 }
             } catch (error) {
-                if (error instanceof ParseError) {
+                if (error instanceof SyntaxError) {
                     this.synchronize();
                 } else {
                     throw error;
@@ -161,7 +168,7 @@ export class Parser {
 
     /**
      * 声明
-     * declaration → varDecl | funDecl | statement
+     * declaration → varDecl | funDecl 
      * 声明由变量声明、函数声明和语句组成
      * 例如：
      * let a = 1;
@@ -171,34 +178,31 @@ export class Parser {
      * }
      * print a;
      */
-    private declaration(): Stmt | null {
-        try {
-            if (this.match(TokenType.Let)) {
-                return this.varDeclaration(null);
-            }
-            if (this.check(TokenType.Identifier)) {
-                const saved = this.current;
-                const type = this.type(); // 解析类型表达式
-                if (type === null) {//如果类型表达式解析失败，则回退
-                    this.current = saved;
-                } else {
-                    return this.varDeclaration(type);
-                }
-            }
-            if (this.match(TokenType.Fun)) {
-                // return this.funDeclaration();
-            }
-            if (this.match(TokenType.Class)) {
-                // return this.classDeclaration();
-            }
-            return this.statement();
-        } catch (error) {
-            if (error instanceof ParseError) {
-                this.synchronize();
-                return null;
-            }
-            throw error;
+    private declaration(program: boolean = false): Stmt[] | null {
+        if (this.match(TokenType.Let)) {
+            return this.varDeclaration(null);
         }
+        if (this.check(TokenType.Identifier)) {
+            const saved = this.current;
+            const type = this.type(); // 解析类型表达式
+            //如果下一个token是标识符，则解析变量声明
+            if (this.check(TokenType.Identifier)) {
+                return this.varDeclaration(type);
+            } else {
+                //如果下一个token不是标识符，则回退
+                this.current = saved;
+            }
+        }
+        if (this.match(TokenType.Fun)) {
+            return [this.funDeclaration()];
+        }
+        if (this.match(TokenType.Class)) {
+            // return this.classDeclaration();
+        }
+        if (program) {
+            throw this.error(this.peek(), "Expect declaration.");
+        }
+        return [this.statement()];
     }
 
 
@@ -206,12 +210,69 @@ export class Parser {
      * 解析 let 变量声明
      * let IDENTIFIER ( "=" expression )? ";" 
      */
-    private varDeclaration(t: GrusType | null): VarStmt {
-        const name = this.consume(TokenType.Identifier, "Expect variable name.");
-        const initializer = this.match(TokenType.Equal) ? this.expression() : null;
+    private varDeclaration(t: GrusType | null): VarStmt[] {
+        const varStmts: VarStmt[] = [];
+        do {
+            const name = this.consume(TokenType.Identifier, "Expect variable name.");
+            const initializer = this.match(TokenType.Equal) ? this.expression(Precedence.ASSIGNMENT) : null;
+            const variable = new Variable(name, t);
+            varStmts.push(new VarStmt(variable, t, initializer));
+        } while (this.match(TokenType.Comma));
         this.consume(TokenType.Semicolon, "Expect ';' after variable declaration.");
-        // 修复Type参数不兼容tsc的报错，确保Type类型是本地ast/Type而非TypeScript的Type
-        return new VarStmt(name, t, initializer);
+        return varStmts;
+    }
+
+    private funDeclaration(): FunctionStmt {
+        const name = this.consume(TokenType.Identifier, "Expect function name.");
+        this.consume(TokenType.LeftParen, "Expect '(' after function name.");
+        const parameters: Parameter[] = [];
+        if (!this.check(TokenType.RightParen)) {
+            do {
+                if (parameters.length >= 255) {
+                    this.error(this.previous(), "Can't have more than 255 parameters.");
+                }
+                const parameter = this.parameter();
+                parameters.push(...parameter);
+            } while (this.match(TokenType.Comma));
+        }
+        this.consume(TokenType.RightParen, "Expect ')' after parameters.");
+        const returnType = this.type();
+        console.log('returnType', returnType);
+        this.consume(TokenType.LeftBrace, "Expect '{' after parameters.");
+        const body = this.block();
+        return new FunctionStmt(name, parameters, returnType, body);
+    }
+
+    /**
+     * 解析参数
+     * parameter → typeExpr IDENTIFIER ( "=" expression )?
+     */
+    private parameter(): Parameter[] {
+        const type = this.type();
+        const parameters: Parameter[] = [];
+        do {
+            const saved = this.current;
+            const name = this.consume(TokenType.Identifier, "Expect parameter name.");
+            if (!(this.check(TokenType.Comma) || this.check(TokenType.Equal) || this.check(TokenType.RightParen))) {
+                this.current = saved - 1;
+                return parameters
+            }
+            const defaultValue = this.match(TokenType.Equal) ? this.expression(Precedence.ASSIGNMENT) : null;
+            parameters.push(new Parameter(name, type, defaultValue));
+        } while (this.match(TokenType.Comma));
+        return parameters;
+    }
+
+    private block(): Stmt[] {
+        const statements: Stmt[] = [];
+        while (!this.check(TokenType.RightBrace) && !this.isAtEnd()) {
+            const stmt = this.declaration();
+            if (stmt) {
+                statements.push(...stmt);
+            }
+        }
+        this.consume(TokenType.RightBrace, "Expect '}' after block.");
+        return statements;
     }
 
     private statement(): Stmt {
@@ -225,8 +286,9 @@ export class Parser {
         return new ExpressionStmt(expr);
     }
 
-    private expression(): Expr {
-        return this.parsePrecedence(Precedence.COMMA);
+    //默认优先级为逗号 ，声明时应该指定优先级
+    private expression(p: Precedence = Precedence.COMMA): Expr {
+        return this.parsePrecedence(p);
     }
 
     private parsePrecedence(precedence: number): Expr {
@@ -234,7 +296,7 @@ export class Parser {
 
         const prefix = this.rules[token.type][0];
         if (!prefix) {
-            throw this.parseError(token, "Expect expression.");
+            throw this.error(token, "Expect expression.");
         }
         let expr = prefix(token);
 
@@ -243,7 +305,7 @@ export class Parser {
             token = this.advance();
             const infix = this.rules[token.type][1];
             if (!infix) {
-                throw this.parseError(token, "Expect expression..");
+                throw this.error(token, "Expect expression..");
             }
             expr = infix(expr, token);
         }
@@ -259,9 +321,10 @@ export class Parser {
             //todo 赋值运算符需要检查左值是否可赋值
             if (left instanceof VariableExpr) {
                 const right = this.parsePrecedence(precedence);
-                return new AssignExpr(left.name, right);
+                const variable = left.var_;
+                return new AssignExpr(variable, right);
             }
-            this.parseError(operator, "Invalid assignment target.");
+            this.error(operator, "Invalid assignment target.");
         }
         const right = this.parsePrecedence(precedence + 1);
         return new BinaryExpr(left, operator, right);
@@ -290,21 +353,19 @@ export class Parser {
             case TokenType.This:
                 return new ThisExpr(token);
             case TokenType.Identifier:
-                return new VariableExpr(token);
+                const variable = new Variable(token, null);
+                return new VariableExpr(variable);
             case TokenType.LeftParen:
                 return this.expression();
             default:
-                throw this.parseError(token, "Expect expression.");
+                throw this.error(token, "Expect expression.");
         }
     }
 
 
-    private type(): GrusType | null {
+    private type(): GrusType {
         const name = this.consume(TokenType.Identifier, "Expect type name.");
-        if (this.check(TokenType.Identifier)) {
-            return new PrimitiveType(name);
-        }
-        return null;
+        return new PrimitiveType(name.lexeme);
     }
 
 
@@ -321,7 +382,7 @@ export class Parser {
         if (this.match(type)) {
             return this.previous();
         }
-        throw this.parseError(this.peek(), message);
+        throw this.error(this.peek(), message);
     }
 
     /**
@@ -397,6 +458,7 @@ export class Parser {
  * */
     private synchronize(): void {
         this.advance();
+        console.log("synchronize");
         while (!this.isAtEnd()) {
             if (this.previous().type === TokenType.Semicolon) return;
             switch (this.peek().type) {
@@ -411,6 +473,11 @@ export class Parser {
             }
             this.advance();
         }
+    }
+
+    private error(token: Token, message: string): SyntaxError {
+        this.errorHandler(token, message);
+        return new SyntaxError(token, message);
     }
 
 }

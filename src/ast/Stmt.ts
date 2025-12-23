@@ -1,6 +1,7 @@
 import { Expr } from "@/ast/Expr";
 import { Token } from "@/ast/Token";
 import { GrusType } from "@/ast/GrusType";
+import { Parameter, Variable } from "./Identifier";
 
 
 
@@ -115,13 +116,13 @@ export class ExpressionStmt extends Stmt {
 }
 
 export class VarStmt extends Stmt {
-    name: Token;
-    type: GrusType | null;
+    var: Variable;
+    type: GrusType ;
     initializer: Expr | null;
-    constructor(name: Token, type: GrusType | null, initializer: Expr | null) {
+    constructor(var_: Variable, type: GrusType | null, initializer: Expr | null) {
         super();
-        this.name = name;
-        this.type = type;
+        this.var = var_;
+        this.type = type as GrusType;
         this.initializer = initializer;
     }
     accept<R>(visitor: StmtVisitor<R>): R {
@@ -131,13 +132,15 @@ export class VarStmt extends Stmt {
 
 export class FunctionStmt extends Stmt {
     name: Token;
-    parameters: Token[];
+    parameters: Parameter[];
     body: Stmt[];
-    constructor(name: Token, parameters: Token[], body: Stmt[]) {
+    returnType: GrusType;
+    constructor(name: Token, parameters: Parameter[], returnType: GrusType | null, body: Stmt[]) {
         super();
         this.name = name;
         this.parameters = parameters;
         this.body = body;
+        this.returnType = returnType as GrusType;
     }
     accept<R>(visitor: StmtVisitor<R>): R {
         return visitor.visitFunctionStmt(this);

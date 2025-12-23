@@ -4,5 +4,26 @@ declaration    → classDecl
                | varDecl;
 
 varDecl        → ("let"|typeExpr) IDENTIFIER  ( "=" expression )? ";" ;
+funDecl        → "fun" function ;
+
+
+statement      → exprStmt
+               | forStmt
+               | ifStmt
+               | printStmt
+               | returnStmt
+               | whileStmt
+               | block ;
+
+
+function       → IDENTIFIER "(" parameters? ")" (":" typeExpr)? block ;
+parameters     → parameter ( "," parameter )* ;
+parameter      → typeExpr IDENTIFIER (=expression) ;
+
+block          → "{" declaration* | statement* "}" ;
+
+expression     → assignment ;
 
 typeExpr       →  IDENTIFIER([])?
+
+

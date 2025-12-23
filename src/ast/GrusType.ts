@@ -10,12 +10,20 @@ export interface TypesVisitor<R> {
 }
 
 export class PrimitiveType extends GrusType {
-    name: Token;
-    constructor(name: Token) {
+    name: string;
+    constructor(name: string) {
         super();
         this.name = name;
     }
     accept<R>(visitor: TypesVisitor<R>): R {
         return visitor.visitPrimitiveType(this);
     }
+}
+
+
+export function sameType(type1: GrusType, type2: GrusType): boolean {
+    if (type1 instanceof PrimitiveType && type2 instanceof PrimitiveType) {
+        return type1.name === type2.name;
+    }
+    return false;
 }
