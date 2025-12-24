@@ -3,7 +3,7 @@ import { ParserErrorHandler } from "./ErrorHandler";
 import { TokenType } from "@/ast/TokenType";
 import { AssignExpr, BinaryExpr, CallExpr, Expr, LiteralExpr, PostfixExpr, ThisExpr, UnaryExpr, VariableExpr } from "@/ast/Expr";
 import { ExpressionStmt, FunctionStmt, Parameter, Stmt, VarStmt } from "@/ast/Stmt";
-import { PrimitiveType, TypeExpr, VoidType } from "@/ast/TypeExpr";
+import { PrimitiveType, TypeExpr } from "@/ast/TypeExpr";
 
 class SyntaxError extends Error {
     public token: Token;
@@ -236,7 +236,6 @@ export class Parser {
         }
         this.consume(TokenType.RightParen, "Expect ')' after parameters.");
         const returnType = this.type();
-        console.log('returnType', returnType);
         this.consume(TokenType.LeftBrace, "Expect '{' after parameters.");
         const body = this.block();
         return new FunctionStmt(name, parameters, returnType, body);
@@ -470,7 +469,6 @@ export class Parser {
  * */
     private synchronize(): void {
         this.advance();
-        console.log("synchronize");
         while (!this.isAtEnd()) {
             if (this.previous().type === TokenType.Semicolon) return;
             switch (this.peek().type) {

@@ -26,9 +26,8 @@ export class Resolver implements ExprVisitor<TypeExpr>, StmtVisitor<void> {
         globalScope.set("printf", { type: new FunctionType(new PrimitiveType("i32"), [new PrimitiveType("i8*"), new TempOmittedType()]), defined: true });
         for (const stmt of nodes) {
             this.resolveStmt(stmt);
-        }
-        console.log(this.scopes);
-        // this.endScope();
+        }   
+        this.endScope();
     }
     resolveStmt(stmt: Stmt): void {
         stmt.accept(this);
@@ -135,9 +134,13 @@ export class Resolver implements ExprVisitor<TypeExpr>, StmtVisitor<void> {
     }
 
     visitAssignExpr(expr: AssignExpr): TypeExpr {
-        const type = this.resolveLocal(expr.name);
-        expr.type = type;
-        return type;
+        const leftType = this.resolveLocal(expr.name);
+        const rightType = this.resolveExpr(expr.value);
+        if (!sameType(leftType, rightType)) {
+            this.error(expr.name, `Type mismatch: ${leftType} != ${rightType}`);
+        }
+        expr.type = leftType;
+        return leftType;
     }
     visitConditionalExpr(expr: ConditionalExpr): TypeExpr {
         throw new Error("Method not implemented.");

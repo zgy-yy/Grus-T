@@ -16,7 +16,7 @@ export class Compiler implements ExprVisitor<[IrSegment, Reg]>, StmtVisitor<IrSe
         this.error = error;
     }
 
-    compileProgram(nodes: Stmt[]): void {
+    compileProgram(nodes: Stmt[]): string {
         this.beginScope();
         this.scopes[this.scopes.length - 1].set("printf", "@printf");
         for (const stmt of nodes) {
@@ -26,7 +26,7 @@ export class Compiler implements ExprVisitor<[IrSegment, Reg]>, StmtVisitor<IrSe
             this.code = global + this.code;
         }
         this.endScope();
-        console.log(this.code);
+        return this.code;
     }
 
     compileStmt(stmt: Stmt): string {
@@ -168,8 +168,6 @@ export class Compiler implements ExprVisitor<[IrSegment, Reg]>, StmtVisitor<IrSe
         if (code) {
             ir_code += code;
         }
-
-        console.log(expr.arguments);
         const paramTypes = expr.arguments.map(argument => argument.type.accept(this));
 
         ir_code += `call ${calleeType} ${callee}(${argsRegs.map((arg, index) => `${paramTypes[index]} ${arg}`).join(", ")})\n`;

@@ -25,8 +25,6 @@ const isErrorAt = (line: number, column: number) =>
 
 // 代码内容
 const vContent = content.split('\n');
-
-
 // 解析代码
 const reportError = (line: number, column: number) => {
     errorCursor.push({ line, column });
@@ -34,7 +32,8 @@ const reportError = (line: number, column: number) => {
 
 try {
     const grus = new Grus(content, reportError);
-    grus.run();
+    const code = grus.run();
+    console.log(code);
 } catch (e) {
     console.error(e);
 }

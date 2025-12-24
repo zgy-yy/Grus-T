@@ -11,7 +11,7 @@ export class Grus {
         this.reportError = reportError;
     }
 
-    run() {
+    run(): string {
         const scanner = new Scanner(this.source, this.scnnerErrorHandler.bind(this));
         const tokens = scanner.scanTokens();
         // const parser = new Parser(tokens, this.parserErrorHandler.bind(this));
@@ -24,7 +24,7 @@ export class Grus {
         const resolver = new Resolver(this.resolverErrorHandler.bind(this));
         resolver.resolveProgram(statements);
         const compiler = new Compiler(this.compilerErrorHandler.bind(this));
-        compiler.compileProgram(statements);
+        return compiler.compileProgram(statements);
     }
 
     scnnerErrorHandler(line: number, column: number, message: string) {
