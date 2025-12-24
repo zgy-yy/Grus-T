@@ -3,6 +3,7 @@ import { FunctionType, PrimitiveType, TempOmittedType, TypesVisitor, VoidType } 
 import { BlockStmt, BreakStmt, ClassStmt, ContinueStmt, ExpressionStmt, ForStmt, FunctionStmt, IfStmt, ReturnStmt, StmtVisitor, VarStmt, WhileStmt } from "@/ast/Stmt";
 import { Stmt } from "@/ast/Stmt";
 import { CompilerErrorHandler } from "@/parser/ErrorHandler";
+import { TokenType } from "@/ast/TokenType";
 
 type Reg = string;
 type IrSegment = string;
@@ -43,27 +44,28 @@ export class Compiler implements ExprVisitor<[IrSegment, Reg]>, StmtVisitor<IrSe
     }
     visitVarStmt(stmt: VarStmt): IrSegment {
         const varName = stmt.name.lexeme;
-        const type = stmt.type.accept(this);
+        const varType = stmt.type.accept(this);
         let ir_code = "";
-        const [code, reg] = stmt.initializer?.accept(this) ?? ["", ""];
-        if (code) {
-            ir_code += `${code}\n`;
+        const [ir, reg] = stmt.initializer?.accept(this) ?? ["", "zeroinitializer"];
+        if (ir) {
+            ir_code += ir;
         }
-
         let c_varName = `%${varName}`;
         if (this.scopes.length > 1) {
             const scope = this.scopes[this.scopes.length - 1];
             scope.set(varName, c_varName);
-            ir_code += `${c_varName} = alloca ${type}\n`;
-            if (reg) {
-                ir_code += `store ${type} ${reg}, ${type}* ${c_varName}\n`;
+            ir_code += `${c_varName} = alloca ${varType}\n`;
+            const valueType = stmt.initializer?.type.accept(this) ?? null;
+            if (reg != "zeroinitializer") {
+                const [turn_ir, turn_reg] = this.matchingTargetType(varType, valueType ?? "", reg);
+                ir_code += turn_ir;
+                ir_code += `store ${varType} ${turn_reg}, ${varType}* ${c_varName}\n`;
             }
         } else {
             c_varName = `@.${varName}`;
             const scope = this.scopes[this.scopes.length - 1];
             scope.set(varName, c_varName);
-
-            ir_code = `${c_varName} = global ${type} ${reg}\n`;
+            ir_code = `${c_varName} = global ${varType} ${reg}\n`;
         }
 
         return ir_code;
@@ -83,8 +85,8 @@ export class Compiler implements ExprVisitor<[IrSegment, Reg]>, StmtVisitor<IrSe
         return code;
     }
     visitExpressionStmt(stmt: ExpressionStmt): IrSegment {
-        const [code, reg] = stmt.expression.accept(this);
-        return code;
+        const [ir, reg] = stmt.expression.accept(this);
+        return ir;
     }
     visitIfStmt(stmt: IfStmt): IrSegment {
         throw new Error("Method not implemented.");
@@ -115,9 +117,11 @@ export class Compiler implements ExprVisitor<[IrSegment, Reg]>, StmtVisitor<IrSe
         const type = expr.type.accept(this);
 
         const c_varName = this.findCompiledVarName(expr.name.lexeme);
-        const [code, value] = expr.value.accept(this);
-        const codeSegment = `store ${type} ${value}, ${type}* ${c_varName}`;
-        return [codeSegment, value];
+        let ir_code = "";
+        const [ir, valueReg] = expr.value.accept(this);
+        ir_code += ir;
+        ir_code += `store ${type} ${valueReg}, ${type}* ${c_varName}\n`;
+        return [ir_code, valueReg];
     }
     visitConditionalExpr(expr: ConditionalExpr): [IrSegment, Reg] {
         throw new Error("Method not implemented.");
@@ -127,10 +131,46 @@ export class Compiler implements ExprVisitor<[IrSegment, Reg]>, StmtVisitor<IrSe
         throw new Error("Method not implemented.");
     }
     visitBinaryExpr(expr: BinaryExpr): [IrSegment, Reg] {
-        throw new Error("Method not implemented.");
+        const [left_ir, leftReg] = expr.left.accept(this);
+        const [right_ir, rightReg] = expr.right.accept(this);
+        let ir_code = left_ir + right_ir;
+
+        const type = expr.type.accept(this);
+        const resultReg = `%bin_reg_${Compiler.regI++}`;
+        switch (expr.operator.type) {
+            case TokenType.Plus:
+                ir_code += `${resultReg} = add ${type} ${leftReg}, ${rightReg}\n`;
+                break;
+            case TokenType.Minus:
+                ir_code += `${resultReg} = sub ${type} ${leftReg}, ${rightReg}\n`;
+                break;
+            case TokenType.Star:
+                ir_code += `${resultReg} = mul ${type} ${leftReg}, ${rightReg}\n`;
+                break;
+            case TokenType.Slash:
+                //有符号除法
+                ir_code += `${resultReg} = sdiv ${type} ${leftReg}, ${rightReg}\n`;
+                break;
+        }
+        return [ir_code, resultReg];
     }
     visitUnaryExpr(expr: UnaryExpr): [IrSegment, Reg] {
-        throw new Error("Method not implemented.");
+        const [ir, reg] = expr.right.accept(this);
+        let ir_code = ir;
+        const type = expr.type.accept(this);
+        const resultReg = `%unary_reg_${Compiler.regI++}`;
+        const floatPoint = ["float", "double"];
+        switch (expr.operator.type) {
+            case TokenType.Minus:
+                // 在 LLVM IR 中，整数取反使用 sub 指令：sub i32 0, %value
+                if (floatPoint.includes(type)) {
+                    ir_code += `${resultReg} = fneg ${type} ${reg}\n`;
+                } else {
+                    ir_code += `${resultReg} = sub ${type} 0, ${reg}\n`;
+                }
+                break;
+        }
+        return [ir_code, resultReg];
     }
     visitLiteralExpr(expr: LiteralExpr): [IrSegment, Reg] {
         const globalReg = `@.constant_${Compiler.constStrI++}`
@@ -229,5 +269,35 @@ export class Compiler implements ExprVisitor<[IrSegment, Reg]>, StmtVisitor<IrSe
             }
         }
         throw new Error(`Variable ${sourceName} not found`);
+    }
+
+    matchingTargetType(targetType: string, sourceType: string, reg: Reg): [IrSegment, Reg] {
+        const floatPoint = ["i8", "i16", "i32", "i64", "float", "double"];
+        const targetI = floatPoint.indexOf(targetType);
+        const sourceI = floatPoint.indexOf(sourceType);
+        const turnReg = `%turn_reg_${Compiler.regI++}`;
+        if (targetI == sourceI) {
+            return ["", reg];
+        } else if (targetI < sourceI) { //降级
+            if (targetI < 4) {
+                if (sourceI < 4) {//整数间转换
+                    return [`${turnReg} = trunc ${sourceType} ${reg} to ${targetType}\n`, turnReg];
+                } else { //浮点数转整数
+                    return [`${turnReg} = fptosi ${sourceType} ${reg} to ${targetType}\n`, turnReg];
+                }
+            } else {
+                return [`${turnReg} = fptrunc ${sourceType} ${reg} to ${targetType}\n`, turnReg];
+            }
+        } else { //升级
+            if (targetI > 3) {
+                if (sourceI > 3) {//浮点数间转换
+                    return [`${turnReg} = fpext ${sourceType} ${reg} to ${targetType}\n`, turnReg];
+                } else { //整数转浮点数
+                    return [`${turnReg} = sitofp ${sourceType} ${reg} to ${targetType}\n`, turnReg];
+                }
+            } else {
+                return [`${turnReg} = sext ${sourceType} ${reg} to ${targetType}\n`, turnReg];
+            }
+        }
     }
 }

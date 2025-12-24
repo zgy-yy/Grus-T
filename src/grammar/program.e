@@ -1,7 +1,6 @@
 
-string a="hello";
 
 fun main() i32 {
-    a="haha";
-    printf("%s",a);
+    float b = -13;
+    printf("%f",b);
 }

@@ -1,19 +1,19 @@
 ; ModuleID = '/Users/tal/Desktop/Grus-T/src/llvm ir/temp-ir.ll'
 source_filename = "/Users/tal/Desktop/Grus-T/src/llvm ir/temp-ir.ll"
 
-@.constant_0 = private unnamed_addr constant [7 x i8] c"hello\0A\00" #0
-@.constant_1 = private unnamed_addr constant [6 x i8] c"haha\0A\00" #0
-@.constant_2 = private unnamed_addr constant [4 x i8] c"%s\0A\00" #0
-@.a = global ptr @.constant_0
+@.constant_1 = private unnamed_addr constant [4 x i8] c"%f\0A\00" #0
 
 declare i32 @printf(ptr, ...)
 
 define i32 @main() {
 entry:
-  store ptr @.constant_1, ptr @.a, align 8
-  %val_reg_1 = load ptr, ptr @.a, align 8
-  %val_reg_2 = bitcast ptr @printf to ptr
-  %0 = call i32 (ptr, ...) %val_reg_2(ptr @.constant_2, ptr %val_reg_1)
+  %unary_reg_0 = sub i32 0, 13
+  %b = alloca float, align 4
+  %turn_reg_1 = sitofp i32 %unary_reg_0 to float
+  store float %turn_reg_1, ptr %b, align 4
+  %val_reg_3 = load float, ptr %b, align 4
+  %val_reg_4 = bitcast ptr @printf to ptr
+  %0 = call i32 (ptr, ...) %val_reg_4(ptr @.constant_1, float %val_reg_3)
   ret i32 0
 }
 

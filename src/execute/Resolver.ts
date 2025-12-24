@@ -3,6 +3,7 @@ import { FunctionType, TypeExpr, PrimitiveType, sameType, TempOmittedType } from
 import { BlockStmt, BreakStmt, ClassStmt, ContinueStmt, ExpressionStmt, ForStmt, FunctionStmt, IfStmt, ReturnStmt, Stmt, StmtVisitor, VarStmt, WhileStmt } from "@/ast/Stmt";
 import { Token } from "@/ast/Token";
 import { ParserErrorHandler } from "@/parser/ErrorHandler";
+import { TokenType } from "@/ast/TokenType";
 
 
 class ResolverError extends Error {
@@ -59,8 +60,8 @@ export class Resolver implements ExprVisitor<TypeExpr>, StmtVisitor<void> {
             if (!stmt.type) {
                 throw this.error(stmt.name, `Initializer type ${initType} does not match variable type ${stmt.type}.`);
             }
-        }else {
-            if(!stmt.type) {
+        } else {
+            if (!stmt.type) {
                 throw this.error(stmt.name, `Variable type is not specified.`);
             }
         }
@@ -142,7 +143,7 @@ export class Resolver implements ExprVisitor<TypeExpr>, StmtVisitor<void> {
         if (this.scopes.length > 0) {
             const scope = this.scopes[this.scopes.length - 1];
             if (scope.get(expr.name.lexeme)?.defined === false) {
-               throw this.error(expr.name, `cannot read local variable in its own initializer.`);
+                throw this.error(expr.name, `cannot read local variable in its own initializer.`);
             }
         }
         const type = this.resolveLocal(expr.name);
@@ -171,13 +172,36 @@ export class Resolver implements ExprVisitor<TypeExpr>, StmtVisitor<void> {
         this.resolveExpr(expr.right);
     }
     visitBinaryExpr(expr: BinaryExpr): TypeExpr {
-        throw new Error("Method not implemented.");
-        this.resolveExpr(expr.left);
-        this.resolveExpr(expr.right);
+        const leftType = this.resolveExpr(expr.left);
+        const rightType = this.resolveExpr(expr.right);
+        if (!sameType(leftType, rightType)) {
+            throw this.error(expr.operator, `Type mismatch: ${leftType} != ${rightType}`);
+        }
+        expr.type = leftType;
+        return leftType;
     }
     visitUnaryExpr(expr: UnaryExpr): TypeExpr {
-        throw new Error("Method not implemented.");
-        this.resolveExpr(expr.right);
+        const rightType = this.resolveExpr(expr.right);
+        switch (expr.operator.type) {
+            case TokenType.Bang:
+                if (rightType instanceof PrimitiveType && rightType.name === "bool") {
+                    expr.type = new PrimitiveType("bool");
+                } else {
+                    throw this.error(expr.operator, `Type mismatch: ${rightType} != bool`);
+                }
+                break;
+            case TokenType.Minus:
+                const allowedTypes = ["i32", "i64", "f32", "f64"];
+                if (allowedTypes.includes(rightType.toString())) {
+                    expr.type = rightType;
+                } else {
+                    throw this.error(expr.operator, `Type mismatch: ${rightType} != ${allowedTypes.join(", ")}`);
+                }
+                break;
+            default:
+                throw this.error(expr.operator, `Unsupported unary operator: ${expr.operator.type}`);
+        }
+        return expr.type;
     }
     visitLiteralExpr(expr: LiteralExpr): TypeExpr {
         if (typeof expr.value === "string") {
