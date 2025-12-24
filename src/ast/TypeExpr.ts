@@ -21,6 +21,9 @@ export class PrimitiveType extends TypeExpr {
     accept<R>(visitor: TypesVisitor<R>): R {
         return visitor.visitPrimitiveType(this);
     }
+    toString(): string {
+        return this.name;
+    }
 }
 
 export class FunctionType extends TypeExpr {
@@ -35,6 +38,9 @@ export class FunctionType extends TypeExpr {
     accept<R>(visitor: TypesVisitor<R>): R {
         return visitor.visitFunctionType(this);
     }
+    toString(): string {
+        return `${this.returnType} (${this.parameters.map(p => p.toString()).join(", ")})`;
+    }
 }
 
 
@@ -46,6 +52,9 @@ export class VoidType extends TypeExpr {
     accept<R>(visitor: TypesVisitor<R>): R {
         return visitor.visitVoidType(this);
     }
+    toString(): string {
+        return "void";
+    }
 }
 
 export class TempOmittedType extends TypeExpr {
@@ -55,9 +64,12 @@ export class TempOmittedType extends TypeExpr {
     accept<R>(visitor: TypesVisitor<R>): R {
         return visitor.visitTempOmittedType(this);
     }
+    toString(): string {
+        return "temp omitted";
+    }
 }
 
-    export function sameType(type1: TypeExpr, type2: TypeExpr): boolean {
+export function sameType(type1: TypeExpr, type2: TypeExpr): boolean {
     if (type1 instanceof PrimitiveType && type2 instanceof PrimitiveType) {
         return type1.name === type2.name;
     }

@@ -11,7 +11,7 @@ const reportError = (line: number, column: number) => {
     console.error(`Error at line ${line}, column ${column}`);
 };
 
-const outFile = path.join(__dirname, 'llvm ir/ir.ll');
+const outFile = path.join(__dirname, 'llvm ir/temp-ir.ll');
 try {
     // 直接读取 .e 文件内容
     const programPath = path.join(__dirname, 'grammar/program.e');

@@ -4,7 +4,15 @@ import { BlockStmt, BreakStmt, ClassStmt, ContinueStmt, ExpressionStmt, ForStmt,
 import { Token } from "@/ast/Token";
 import { ParserErrorHandler } from "@/parser/ErrorHandler";
 
-type AstNode = Expr | Stmt;
+
+class ResolverError extends Error {
+    public token: Token;
+    constructor(token: Token, message: string) {
+        super(message);
+        this.token = token;
+    }
+}
+
 
 type ClassType = "NONE" | "CLASS";
 export class Resolver implements ExprVisitor<TypeExpr>, StmtVisitor<void> {
@@ -14,21 +22,26 @@ export class Resolver implements ExprVisitor<TypeExpr>, StmtVisitor<void> {
         type: TypeExpr | null;
         defined: boolean;
     }>[] = [];
-    private error: ParserErrorHandler;
+    private errorHandler: ParserErrorHandler;
     private currentClass: ClassType = "NONE";
-    constructor(error: ParserErrorHandler) {
-        this.error = error;
+    constructor(errorHandler: ParserErrorHandler) {
+        this.errorHandler = errorHandler;
     }
 
     resolveProgram(nodes: Stmt[]): void {
-        this.beginScope();
-        const globalScope = this.scopes[this.scopes.length - 1];
-        globalScope.set("printf", { type: new FunctionType(new PrimitiveType("i32"), [new PrimitiveType("i8*"), new TempOmittedType()]), defined: true });
-        for (const stmt of nodes) {
-            this.resolveStmt(stmt);
-        }   
-        this.endScope();
+        try {
+            this.beginScope();
+            const globalScope = this.scopes[this.scopes.length - 1];
+            globalScope.set("printf", { type: new FunctionType(new PrimitiveType("i32"), [new PrimitiveType("i8*"), new TempOmittedType()]), defined: true });
+            for (const stmt of nodes) {
+                this.resolveStmt(stmt);
+            }
+            this.endScope();
+        } catch (error) {
+            throw error;
+        }
     }
+
     resolveStmt(stmt: Stmt): void {
         stmt.accept(this);
     }
@@ -43,8 +56,12 @@ export class Resolver implements ExprVisitor<TypeExpr>, StmtVisitor<void> {
             if (!stmt.type) {
                 stmt.type = initType;
             }
-            if (stmt.type && !sameType(initType, stmt.type)) {
-                this.error(stmt.name, `Initializer type ${initType} does not match variable type ${stmt.type}.`);
+            if (!stmt.type) {
+                throw this.error(stmt.name, `Initializer type ${initType} does not match variable type ${stmt.type}.`);
+            }
+        }else {
+            if(!stmt.type) {
+                throw this.error(stmt.name, `Variable type is not specified.`);
             }
         }
         this.define(stmt.name, stmt.type);
@@ -106,12 +123,12 @@ export class Resolver implements ExprVisitor<TypeExpr>, StmtVisitor<void> {
     }
     visitBreakStmt(stmt: BreakStmt): void {
         if (this.loopDepth <= 0) {
-            this.error(stmt.keyword, `Unexpected 'break'`);
+            throw this.error(stmt.keyword, `Unexpected 'break'`);
         }
     }
     visitContinueStmt(stmt: ContinueStmt): void {
         if (this.loopDepth <= 0) {
-            this.error(stmt.keyword, `Unexpected continue statement`);
+            throw this.error(stmt.keyword, `Unexpected continue statement`);
         }
     }
     visitReturnStmt(stmt: ReturnStmt): void {
@@ -125,7 +142,7 @@ export class Resolver implements ExprVisitor<TypeExpr>, StmtVisitor<void> {
         if (this.scopes.length > 0) {
             const scope = this.scopes[this.scopes.length - 1];
             if (scope.get(expr.name.lexeme)?.defined === false) {
-                this.error(expr.name, `cannot read local variable in its own initializer.`);
+               throw this.error(expr.name, `cannot read local variable in its own initializer.`);
             }
         }
         const type = this.resolveLocal(expr.name);
@@ -137,7 +154,7 @@ export class Resolver implements ExprVisitor<TypeExpr>, StmtVisitor<void> {
         const leftType = this.resolveLocal(expr.name);
         const rightType = this.resolveExpr(expr.value);
         if (!sameType(leftType, rightType)) {
-            this.error(expr.name, `Type mismatch: ${leftType} != ${rightType}`);
+            throw this.error(expr.name, `Type mismatch: ${leftType} != ${rightType}`);
         }
         expr.type = leftType;
         return leftType;
@@ -164,7 +181,7 @@ export class Resolver implements ExprVisitor<TypeExpr>, StmtVisitor<void> {
     }
     visitLiteralExpr(expr: LiteralExpr): TypeExpr {
         if (typeof expr.value === "string") {
-            expr.type = new PrimitiveType("i8*");
+            expr.type = new PrimitiveType("string");
         } else if (typeof expr.value === "number") {
             expr.type = new PrimitiveType("i32");
             return new PrimitiveType("i32");
@@ -239,7 +256,7 @@ export class Resolver implements ExprVisitor<TypeExpr>, StmtVisitor<void> {
         if (this.scopes.length > 0) {
             const scope = this.scopes[this.scopes.length - 1];
             if (scope.has(name.lexeme)) {
-                this.error(name, `Variable with this name ${name.lexeme} already declared in this scope.`);
+                throw this.error(name, `Variable with this name ${name.lexeme} already declared in this scope.`);
             }
             scope.set(name.lexeme, { type: null, defined: false });
         }
@@ -265,5 +282,11 @@ export class Resolver implements ExprVisitor<TypeExpr>, StmtVisitor<void> {
         }
         throw new Error(`Variable ${name.lexeme} not found`);
         // not found Assume global
+    }
+
+
+    error(token: Token, message: string): ResolverError {
+        this.errorHandler(token, message);
+        return new ResolverError(token, message);
     }
 }

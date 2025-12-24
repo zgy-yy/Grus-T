@@ -14,7 +14,6 @@ export class Grus {
     run(): string {
         const scanner = new Scanner(this.source, this.scnnerErrorHandler.bind(this));
         const tokens = scanner.scanTokens();
-        // const parser = new Parser(tokens, this.parserErrorHandler.bind(this));
         const parser = new Parser(tokens, this.parserErrorHandler.bind(this));
         const statements = parser.parse();
         console.log(statements);
@@ -22,7 +21,12 @@ export class Grus {
             throw new Error('解析失败');
         }
         const resolver = new Resolver(this.resolverErrorHandler.bind(this));
-        resolver.resolveProgram(statements);
+        try {
+            resolver.resolveProgram(statements);
+        } catch (error) {
+            console.error(error);
+            return "";
+        }
         const compiler = new Compiler(this.compilerErrorHandler.bind(this));
         return compiler.compileProgram(statements);
     }

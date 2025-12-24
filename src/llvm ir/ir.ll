@@ -1,18 +1,19 @@
-; ModuleID = 'src/llvm ir/ir.ll'
-source_filename = "src/llvm ir/ir.ll"
+; ModuleID = '/Users/tal/Desktop/Grus-T/src/llvm ir/temp-ir.ll'
+source_filename = "/Users/tal/Desktop/Grus-T/src/llvm ir/temp-ir.ll"
 
-@.constant_2 = private unnamed_addr constant [4 x i8] c"%d\0A\00" #0
-@.a = global i32 23
+@.constant_0 = private unnamed_addr constant [7 x i8] c"hello\0A\00" #0
+@.constant_1 = private unnamed_addr constant [6 x i8] c"haha\0A\00" #0
+@.constant_2 = private unnamed_addr constant [4 x i8] c"%s\0A\00" #0
+@.a = global ptr @.constant_0
 
 declare i32 @printf(ptr, ...)
 
 define i32 @main() {
 entry:
-  store i32 23, ptr @.a, align 4
-  %str_reg_1 = getelementptr inbounds [4 x i8], ptr @.constant_2, i32 0, i32 0
-  %val_reg_2 = load i32, ptr @.a, align 4
-  %val_reg_3 = bitcast ptr @printf to ptr
-  %0 = call i32 (ptr, ...) %val_reg_3(ptr %str_reg_1, i32 %val_reg_2)
+  store ptr @.constant_1, ptr @.a, align 8
+  %val_reg_1 = load ptr, ptr @.a, align 8
+  %val_reg_2 = bitcast ptr @printf to ptr
+  %0 = call i32 (ptr, ...) %val_reg_2(ptr @.constant_2, ptr %val_reg_1)
   ret i32 0
 }
 

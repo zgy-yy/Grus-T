@@ -138,11 +138,7 @@ export class Compiler implements ExprVisitor<[IrSegment, Reg]>, StmtVisitor<IrSe
             // private unnamed_addr constant [15 x i8] c"Hello, World!\0A\00", align 1
             const g_ir = `${globalReg} = private unnamed_addr constant [${expr.value.length + 2} x i8] c"${expr.value}\\0A\\00" align 1\n`;
             this.globals.push(g_ir);
-            const reg = `%str_reg_${Compiler.regI++}`;
-            // getelementptr inbounds [15 x i8], [15 x i8]* @.str
-            const ir_code = `${reg} = getelementptr inbounds [${expr.value.length + 2} x i8], [${expr.value.length + 2} x i8]* ${globalReg}, i32 0, i32 0\n`;
-
-            return [ir_code, reg];
+            return ["", globalReg];
         }
         return ["", expr.value?.toString() ?? ""]
     }
@@ -199,6 +195,9 @@ export class Compiler implements ExprVisitor<[IrSegment, Reg]>, StmtVisitor<IrSe
 
 
     visitPrimitiveType(expr: PrimitiveType): string {
+        if (expr.name === "string") {
+            return "i8*";
+        }
         return expr.name;
     }
     visitFunctionType(expr: FunctionType): string {

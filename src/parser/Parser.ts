@@ -13,8 +13,6 @@ class SyntaxError extends Error {
     }
 }
 
-class TypeParseError extends Error { }
-
 /**
  * 运算符优先级
  */

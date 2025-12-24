@@ -1,7 +1,7 @@
 
-let a=23;
+string a="hello";
 
 fun main() i32 {
-    a=23;
-    printf("%d",a);
+    a="haha";
+    printf("%s",a);
 }
