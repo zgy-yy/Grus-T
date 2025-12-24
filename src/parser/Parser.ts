@@ -1,10 +1,9 @@
 import { Token } from "@/ast/Token";
 import { ParserErrorHandler } from "./ErrorHandler";
 import { TokenType } from "@/ast/TokenType";
-import { AssignExpr, BinaryExpr, Expr, LiteralExpr, PostfixExpr, ThisExpr, UnaryExpr, VariableExpr } from "@/ast/Expr";
-import { ExpressionStmt, FunctionStmt, Stmt, VarStmt } from "@/ast/Stmt";
-import { PrimitiveType, GrusType } from "@/ast/GrusType";
-import { Parameter, Variable } from "@/ast/Identifier";
+import { AssignExpr, BinaryExpr, CallExpr, Expr, LiteralExpr, PostfixExpr, ThisExpr, UnaryExpr, VariableExpr } from "@/ast/Expr";
+import { ExpressionStmt, FunctionStmt, Parameter, Stmt, VarStmt } from "@/ast/Stmt";
+import { PrimitiveType, TypeExpr, VoidType } from "@/ast/TypeExpr";
 
 class SyntaxError extends Error {
     public token: Token;
@@ -58,7 +57,7 @@ export class Parser {
 
     private rules: Record<TokenType, ParseRule> = {
         [TokenType.Dot]: [null, null, Precedence.NONE],//.
-        [TokenType.LeftParen]: [this.primary.bind(this), null, Precedence.NONE],//(
+        [TokenType.LeftParen]: [this.primary.bind(this), this.call.bind(this), Precedence.CALL],//(
 
         [TokenType.Bang]: [this.unary.bind(this), null, Precedence.NONE],//!
         [TokenType.Minus]: [this.unary.bind(this), this.binary.bind(this), Precedence.TERM],//-
@@ -210,13 +209,13 @@ export class Parser {
      * 解析 let 变量声明
      * let IDENTIFIER ( "=" expression )? ";" 
      */
-    private varDeclaration(t: GrusType | null): VarStmt[] {
+    private varDeclaration(t: TypeExpr | null): VarStmt[] {
         const varStmts: VarStmt[] = [];
         do {
             const name = this.consume(TokenType.Identifier, "Expect variable name.");
             const initializer = this.match(TokenType.Equal) ? this.expression(Precedence.ASSIGNMENT) : null;
-            const variable = new Variable(name, t);
-            varStmts.push(new VarStmt(variable, t, initializer));
+            const type = t as unknown as TypeExpr;
+            varStmts.push(new VarStmt(name, type, initializer));
         } while (this.match(TokenType.Comma));
         this.consume(TokenType.Semicolon, "Expect ';' after variable declaration.");
         return varStmts;
@@ -258,7 +257,11 @@ export class Parser {
                 return parameters
             }
             const defaultValue = this.match(TokenType.Equal) ? this.expression(Precedence.ASSIGNMENT) : null;
-            parameters.push(new Parameter(name, type, defaultValue));
+            parameters.push({
+                name,
+                type,
+                defaultValue
+            });
         } while (this.match(TokenType.Comma));
         return parameters;
     }
@@ -313,6 +316,17 @@ export class Parser {
     }
 
 
+    private call(callee: Expr, paren: Token): Expr {
+        const args: Expr[] = [];
+        if (!this.check(TokenType.RightParen)) {
+            do {
+                args.push(this.expression(Precedence.ASSIGNMENT));
+            } while (this.match(TokenType.Comma));
+        }
+        this.consume(TokenType.RightParen, "Expect ')' after arguments.");
+        return new CallExpr(callee, paren, args);
+    }
+
     private binary(left: Expr, operator: Token): Expr {
         const precedence = this.rules[operator.type][2]
         const assignOperators = [TokenType.Equal, TokenType.PlusEqual, TokenType.MinusEqual, TokenType.StarEqual, TokenType.SlashEqual, TokenType.PercentEqual, TokenType.CaretEqual, TokenType.AndEqual, TokenType.OrEqual, TokenType.GreaterGreaterEqual, TokenType.LessLessEqual]
@@ -321,8 +335,7 @@ export class Parser {
             //todo 赋值运算符需要检查左值是否可赋值
             if (left instanceof VariableExpr) {
                 const right = this.parsePrecedence(precedence);
-                const variable = left.var_;
-                return new AssignExpr(variable, right);
+                return new AssignExpr(left.name, right);
             }
             this.error(operator, "Invalid assignment target.");
         }
@@ -353,8 +366,7 @@ export class Parser {
             case TokenType.This:
                 return new ThisExpr(token);
             case TokenType.Identifier:
-                const variable = new Variable(token, null);
-                return new VariableExpr(variable);
+                return new VariableExpr(token);
             case TokenType.LeftParen:
                 return this.expression();
             default:
@@ -363,7 +375,7 @@ export class Parser {
     }
 
 
-    private type(): GrusType {
+    private type(): TypeExpr {
         const name = this.consume(TokenType.Identifier, "Expect type name.");
         return new PrimitiveType(name.lexeme);
     }

@@ -1,19 +1,17 @@
 import { AssignExpr, BinaryExpr, CallExpr, ConditionalExpr, Expr, ExprVisitor, GetExpr, GroupingExpr, LiteralExpr, LogicalExpr, PostfixExpr, SetExpr, ThisExpr, UnaryExpr, VariableExpr } from "@/ast/Expr";
-import { GrusType, PrimitiveType, sameType } from "@/ast/GrusType";
-import { Variable } from "@/ast/Identifier";
+import { FunctionType, TypeExpr, PrimitiveType, sameType, TempOmittedType } from "@/ast/TypeExpr";
 import { BlockStmt, BreakStmt, ClassStmt, ContinueStmt, ExpressionStmt, ForStmt, FunctionStmt, IfStmt, ReturnStmt, Stmt, StmtVisitor, VarStmt, WhileStmt } from "@/ast/Stmt";
 import { Token } from "@/ast/Token";
 import { ParserErrorHandler } from "@/parser/ErrorHandler";
 
 type AstNode = Expr | Stmt;
 
-type FunctionType = "FUNCTION" | "METHOD";
 type ClassType = "NONE" | "CLASS";
-export class Resolver implements ExprVisitor<GrusType>, StmtVisitor<void> {
+export class Resolver implements ExprVisitor<TypeExpr>, StmtVisitor<void> {
 
     private loopDepth: number = 0;
     private scopes: Map<string, {
-        type: GrusType | null;
+        type: TypeExpr | null;
         defined: boolean;
     }>[] = [];
     private error: ParserErrorHandler;
@@ -25,7 +23,7 @@ export class Resolver implements ExprVisitor<GrusType>, StmtVisitor<void> {
     resolveProgram(nodes: Stmt[]): void {
         this.beginScope();
         const globalScope = this.scopes[this.scopes.length - 1];
-        globalScope.set("print", { type: new PrimitiveType("void"), defined: true });
+        globalScope.set("printf", { type: new FunctionType(new PrimitiveType("i32"), [new PrimitiveType("i8*"), new TempOmittedType()]), defined: true });
         for (const stmt of nodes) {
             this.resolveStmt(stmt);
         }
@@ -35,22 +33,22 @@ export class Resolver implements ExprVisitor<GrusType>, StmtVisitor<void> {
     resolveStmt(stmt: Stmt): void {
         stmt.accept(this);
     }
-    resolveExpr(node: Expr): GrusType {
+    resolveExpr(node: Expr): TypeExpr {
         return node.accept(this);
     }
 
     visitVarStmt(stmt: VarStmt): void {
-        this.declare(stmt.var.name);
+        this.declare(stmt.name);
         if (stmt.initializer) {
             const initType = this.resolveExpr(stmt.initializer);
             if (!stmt.type) {
                 stmt.type = initType;
             }
             if (stmt.type && !sameType(initType, stmt.type)) {
-                this.error(stmt.var.name, `Initializer type ${initType} does not match variable type ${stmt.type}.`);
+                this.error(stmt.name, `Initializer type ${initType} does not match variable type ${stmt.type}.`);
             }
         }
-        this.define(stmt.var.name, stmt.type);
+        this.define(stmt.name, stmt.type);
     }
 
     visitBlockStmt(stmt: BlockStmt): void {
@@ -124,64 +122,81 @@ export class Resolver implements ExprVisitor<GrusType>, StmtVisitor<void> {
     }
 
 
-    visitVariableExpr(expr: VariableExpr): GrusType {
+    visitVariableExpr(expr: VariableExpr): TypeExpr {
         if (this.scopes.length > 0) {
             const scope = this.scopes[this.scopes.length - 1];
-            if (scope.get(expr.var_.name.lexeme)?.defined === false) {
-                this.error(expr.var_.name, `cannot read local variable in its own initializer.`);
+            if (scope.get(expr.name.lexeme)?.defined === false) {
+                this.error(expr.name, `cannot read local variable in its own initializer.`);
             }
         }
-        return this.resolveLocal(expr.var_, expr.var_.name);
+        const type = this.resolveLocal(expr.name);
+        expr.type = type;
+        return type;
     }
 
-    visitAssignExpr(expr: AssignExpr): GrusType {
-        return this.resolveLocal(expr.var_, expr.var_.name);
+    visitAssignExpr(expr: AssignExpr): TypeExpr {
+        const type = this.resolveLocal(expr.name);
+        expr.type = type;
+        return type;
     }
-    visitConditionalExpr(expr: ConditionalExpr): GrusType {
+    visitConditionalExpr(expr: ConditionalExpr): TypeExpr {
         throw new Error("Method not implemented.");
         this.resolveExpr(expr.condition);
         this.resolveExpr(expr.trueExpr);
         this.resolveExpr(expr.falseExpr);
     }
-    visitLogicalExpr(expr: LogicalExpr): GrusType {
+    visitLogicalExpr(expr: LogicalExpr): TypeExpr {
         throw new Error("Method not implemented.");
         this.resolveExpr(expr.left);
         this.resolveExpr(expr.right);
     }
-    visitBinaryExpr(expr: BinaryExpr): GrusType {
+    visitBinaryExpr(expr: BinaryExpr): TypeExpr {
         throw new Error("Method not implemented.");
         this.resolveExpr(expr.left);
         this.resolveExpr(expr.right);
     }
-    visitUnaryExpr(expr: UnaryExpr): GrusType {
+    visitUnaryExpr(expr: UnaryExpr): TypeExpr {
         throw new Error("Method not implemented.");
         this.resolveExpr(expr.right);
     }
-    visitLiteralExpr(expr: LiteralExpr): GrusType {
-        return new PrimitiveType("i32");
-        // 字面量表达式没有子表达式需要解析
+    visitLiteralExpr(expr: LiteralExpr): TypeExpr {
+        if (typeof expr.value === "string") {
+            expr.type = new PrimitiveType("i8*");
+        } else if (typeof expr.value === "number") {
+            expr.type = new PrimitiveType("i32");
+            return new PrimitiveType("i32");
+        } else if (typeof expr.value === "boolean") {
+            expr.type = new PrimitiveType("i1");
+        } else {
+            expr.type = new PrimitiveType("void64");
+        }
+        return expr.type;
     }
-    visitPostfixExpr(expr: PostfixExpr): GrusType {
+    visitPostfixExpr(expr: PostfixExpr): TypeExpr {
         throw new Error("Method not implemented.");
         this.resolveExpr(expr.left);
     }
-    visitCallExpr(expr: CallExpr): GrusType {
-        throw new Error("Method not implemented.");
-        this.resolveExpr(expr.callee);
+    visitCallExpr(expr: CallExpr): TypeExpr {
+        const calleeType = this.resolveExpr(expr.callee);
+        if (calleeType instanceof PrimitiveType && calleeType.name === "printf") {
+            return new PrimitiveType("void");
+        }
         for (const argument of expr.arguments) {
             this.resolveExpr(argument);
         }
+        expr.type = calleeType;
+        return calleeType;
     }
-    visitGetExpr(expr: GetExpr): GrusType {
+    visitGetExpr(expr: GetExpr): TypeExpr {
         throw new Error("Method not implemented.");
         this.resolveExpr(expr.object);
     }
-    visitSetExpr(expr: SetExpr): GrusType {
+    visitSetExpr(expr: SetExpr): TypeExpr {
         throw new Error("Method not implemented.");
         this.resolveExpr(expr.object);
         this.resolveExpr(expr.value);
     }
-    visitThisExpr(expr: ThisExpr): GrusType {
+    visitThisExpr(expr: ThisExpr): TypeExpr {
         throw new Error("Method not implemented.");
         if (this.currentClass === "NONE") {
             this.error(expr.keyword, `Cannot use 'this' outside of a class.`);
@@ -189,7 +204,7 @@ export class Resolver implements ExprVisitor<GrusType>, StmtVisitor<void> {
             // this.resolveLocal(expr, expr.keyword);
         }
     }
-    visitGroupingExpr(expr: GroupingExpr): GrusType {
+    visitGroupingExpr(expr: GroupingExpr): TypeExpr {
         throw new Error("Method not implemented.");
         this.resolveExpr(expr.expression);
     }
@@ -210,7 +225,7 @@ export class Resolver implements ExprVisitor<GrusType>, StmtVisitor<void> {
 
     beginScope(): void {
         this.scopes.push(new Map<string, {
-            type: GrusType;
+            type: TypeExpr;
             defined: boolean;
         }>());
     }
@@ -226,19 +241,23 @@ export class Resolver implements ExprVisitor<GrusType>, StmtVisitor<void> {
             scope.set(name.lexeme, { type: null, defined: false });
         }
     }
-    define(name: Token, type: GrusType): void {
+    define(name: Token, type: TypeExpr): void {
         if (this.scopes.length > 0) {
             const scope = this.scopes[this.scopes.length - 1];
             scope.set(name.lexeme, { type: type, defined: true });
         }
     }
-    resolveLocal(var_: Variable, name: Token): GrusType {
+
+    resolveLocal(name: Token): TypeExpr {
         for (let i = this.scopes.length - 1; i >= 0; i--) {
             const scope = this.scopes[i];
             if (scope.has(name.lexeme)) {
-                var_.type = scope.get(name.lexeme)?.type as GrusType;
+                const type = scope.get(name.lexeme)?.type;
+                if (!type) {
+                    throw new Error(`Variable ${name.lexeme} not found`);
+                }
                 // distance is the number of scopes from the current scope to the global scope
-                return var_.type;
+                return type;
             }
         }
         throw new Error(`Variable ${name.lexeme} not found`);

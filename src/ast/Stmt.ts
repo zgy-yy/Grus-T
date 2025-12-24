@@ -1,9 +1,6 @@
 import { Expr } from "@/ast/Expr";
 import { Token } from "@/ast/Token";
-import { GrusType } from "@/ast/GrusType";
-import { Parameter, Variable } from "./Identifier";
-
-
+import { TypeExpr } from "@/ast/TypeExpr";
 
 export abstract class Stmt {
     abstract accept<R>(visitor: StmtVisitor<R>): R;
@@ -116,13 +113,13 @@ export class ExpressionStmt extends Stmt {
 }
 
 export class VarStmt extends Stmt {
-    var: Variable;
-    type: GrusType ;
+    name: Token;
+    type: TypeExpr;
     initializer: Expr | null;
-    constructor(var_: Variable, type: GrusType | null, initializer: Expr | null) {
+    constructor(name: Token, type: TypeExpr, initializer: Expr | null) {
         super();
-        this.var = var_;
-        this.type = type as GrusType;
+        this.name = name;
+        this.type = type;
         this.initializer = initializer;
     }
     accept<R>(visitor: StmtVisitor<R>): R {
@@ -130,17 +127,24 @@ export class VarStmt extends Stmt {
     }
 }
 
+
+export type Parameter = {
+    name: Token;
+    type: TypeExpr;
+    defaultValue: Expr | null;
+}
+
 export class FunctionStmt extends Stmt {
     name: Token;
     parameters: Parameter[];
     body: Stmt[];
-    returnType: GrusType;
-    constructor(name: Token, parameters: Parameter[], returnType: GrusType | null, body: Stmt[]) {
+    returnType: TypeExpr;
+    constructor(name: Token, parameters: Parameter[], returnType: TypeExpr | null, body: Stmt[]) {
         super();
         this.name = name;
         this.parameters = parameters;
         this.body = body;
-        this.returnType = returnType as GrusType;
+        this.returnType = returnType as TypeExpr;
     }
     accept<R>(visitor: StmtVisitor<R>): R {
         return visitor.visitFunctionStmt(this);

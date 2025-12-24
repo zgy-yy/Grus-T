@@ -1,10 +1,17 @@
-import { GrusType } from "./GrusType";
 import { GrusValue } from "./GrusValue";
-import { Variable } from "./Identifier";
 import { Token } from "./Token";
+import { TypeExpr } from "./TypeExpr";
 
 
-export abstract class Expr {
+export interface TExpr{
+    type: TypeExpr;
+}
+
+export abstract class Expr implements TExpr {
+    type: TypeExpr;
+    constructor() {
+        this.type = null as unknown as TypeExpr;
+    }
     abstract accept<R>(visitor: ExprVisitor<R>): R;
 }
 
@@ -30,11 +37,11 @@ export interface ExprVisitor<R> {
  * 赋值表达式
  */
 export class AssignExpr extends Expr {
-    var_: Variable;
+    name: Token;
     value: Expr;
-    constructor(name: Variable, value: Expr) {
+    constructor(name: Token, value: Expr) {
         super();
-        this.var_= name;
+        this.name = name;
         this.value = value;
     }
     accept<R>(visitor: ExprVisitor<R>): R {
@@ -228,10 +235,10 @@ export class GroupingExpr extends Expr {
 
 
 export class VariableExpr extends Expr {
-    var_: Variable;
-    constructor(var_: Variable) {
+    name: Token;
+    constructor(name: Token) {
         super();
-        this.var_ = var_;
+        this.name = name;
     }
     accept<R>(visitor: ExprVisitor<R>): R {
         return visitor.visitVariableExpr(this);
