@@ -147,7 +147,6 @@ export class Resolver implements ExprVisitor<TypeExpr>, StmtVisitor<void> {
             }
         }
         const type = this.resolveLocal(expr.name);
-        expr.type = type;
         return type;
     }
 
@@ -157,7 +156,6 @@ export class Resolver implements ExprVisitor<TypeExpr>, StmtVisitor<void> {
         if (!sameType(leftType, rightType)) {
             throw this.error(expr.name, `Type mismatch: ${leftType} != ${rightType}`);
         }
-        expr.type = leftType;
         return leftType;
     }
     visitConditionalExpr(expr: ConditionalExpr): TypeExpr {
@@ -177,15 +175,15 @@ export class Resolver implements ExprVisitor<TypeExpr>, StmtVisitor<void> {
         if (!sameType(leftType, rightType)) {
             throw this.error(expr.operator, `Type mismatch: ${leftType} != ${rightType}`);
         }
-        expr.type = leftType;
         return leftType;
     }
     visitUnaryExpr(expr: UnaryExpr): TypeExpr {
         const rightType = this.resolveExpr(expr.right);
+        let returnType: TypeExpr;
         switch (expr.operator.type) {
             case TokenType.Bang:
                 if (rightType instanceof PrimitiveType && rightType.name === "bool") {
-                    expr.type = new PrimitiveType("bool");
+                    returnType = new PrimitiveType("bool");
                 } else {
                     throw this.error(expr.operator, `Type mismatch: ${rightType} != bool`);
                 }
@@ -193,7 +191,7 @@ export class Resolver implements ExprVisitor<TypeExpr>, StmtVisitor<void> {
             case TokenType.Minus:
                 const allowedTypes = ["i32", "i64", "f32", "f64"];
                 if (allowedTypes.includes(rightType.toString())) {
-                    expr.type = rightType;
+                    returnType = rightType;
                 } else {
                     throw this.error(expr.operator, `Type mismatch: ${rightType} != ${allowedTypes.join(", ")}`);
                 }
@@ -201,20 +199,21 @@ export class Resolver implements ExprVisitor<TypeExpr>, StmtVisitor<void> {
             default:
                 throw this.error(expr.operator, `Unsupported unary operator: ${expr.operator.type}`);
         }
-        return expr.type;
+        return returnType;
     }
     visitLiteralExpr(expr: LiteralExpr): TypeExpr {
+        let returnType: TypeExpr;
         if (typeof expr.value === "string") {
-            expr.type = new PrimitiveType("string");
+            returnType = new PrimitiveType("string");
         } else if (typeof expr.value === "number") {
-            expr.type = new PrimitiveType("i32");
+            returnType = new PrimitiveType("i32");
             return new PrimitiveType("i32");
         } else if (typeof expr.value === "boolean") {
-            expr.type = new PrimitiveType("i1");
+            returnType = new PrimitiveType("i1");
         } else {
-            expr.type = new PrimitiveType("void64");
+            returnType = new PrimitiveType("void64");
         }
-        return expr.type;
+        return returnType;
     }
     visitPostfixExpr(expr: PostfixExpr): TypeExpr {
         throw new Error("Method not implemented.");
@@ -228,7 +227,6 @@ export class Resolver implements ExprVisitor<TypeExpr>, StmtVisitor<void> {
         for (const argument of expr.arguments) {
             this.resolveExpr(argument);
         }
-        expr.type = calleeType;
         return calleeType;
     }
     visitGetExpr(expr: GetExpr): TypeExpr {

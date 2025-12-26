@@ -1,25 +1,49 @@
 import { AssignExpr, BinaryExpr, CallExpr, ConditionalExpr, Expr, ExprVisitor, GetExpr, GroupingExpr, LiteralExpr, LogicalExpr, PostfixExpr, SetExpr, ThisExpr, UnaryExpr, VariableExpr } from "@/ast/Expr";
-import { FunctionType, PrimitiveType, TempOmittedType, TypesVisitor, VoidType } from "@/ast/TypeExpr";
+import { FunctionType, PrimitiveType, TempOmittedType, TypeExpr, TypesVisitor, VoidType } from "@/ast/TypeExpr";
 import { BlockStmt, BreakStmt, ClassStmt, ContinueStmt, ExpressionStmt, ForStmt, FunctionStmt, IfStmt, ReturnStmt, StmtVisitor, VarStmt, WhileStmt } from "@/ast/Stmt";
 import { Stmt } from "@/ast/Stmt";
 import { CompilerErrorHandler } from "@/parser/ErrorHandler";
 import { TokenType } from "@/ast/TokenType";
 
 type Reg = string;
-type IrSegment = string;
-export class Compiler implements ExprVisitor<[IrSegment, Reg]>, StmtVisitor<IrSegment>, TypesVisitor<IrSegment> {
+type IrFragment = string;
+type IrType = string;
+
+//表达式编译结果
+class ExprCompose {
+    ir: IrFragment;
+    reg: Reg;
+    irtype: IrType;
+    constructor(irtype: IrType, reg: Reg, ir: IrFragment,) {
+        this.ir = ir;
+        this.reg = reg;
+        this.irtype = irtype;
+    }
+}
+
+//Ir 变量
+class IrVar {
+    name: string;
+    type: TypeExpr;
+    constructor(name: string, type: TypeExpr) {
+        this.name = name;
+        this.type = type;
+    }
+}
+
+export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragment>, TypesVisitor<IrFragment> {
     static constStrI: number = 0;
     static regI: number = 0;
-    scopes: Map<string, string>[] = []; // sourceName -> compiledName
+    scopes: Map<string, IrVar>[] = []; // sourceName -> compiledName
     globals: string[] = ["declare i32 @printf(i8*, ...)\n"];
     code: string = "";
     constructor(private readonly error: CompilerErrorHandler) {
-        this.error = error;
+        // this.error = error;
     }
 
     compileProgram(nodes: Stmt[]): string {
         this.beginScope();
-        this.scopes[this.scopes.length - 1].set("printf", "@printf");
+        this.scopes[this.scopes.length - 1].set("printf", new IrVar("@printf", new FunctionType(new PrimitiveType("i32"), [new PrimitiveType("i8*"), new PrimitiveType("...")])));
         for (const stmt of nodes) {
             this.code += this.compileStmt(stmt);
         }
@@ -30,47 +54,49 @@ export class Compiler implements ExprVisitor<[IrSegment, Reg]>, StmtVisitor<IrSe
         return this.code;
     }
 
-    compileStmt(stmt: Stmt): string {
+    compileStmt(stmt: Stmt): IrFragment {
         return stmt.accept(this);
     }
-    visitBlockStmt(stmt: BlockStmt): string {
+    visitBlockStmt(stmt: BlockStmt): IrFragment {
         this.beginScope();
-        let code = "";
+        let ir_code = "";
         for (const statement of stmt.statements) {
-            code += statement.accept(this);
+            ir_code += statement.accept(this);
         }
         this.endScope();
-        return code;
+        return ir_code;
     }
-    visitVarStmt(stmt: VarStmt): IrSegment {
+    visitVarStmt(stmt: VarStmt): IrFragment {
         const varName = stmt.name.lexeme;
-        const varType = stmt.type.accept(this);
-        let ir_code = "";
-        const [ir, reg] = stmt.initializer?.accept(this) ?? ["", "zeroinitializer"];
-        if (ir) {
-            ir_code += ir;
-        }
-        let c_varName = `%${varName}`;
+        const var_ir_type = stmt.type.accept(this);
+
+        const init_comp = stmt.initializer?.accept(this) ?? new ExprCompose("void", "zeroinitializer", "");
+        const init_reg = init_comp.reg;
+        const init_ir_type = init_comp.irtype;
+        let ir_code = init_comp.ir;
+
+
+        let ir_name = `%${varName}`;
         if (this.scopes.length > 1) {
             const scope = this.scopes[this.scopes.length - 1];
-            scope.set(varName, c_varName);
-            ir_code += `${c_varName} = alloca ${varType}\n`;
-            const valueType = stmt.initializer?.type.accept(this) ?? null;
-            if (reg != "zeroinitializer") {
-                const [turn_ir, turn_reg] = this.matchingTargetType(varType, valueType ?? "", reg);
-                ir_code += turn_ir;
-                ir_code += `store ${varType} ${turn_reg}, ${varType}* ${c_varName}\n`;
+            scope.set(varName, new IrVar(ir_name, stmt.type));
+            ir_code += `${ir_name} = alloca ${var_ir_type}\n`;
+
+            if (init_reg != "zeroinitializer") {
+                const comp = this.matchingTargetType(var_ir_type, init_ir_type, init_reg);
+                ir_code += comp.ir;
+                ir_code += `store ${var_ir_type} ${comp.reg}, ${var_ir_type}* ${ir_name}\n`;
             }
         } else {
-            c_varName = `@.${varName}`;
+            ir_name = `@.${varName}`;
             const scope = this.scopes[this.scopes.length - 1];
-            scope.set(varName, c_varName);
-            ir_code = `${c_varName} = global ${varType} ${reg}\n`;
+            scope.set(varName, new IrVar(ir_name, stmt.type));
+            ir_code = `${ir_name} = global ${var_ir_type} ${init_reg}\n`;
         }
 
         return ir_code;
     }
-    visitFunctionStmt(stmt: FunctionStmt): IrSegment {
+    visitFunctionStmt(stmt: FunctionStmt): IrFragment {
         this.beginScope();
         Compiler.regI = 0;
         const fn_name = stmt.name.lexeme;
@@ -84,155 +110,166 @@ export class Compiler implements ExprVisitor<[IrSegment, Reg]>, StmtVisitor<IrSe
         this.endScope();
         return code;
     }
-    visitExpressionStmt(stmt: ExpressionStmt): IrSegment {
-        const [ir, reg] = stmt.expression.accept(this);
-        return ir;
+    visitExpressionStmt(stmt: ExpressionStmt): IrFragment {
+        const comp = stmt.expression.accept(this);
+        let ir_code = comp.ir;
+        return ir_code;
     }
-    visitIfStmt(stmt: IfStmt): IrSegment {
+    visitIfStmt(stmt: IfStmt): IrFragment {
         throw new Error("Method not implemented.");
     }
-    visitWhileStmt(stmt: WhileStmt): IrSegment {
+    visitWhileStmt(stmt: WhileStmt): IrFragment {
         throw new Error("Method not implemented.");
     }
-    visitForStmt(stmt: ForStmt): IrSegment {
+    visitForStmt(stmt: ForStmt): IrFragment {
         throw new Error("Method not implemented.");
     }
-    visitBreakStmt(stmt: BreakStmt): IrSegment {
+    visitBreakStmt(stmt: BreakStmt): IrFragment {
         throw new Error("Method not implemented.");
     }
-    visitContinueStmt(stmt: ContinueStmt): IrSegment {
+    visitContinueStmt(stmt: ContinueStmt): IrFragment {
         throw new Error("Method not implemented.");
     }
-    visitReturnStmt(stmt: ReturnStmt): IrSegment {
+    visitReturnStmt(stmt: ReturnStmt): IrFragment {
         throw new Error("Method not implemented.");
     }
-    visitClassStmt(stmt: ClassStmt): IrSegment {
+    visitClassStmt(stmt: ClassStmt): IrFragment {
         throw new Error("Method not implemented.");
     }
 
 
     // Expr
 
-    visitAssignExpr(expr: AssignExpr): [IrSegment, Reg] {
-        const type = expr.type.accept(this);
+    visitAssignExpr(expr: AssignExpr): ExprCompose {
+        const irVar = this.findIrVar(expr.name.lexeme);
+        const ir_type = irVar.type.accept(this);
 
-        const c_varName = this.findCompiledVarName(expr.name.lexeme);
-        let ir_code = "";
-        const [ir, valueReg] = expr.value.accept(this);
-        ir_code += ir;
-        ir_code += `store ${type} ${valueReg}, ${type}* ${c_varName}\n`;
-        return [ir_code, valueReg];
+        const ir_value = expr.value.accept(this);
+        let ir_code = ir_value.ir;
+        ir_code += `store ${ir_type} ${ir_value.reg}, ${ir_type}* ${irVar.name}\n`;
+        return new ExprCompose(ir_type, ir_value.reg, ir_code);
     }
-    visitConditionalExpr(expr: ConditionalExpr): [IrSegment, Reg] {
+    visitConditionalExpr(expr: ConditionalExpr): ExprCompose {
         throw new Error("Method not implemented.");
         // return `${expr.condition.accept(this)} ? ${expr.trueExpr.accept(this)} : ${expr.falseExpr.accept(this)}`;
     }
-    visitLogicalExpr(expr: LogicalExpr): [IrSegment, Reg] {
+    visitLogicalExpr(expr: LogicalExpr): ExprCompose {
         throw new Error("Method not implemented.");
     }
-    visitBinaryExpr(expr: BinaryExpr): [IrSegment, Reg] {
-        const [left_ir, leftReg] = expr.left.accept(this);
-        const [right_ir, rightReg] = expr.right.accept(this);
-        let ir_code = left_ir + right_ir;
+    visitBinaryExpr(expr: BinaryExpr): ExprCompose {
+        const left_comp = expr.left.accept(this);
+        const right_comp = expr.right.accept(this);
+        let ir_code = left_comp.ir + right_comp.ir;
 
-        const type = expr.type.accept(this);
-        const resultReg = `%bin_reg_${Compiler.regI++}`;
+        const result_reg = `%bin_reg_${Compiler.regI++}`;
+        const [ir_type, compared] = compareType(left_comp.irtype, right_comp.irtype);
+        if (compared === "l") {
+            const comp = this.matchingTargetType(ir_type, left_comp.irtype, left_comp.reg);
+            ir_code += comp.ir;
+            left_comp.reg = comp.reg;
+        } else {
+            const comp = this.matchingTargetType(ir_type, right_comp.irtype, right_comp.reg);
+            ir_code += comp.ir;
+            right_comp.reg = comp.reg;
+        }
+
+
         switch (expr.operator.type) {
             case TokenType.Plus:
-                ir_code += `${resultReg} = add ${type} ${leftReg}, ${rightReg}\n`;
+                ir_code += `${result_reg} = ${operator(ir_type, '+')} ${ir_type} ${left_comp.reg}, ${right_comp.reg}\n`;
                 break;
             case TokenType.Minus:
-                ir_code += `${resultReg} = sub ${type} ${leftReg}, ${rightReg}\n`;
+                ir_code += `${result_reg} = ${operator(ir_type, '-')} ${ir_type} ${left_comp.reg}, ${right_comp.reg}\n`;
                 break;
             case TokenType.Star:
-                ir_code += `${resultReg} = mul ${type} ${leftReg}, ${rightReg}\n`;
+                ir_code += `${result_reg} = ${operator(ir_type, '*')} ${ir_type} ${left_comp.reg}, ${right_comp.reg}\n`;
                 break;
             case TokenType.Slash:
                 //有符号除法
-                ir_code += `${resultReg} = sdiv ${type} ${leftReg}, ${rightReg}\n`;
+                ir_code += `${result_reg} = ${operator(ir_type, '/')} ${ir_type} ${left_comp.reg}, ${right_comp.reg}\n`;
+                break;
+            case TokenType.Percent:
+                ir_code += `${result_reg} = ${operator(ir_type, '%')} ${ir_type} ${left_comp.reg}, ${right_comp.reg}\n`;
                 break;
         }
-        return [ir_code, resultReg];
+        return new ExprCompose(ir_type, result_reg, ir_code);
     }
-    visitUnaryExpr(expr: UnaryExpr): [IrSegment, Reg] {
-        const [ir, reg] = expr.right.accept(this);
-        let ir_code = ir;
-        const type = expr.type.accept(this);
+    visitUnaryExpr(expr: UnaryExpr): ExprCompose {
+        const comp = expr.right.accept(this);
+        let ir_code = comp.ir;
+        const ir_type = comp.irtype;
         const resultReg = `%unary_reg_${Compiler.regI++}`;
         const floatPoint = ["float", "double"];
         switch (expr.operator.type) {
             case TokenType.Minus:
                 // 在 LLVM IR 中，整数取反使用 sub 指令：sub i32 0, %value
-                if (floatPoint.includes(type)) {
-                    ir_code += `${resultReg} = fneg ${type} ${reg}\n`;
+                if (floatPoint.includes(ir_type)) {
+                    ir_code += `${resultReg} = fneg ${ir_type} ${comp.reg}\n`;
                 } else {
-                    ir_code += `${resultReg} = sub ${type} 0, ${reg}\n`;
+                    ir_code += `${resultReg} = sub ${ir_type} 0, ${comp.reg}\n`;
                 }
                 break;
         }
-        return [ir_code, resultReg];
+        return new ExprCompose(ir_type, resultReg, ir_code);
     }
-    visitLiteralExpr(expr: LiteralExpr): [IrSegment, Reg] {
+
+    visitPostfixExpr(expr: PostfixExpr): ExprCompose {
+        throw new Error("Method not implemented.");
+    }
+    visitCallExpr(expr: CallExpr): ExprCompose {
+        const reg = `%call_reg_${Compiler.regI++}`;
+        const callee = expr.callee.accept(this);
+        const args = expr.arguments.map(argument => argument.accept(this));
+        let ir_code = "";
+        const arg_comps = args.map(arg => {
+            ir_code += arg.ir
+            return {
+                irtype: arg.irtype,
+                reg: arg.reg,
+            };
+        });
+
+        ir_code += `${reg} = call ${callee.irtype} ${callee.reg}(${arg_comps.map(arg => `${arg.irtype} ${arg.reg}`).join(", ")})\n`;
+        return new ExprCompose(callee.irtype, reg, ir_code);
+    }
+    visitSetExpr(expr: SetExpr): ExprCompose {
+        throw new Error("Method not implemented.");
+    }
+    visitGetExpr(expr: GetExpr): ExprCompose {
+        throw new Error("Method not implemented.");
+    }
+    visitThisExpr(expr: ThisExpr): ExprCompose {
+        throw new Error("Method not implemented.");
+    }
+    visitGroupingExpr(expr: GroupingExpr): ExprCompose {
+        throw new Error("Method not implemented.");
+    }
+    visitVariableExpr(expr: VariableExpr): ExprCompose {
+        const irVar = this.findIrVar(expr.name.lexeme);
+        if (irVar.type instanceof FunctionType) {
+            const ir_type = irVar.type.accept(this);
+            // 对于函数类型，直接返回函数名（如 @printf），不需要创建寄存器
+            return new ExprCompose(ir_type, irVar.name, "");
+        }
+        const reg = `%val_reg_${Compiler.regI++}`;
+        const ir_type = irVar.type.accept(this);
+        const ir_code = `${reg} = load ${ir_type} , ${ir_type}* ${irVar.name}\n`;
+        return new ExprCompose(ir_type, reg, ir_code);
+    }
+
+    visitLiteralExpr(expr: LiteralExpr): ExprCompose {
         const globalReg = `@.constant_${Compiler.constStrI++}`
         if (typeof expr.value === "string") {
             // private unnamed_addr constant [15 x i8] c"Hello, World!\0A\00", align 1
-            const g_ir = `${globalReg} = private unnamed_addr constant [${expr.value.length + 2} x i8] c"${expr.value}\\0A\\00" align 1\n`;
+            const g_ir = `${globalReg} = private unnamed_addr constant [${expr.value.length + 2} x i8] c"${expr.value}\\0A\\00", align 1\n`;
             this.globals.push(g_ir);
-            return ["", globalReg];
+            // 不在这里返回 g_ir，因为它会被添加到全局作用域
+            return new ExprCompose("i8*", globalReg, "");
         }
-        return ["", expr.value?.toString() ?? ""]
-    }
-    visitPostfixExpr(expr: PostfixExpr): [IrSegment, Reg] {
-        throw new Error("Method not implemented.");
-    }
-    visitCallExpr(expr: CallExpr): [IrSegment, Reg] {
-        const reg = `%call_reg_${Compiler.regI++}`;
-        const calleeType = expr.callee.type.accept(this);
-        const args = expr.arguments.map(argument => argument.accept(this));
-        const argsRegs: Reg[] = [];
-        let ir_code = "";
-        args.forEach(arg => {
-            if (arg[0]) {
-                ir_code += arg[0];
-            }
-            if (arg[1]) {
-                argsRegs.push(arg[1]);
-            }
-        });
-
-        const [code, callee] = expr.callee.accept(this);
-        if (code) {
-            ir_code += code;
-        }
-        const paramTypes = expr.arguments.map(argument => argument.type.accept(this));
-
-        ir_code += `call ${calleeType} ${callee}(${argsRegs.map((arg, index) => `${paramTypes[index]} ${arg}`).join(", ")})\n`;
-        return [ir_code, reg];
-    }
-    visitSetExpr(expr: SetExpr): [IrSegment, Reg] {
-        throw new Error("Method not implemented.");
-    }
-    visitGetExpr(expr: GetExpr): [IrSegment, Reg] {
-        throw new Error("Method not implemented.");
-    }
-    visitThisExpr(expr: ThisExpr): [IrSegment, Reg] {
-        throw new Error("Method not implemented.");
-    }
-    visitGroupingExpr(expr: GroupingExpr): [IrSegment, Reg] {
-        throw new Error("Method not implemented.");
-    }
-    visitVariableExpr(expr: VariableExpr): [IrSegment, Reg] {
-        const reg = `%val_reg_${Compiler.regI++}`;
-        const type = expr.type.accept(this);
-        const c_varName = this.findCompiledVarName(expr.name.lexeme);
-        if (expr.type instanceof FunctionType) {
-            const ir_code = `${reg} = bitcast ${type}* ${c_varName} to ${type}*\n`;
-            return [ir_code, reg];
-        }
-        const ir_code = `${reg} = load ${type} , ${type}* ${c_varName}\n`;
-        return [ir_code, reg];
+        return new ExprCompose("i32", expr.value?.toString() ?? "", "");
     }
 
+    //编译类型表达式
 
     visitPrimitiveType(expr: PrimitiveType): string {
         if (expr.name === "string") {
@@ -252,52 +289,90 @@ export class Compiler implements ExprVisitor<[IrSegment, Reg]>, StmtVisitor<IrSe
         return "...";
     }
 
-
+    //作用域
     beginScope(): void {
-        this.scopes.push(new Map<string, string>());
+        this.scopes.push(new Map<string, IrVar>());
     }
     endScope(): void {
         this.scopes.pop();
     }
 
-    findCompiledVarName(sourceName: string): string {
+    define(name: string, type: TypeExpr): void {
+        this.scopes[this.scopes.length - 1].set(name, new IrVar(name, type));
+    }
+    findIrVar(sourceName: string): IrVar {
         for (let i = this.scopes.length - 1; i >= 0; i--) {
             const scope = this.scopes[i];
-            const compiledName = scope.get(sourceName);
-            if (compiledName) {
-                return compiledName;
+            const ir_var = scope.get(sourceName);
+            if (ir_var) {
+                return ir_var;
             }
         }
         throw new Error(`Variable ${sourceName} not found`);
     }
 
-    matchingTargetType(targetType: string, sourceType: string, reg: Reg): [IrSegment, Reg] {
+    matchingTargetType(targetType: string, sourceType: string, reg: Reg): ExprCompose {
         const floatPoint = ["i8", "i16", "i32", "i64", "float", "double"];
         const targetI = floatPoint.indexOf(targetType);
         const sourceI = floatPoint.indexOf(sourceType);
         const turnReg = `%turn_reg_${Compiler.regI++}`;
         if (targetI == sourceI) {
-            return ["", reg];
+            return new ExprCompose(targetType, reg, "");
         } else if (targetI < sourceI) { //降级
             if (targetI < 4) {
                 if (sourceI < 4) {//整数间转换
-                    return [`${turnReg} = trunc ${sourceType} ${reg} to ${targetType}\n`, turnReg];
+                    const ir = `${turnReg} = trunc ${sourceType} ${reg} to ${targetType}\n`;
+                    return new ExprCompose(targetType, turnReg, ir);
                 } else { //浮点数转整数
-                    return [`${turnReg} = fptosi ${sourceType} ${reg} to ${targetType}\n`, turnReg];
+                    const ir = `${turnReg} = fptosi ${sourceType} ${reg} to ${targetType}\n`;
+                    return new ExprCompose(targetType, turnReg, ir);
                 }
             } else {
-                return [`${turnReg} = fptrunc ${sourceType} ${reg} to ${targetType}\n`, turnReg];
+                const ir = `${turnReg} = fptrunc ${sourceType} ${reg} to ${targetType}\n`;
+                return new ExprCompose(targetType, turnReg, ir);
             }
         } else { //升级
             if (targetI > 3) {
                 if (sourceI > 3) {//浮点数间转换
-                    return [`${turnReg} = fpext ${sourceType} ${reg} to ${targetType}\n`, turnReg];
+                    const ir = `${turnReg} = fpext ${sourceType} ${reg} to ${targetType}\n`;
+                    return new ExprCompose(targetType, turnReg, ir);
                 } else { //整数转浮点数
-                    return [`${turnReg} = sitofp ${sourceType} ${reg} to ${targetType}\n`, turnReg];
+                    const ir = `${turnReg} = sitofp ${sourceType} ${reg} to ${targetType}\n`;
+                    return new ExprCompose(targetType, turnReg, ir);
                 }
             } else {
-                return [`${turnReg} = sext ${sourceType} ${reg} to ${targetType}\n`, turnReg];
+                const ir = `${turnReg} = sext ${sourceType} ${reg} to ${targetType}\n`;
+                return new ExprCompose(targetType, turnReg, ir);
             }
         }
     }
+}
+
+//比较两个类型，返回最大类型和 需要改变类型的  l 左边，r 右边
+function compareType(type1: string, type2: string): [IrType, 'r' | 'l'] {
+    const floatPoint = ["i8", "i16", "i32", "i64", "float", "double"];
+    const index1 = floatPoint.indexOf(type1);
+    const index2 = floatPoint.indexOf(type2);
+    const maxType = floatPoint[Math.max(index1, index2)];
+    const compared = index2 > index1 ? "l" : "r"
+    return [maxType, compared];
+}
+
+function operator(type: IrType, operator: '+' | '-' | '*' | '/' | '%'): string {
+    const floatArithmetic = ["float", "double"].includes(type);
+    switch (operator) {
+        case '+':
+            return floatArithmetic ? "fadd" : "add";
+        case '-':
+            return floatArithmetic ? "fsub" : "sub";
+        case '*':
+            return floatArithmetic ? "fmul" : "mul";
+        case '/':
+            return floatArithmetic ? "fdiv" : "sdiv";
+        case '%':
+            return floatArithmetic ? "frem" : "srem";
+        default:
+            throw new Error(`Unsupported operator: ${operator}`);
+    }
+
 }

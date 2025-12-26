@@ -1,17 +1,6 @@
 import { GrusValue } from "./GrusValue";
 import { Token } from "./Token";
-import { TypeExpr } from "./TypeExpr";
-
-
-export interface TExpr{
-    type: TypeExpr;
-}
-
-export abstract class Expr implements TExpr {
-    type: TypeExpr;
-    constructor() {
-        this.type = null as unknown as TypeExpr;
-    }
+export abstract class Expr  {
     abstract accept<R>(visitor: ExprVisitor<R>): R;
 }
 
