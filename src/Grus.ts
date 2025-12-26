@@ -16,7 +16,6 @@ export class Grus {
         const tokens = scanner.scanTokens();
         const parser = new Parser(tokens, this.parserErrorHandler.bind(this));
         const statements = parser.parse();
-        console.log(statements);
         if (!statements) {
             throw new Error('解析失败');
         }

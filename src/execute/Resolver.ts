@@ -189,7 +189,7 @@ export class Resolver implements ExprVisitor<TypeExpr>, StmtVisitor<void> {
                 }
                 break;
             case TokenType.Minus:
-                const allowedTypes = ["i32", "i64", "f32", "f64"];
+                const allowedTypes = ["i8", "i16", "i32", "i64", "float", "double"];
                 if (allowedTypes.includes(rightType.toString())) {
                     returnType = rightType;
                 } else {
@@ -202,18 +202,22 @@ export class Resolver implements ExprVisitor<TypeExpr>, StmtVisitor<void> {
         return returnType;
     }
     visitLiteralExpr(expr: LiteralExpr): TypeExpr {
-        let returnType: TypeExpr;
+        let literalType: TypeExpr;
         if (typeof expr.value === "string") {
-            returnType = new PrimitiveType("string");
+            literalType = new PrimitiveType("string");
         } else if (typeof expr.value === "number") {
-            returnType = new PrimitiveType("i32");
-            return new PrimitiveType("i32");
+            if (!Number.isInteger(expr.value)) {
+                literalType = new PrimitiveType("float");
+
+            } else {
+                literalType = new PrimitiveType("i32");
+            }
         } else if (typeof expr.value === "boolean") {
-            returnType = new PrimitiveType("i1");
+            literalType = new PrimitiveType("i1");
         } else {
-            returnType = new PrimitiveType("void64");
+            literalType = new PrimitiveType("void64");
         }
-        return returnType;
+        return literalType;
     }
     visitPostfixExpr(expr: PostfixExpr): TypeExpr {
         throw new Error("Method not implemented.");

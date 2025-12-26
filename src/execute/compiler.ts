@@ -266,7 +266,14 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
             // 不在这里返回 g_ir，因为它会被添加到全局作用域
             return new ExprCompose("i8*", globalReg, "");
         }
-        return new ExprCompose("i32", expr.value?.toString() ?? "", "");
+        if (typeof expr.value === "number") {
+            if (!Number.isInteger(expr.value)) {
+                return new ExprCompose("float", expr.value?.toString() ?? "", "");
+            } else {
+                return new ExprCompose("i32", expr.value?.toString() ?? "", "");
+            }
+        }
+        return new ExprCompose("void64", "", "");
     }
 
     //编译类型表达式

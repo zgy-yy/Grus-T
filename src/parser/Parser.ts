@@ -365,7 +365,9 @@ export class Parser {
             case TokenType.Identifier:
                 return new VariableExpr(token);
             case TokenType.LeftParen:
-                return this.expression();
+                const expr = this.expression();
+                this.consume(TokenType.RightParen, "Expect ')' after expression.");
+                return expr;
             default:
                 throw this.error(token, "Expect expression.");
         }
