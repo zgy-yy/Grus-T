@@ -162,7 +162,7 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
         let ir_code = left_comp.ir + right_comp.ir;
 
         const result_reg = `%bin_reg_${Compiler.regI++}`;
-        const [ir_type, compared] = compareType(left_comp.irtype, right_comp.irtype);
+        let [ir_type, compared] = compareType(left_comp.irtype, right_comp.irtype);
         if (compared === "l") {
             const comp = this.matchingTargetType(ir_type, left_comp.irtype, left_comp.reg);
             ir_code += comp.ir;
@@ -172,6 +172,7 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
             ir_code += comp.ir;
             right_comp.reg = comp.reg;
         }
+
 
 
         switch (expr.operator.type) {
@@ -196,6 +197,30 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
                 break;
             case TokenType.LessLess:
                 ir_code += `${result_reg} = ${binaryOperator(ir_type, '<<')} ${ir_type} ${left_comp.reg}, ${right_comp.reg}\n`;
+                break;
+            case TokenType.EqualEqual:
+                ir_code += `${result_reg} = ${binaryOperator(ir_type, '==')} ${ir_type} ${left_comp.reg}, ${right_comp.reg}\n`;
+                ir_type = "i1"
+                break;
+            case TokenType.BangEqual:
+                ir_code += `${result_reg} = ${binaryOperator(ir_type, '!=')} ${ir_type} ${left_comp.reg}, ${right_comp.reg}\n`;
+                ir_type = "i1"
+                break;
+            case TokenType.Greater:
+                ir_code += `${result_reg} = ${binaryOperator(ir_type, '>')} ${ir_type} ${left_comp.reg}, ${right_comp.reg}\n`;
+                ir_type = "i1"
+                break;
+            case TokenType.GreaterEqual:
+                ir_code += `${result_reg} = ${binaryOperator(ir_type, '>=')} ${ir_type} ${left_comp.reg}, ${right_comp.reg}\n`;
+                ir_type = "i1"
+                break;
+            case TokenType.Less:
+                ir_code += `${result_reg} = ${binaryOperator(ir_type, '<')} ${ir_type} ${left_comp.reg}, ${right_comp.reg}\n`;
+                ir_type = "i1"
+                break;
+            case TokenType.LessEqual:
+                ir_code += `${result_reg} = ${binaryOperator(ir_type, '<=')} ${ir_type} ${left_comp.reg}, ${right_comp.reg}\n`;
+                ir_type = "i1"
                 break;
         }
         return new ExprCompose(ir_type, result_reg, ir_code);
@@ -227,11 +252,38 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
         const callee = expr.callee.accept(this);
         const args = expr.arguments.map(argument => argument.accept(this));
         let ir_code = "";
+
+        // 检查是否是可变参数函数（如printf）
+        let isVariadic = false;
+        if (expr.callee instanceof VariableExpr) {
+            const irVar = this.findIrVar(expr.callee.name.lexeme);
+            if (irVar.type instanceof FunctionType) {
+                // 检查参数列表中是否包含"..."（可变参数）
+                isVariadic = irVar.type.parameters.some(param =>
+                    param instanceof PrimitiveType && param.name === "..."
+                );
+            }
+        }
+
         const arg_comps = args.map(arg => {
-            ir_code += arg.ir
+            ir_code += arg.ir;
+
+            // 对于可变参数函数，将较小的整数类型提升为i32
+            let finalType = arg.irtype;
+            let finalReg = arg.reg;
+
+            if (isVariadic && (arg.irtype === "i1" || arg.irtype === "i8" || arg.irtype === "i16")) {
+                const extendReg = `%extend_reg_${Compiler.regI++}`;
+                // i1使用zext，其他使用sext
+                const extendOp = arg.irtype === "i1" ? "zext" : "sext";
+                ir_code += `${extendReg} = ${extendOp} ${arg.irtype} ${arg.reg} to i32\n`;
+                finalType = "i32";
+                finalReg = extendReg;
+            }
+
             return {
-                irtype: arg.irtype,
-                reg: arg.reg,
+                irtype: finalType,
+                reg: finalReg,
             };
         });
 
@@ -271,13 +323,14 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
             this.globals.push(g_ir);
             // 不在这里返回 g_ir，因为它会被添加到全局作用域
             return new ExprCompose("i8*", globalReg, "");
-        }
-        if (typeof expr.value === "number") {
+        } else if (typeof expr.value === "number") {
             if (!Number.isInteger(expr.value)) {
                 return new ExprCompose("float", expr.value?.toString() ?? "", "");
             } else {
                 return new ExprCompose("i32", expr.value?.toString() ?? "", "");
             }
+        } else if (typeof expr.value === "boolean") {
+            return new ExprCompose("i1", expr.value ? "1" : "0", "");
         }
         return new ExprCompose("void64", "", "");
     }
@@ -354,7 +407,9 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
                     return new ExprCompose(targetType, turnReg, ir);
                 }
             } else {
-                const ir = `${turnReg} = sext ${sourceType} ${reg} to ${targetType}\n`;
+                // 对于 i1 (布尔值)，使用 zext (零扩展)，其他整数类型使用 sext (符号扩展)
+                const extendOp = sourceType === "i1" ? "zext" : "sext";
+                const ir = `${turnReg} = ${extendOp} ${sourceType} ${reg} to ${targetType}\n`;
                 return new ExprCompose(targetType, turnReg, ir);
             }
         }
@@ -363,7 +418,7 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
 
 //比较两个类型，返回最大类型和 需要改变类型的  l 左边，r 右边
 function compareType(type1: string, type2: string): [IrType, 'r' | 'l'] {
-    const floatPoint = ["i8", "i16", "i32", "i64", "float", "double"];
+    const floatPoint = ["i1", "i8", "i16", "i32", "i64", "float", "double"];
     const index1 = floatPoint.indexOf(type1);
     const index2 = floatPoint.indexOf(type2);
     const maxType = floatPoint[Math.max(index1, index2)];
@@ -371,7 +426,7 @@ function compareType(type1: string, type2: string): [IrType, 'r' | 'l'] {
     return [maxType, compared];
 }
 
-function binaryOperator(type: IrType, operator: '+' | '-' | '*' | '/' | '%' | '>>' | '<<'): string {
+function binaryOperator(type: IrType, operator: '+' | '-' | '*' | '/' | '%' | '>>' | '<<' | '==' | '!=' | '>' | '>=' | '<' | '<='): string {
     const floatArithmetic = ["float", "double"].includes(type);
     switch (operator) {
         case '+':
@@ -388,6 +443,20 @@ function binaryOperator(type: IrType, operator: '+' | '-' | '*' | '/' | '%' | '>
             return "ashr"; //算术右移
         case '<<':
             return "shl";
+        case '==':
+            return floatArithmetic ? "fcmp oeq" : "icmp eq";
+        case '!=':
+            return floatArithmetic ? "fcmp une" : "icmp ne";
+        case '>':
+            return floatArithmetic ? "fcmp ogt" : "icmp sgt";
+        case '>=':
+            return floatArithmetic ? "fcmp oge" : "icmp sge";
+        case '<':
+            return floatArithmetic ? "fcmp olt" : "icmp slt";
+        case '<=':
+            return floatArithmetic ? "fcmp ole" : "icmp sle";
+
+
         default:
             throw new Error(`Unsupported operator: ${operator}`);
     }

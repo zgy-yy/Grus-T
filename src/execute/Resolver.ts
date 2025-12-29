@@ -173,6 +173,13 @@ export class Resolver implements ExprVisitor<TypeExpr>, StmtVisitor<void> {
         const leftType = this.resolveExpr(expr.left);
         const rightType = this.resolveExpr(expr.right);
 
+        if (leftType.toString() === "i1" && rightType.toString() === "i1") {
+            if (!(['&', '|', '^', '!', '&&', '||', '==', '!='].includes(expr.operator.lexeme))) {
+                throw this.error(expr.operator, `Logical operators do not support boolean types`);
+            }
+        }
+
+
         if (['float', 'double'].includes(leftType.toString()) || ['float', 'double'].includes(rightType.toString())) {
             switch (expr.operator.type) {
                 case TokenType.GreaterGreater:
@@ -333,6 +340,9 @@ export class Resolver implements ExprVisitor<TypeExpr>, StmtVisitor<void> {
 
 function sameType(type1: TypeExpr, type2: TypeExpr): boolean {
     const numberTypes = ["i8", "i16", "i32", "i64", "float", "double"];
+    if (type1.toString() === "i1" && type2.toString() === "i1") {
+        return true;
+    }
     if (numberTypes.includes(type1.toString()) && numberTypes.includes(type2.toString())) {
         return true;
     }

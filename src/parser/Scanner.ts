@@ -24,7 +24,7 @@ const keywords = new Map<string, TokenType>([
   ['return', TokenType.Return],
 
   ['null', TokenType.Null],
-
+  
   ['true', TokenType.True],
   ['false', TokenType.False],
 ]);
