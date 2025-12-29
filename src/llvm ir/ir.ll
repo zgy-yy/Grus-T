@@ -7,11 +7,16 @@ declare i32 @printf(ptr, ...)
 
 define i32 @main() {
 entry:
-  %bin_reg_0 = add i32 10, 5
-  %unary_reg_2 = sub i32 0, %bin_reg_0
-  %x = alloca i32, align 4
-  store i32 %unary_reg_2, ptr %x, align 4
-  %val_reg_5 = load i32, ptr %x, align 4
-  %call_reg_4 = call i32 (ptr, ...) @printf(ptr @.constant_2, i32 %val_reg_5)
+  %x = alloca i8, align 1
+  %turn_reg_0 = trunc i32 1 to i8
+  store i8 %turn_reg_0, ptr %x, align 1
+  %val_reg_1 = load i8, ptr %x, align 1
+  %turn_reg_3 = sext i8 %val_reg_1 to i32
+  %bin_reg_2 = shl i32 %turn_reg_3, 10
+  %a = alloca i8, align 1
+  %turn_reg_4 = trunc i32 %bin_reg_2 to i8
+  store i8 %turn_reg_4, ptr %a, align 1
+  %val_reg_6 = load i8, ptr %a, align 1
+  %call_reg_5 = call i32 (ptr, ...) @printf(ptr @.constant_2, i8 %val_reg_6)
   ret i32 0
 }

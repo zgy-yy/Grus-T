@@ -176,20 +176,26 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
 
         switch (expr.operator.type) {
             case TokenType.Plus:
-                ir_code += `${result_reg} = ${operator(ir_type, '+')} ${ir_type} ${left_comp.reg}, ${right_comp.reg}\n`;
+                ir_code += `${result_reg} = ${binaryOperator(ir_type, '+')} ${ir_type} ${left_comp.reg}, ${right_comp.reg}\n`;
                 break;
             case TokenType.Minus:
-                ir_code += `${result_reg} = ${operator(ir_type, '-')} ${ir_type} ${left_comp.reg}, ${right_comp.reg}\n`;
+                ir_code += `${result_reg} = ${binaryOperator(ir_type, '-')} ${ir_type} ${left_comp.reg}, ${right_comp.reg}\n`;
                 break;
             case TokenType.Star:
-                ir_code += `${result_reg} = ${operator(ir_type, '*')} ${ir_type} ${left_comp.reg}, ${right_comp.reg}\n`;
+                ir_code += `${result_reg} = ${binaryOperator(ir_type, '*')} ${ir_type} ${left_comp.reg}, ${right_comp.reg}\n`;
                 break;
             case TokenType.Slash:
                 //有符号除法
-                ir_code += `${result_reg} = ${operator(ir_type, '/')} ${ir_type} ${left_comp.reg}, ${right_comp.reg}\n`;
+                ir_code += `${result_reg} = ${binaryOperator(ir_type, '/')} ${ir_type} ${left_comp.reg}, ${right_comp.reg}\n`;
                 break;
             case TokenType.Percent:
-                ir_code += `${result_reg} = ${operator(ir_type, '%')} ${ir_type} ${left_comp.reg}, ${right_comp.reg}\n`;
+                ir_code += `${result_reg} = ${binaryOperator(ir_type, '%')} ${ir_type} ${left_comp.reg}, ${right_comp.reg}\n`;
+                break;
+            case TokenType.GreaterGreater:
+                ir_code += `${result_reg} = ${binaryOperator(ir_type, '>>')} ${ir_type} ${left_comp.reg}, ${right_comp.reg}\n`;
+                break;
+            case TokenType.LessLess:
+                ir_code += `${result_reg} = ${binaryOperator(ir_type, '<<')} ${ir_type} ${left_comp.reg}, ${right_comp.reg}\n`;
                 break;
         }
         return new ExprCompose(ir_type, result_reg, ir_code);
@@ -365,7 +371,7 @@ function compareType(type1: string, type2: string): [IrType, 'r' | 'l'] {
     return [maxType, compared];
 }
 
-function operator(type: IrType, operator: '+' | '-' | '*' | '/' | '%'): string {
+function binaryOperator(type: IrType, operator: '+' | '-' | '*' | '/' | '%' | '>>' | '<<'): string {
     const floatArithmetic = ["float", "double"].includes(type);
     switch (operator) {
         case '+':
@@ -378,6 +384,10 @@ function operator(type: IrType, operator: '+' | '-' | '*' | '/' | '%'): string {
             return floatArithmetic ? "fdiv" : "sdiv";
         case '%':
             return floatArithmetic ? "frem" : "srem";
+        case '>>':
+            return "ashr"; //算术右移
+        case '<<':
+            return "shl";
         default:
             throw new Error(`Unsupported operator: ${operator}`);
     }

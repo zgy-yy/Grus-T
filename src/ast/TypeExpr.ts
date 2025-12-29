@@ -68,14 +68,3 @@ export class TempOmittedType extends TypeExpr {
         return "temp omitted";
     }
 }
-
-export function sameType(type1: TypeExpr, type2: TypeExpr): boolean {
-    const numberTypes = ["i16","i32", "i64", "float", "double"];
-    if (numberTypes.includes(type1.toString()) && numberTypes.includes(type2.toString())) {
-        return true;
-    }
-    if (type1 instanceof PrimitiveType && type2 instanceof PrimitiveType) {
-        return type1.name === type2.name;
-    }
-    return false;
-}

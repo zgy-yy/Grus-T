@@ -1,5 +1,5 @@
 import { AssignExpr, BinaryExpr, CallExpr, ConditionalExpr, Expr, ExprVisitor, GetExpr, GroupingExpr, LiteralExpr, LogicalExpr, PostfixExpr, SetExpr, ThisExpr, UnaryExpr, VariableExpr } from "@/ast/Expr";
-import { FunctionType, TypeExpr, PrimitiveType, sameType, TempOmittedType } from "@/ast/TypeExpr";
+import { FunctionType, TypeExpr, PrimitiveType, TempOmittedType } from "@/ast/TypeExpr";
 import { BlockStmt, BreakStmt, ClassStmt, ContinueStmt, ExpressionStmt, ForStmt, FunctionStmt, IfStmt, ReturnStmt, Stmt, StmtVisitor, VarStmt, WhileStmt } from "@/ast/Stmt";
 import { Token } from "@/ast/Token";
 import { ParserErrorHandler } from "@/parser/ErrorHandler";
@@ -172,9 +172,22 @@ export class Resolver implements ExprVisitor<TypeExpr>, StmtVisitor<void> {
     visitBinaryExpr(expr: BinaryExpr): TypeExpr {
         const leftType = this.resolveExpr(expr.left);
         const rightType = this.resolveExpr(expr.right);
+
+        if (['float', 'double'].includes(leftType.toString()) || ['float', 'double'].includes(rightType.toString())) {
+            switch (expr.operator.type) {
+                case TokenType.GreaterGreater:
+                    {
+                        throw this.error(expr.operator, `Float arithmetic does not support shift operators`);
+                    }
+                case TokenType.LessLess:
+                    throw this.error(expr.operator, `Float arithmetic does not support shift operators`);
+            }
+        }
+
         if (!sameType(leftType, rightType)) {
             throw this.error(expr.operator, `Type mismatch: ${leftType} != ${rightType}`);
         }
+
         return leftType;
     }
     visitUnaryExpr(expr: UnaryExpr): TypeExpr {
@@ -315,4 +328,16 @@ export class Resolver implements ExprVisitor<TypeExpr>, StmtVisitor<void> {
         this.errorHandler(token, message);
         return new ResolverError(token, message);
     }
+}
+
+
+function sameType(type1: TypeExpr, type2: TypeExpr): boolean {
+    const numberTypes = ["i8", "i16", "i32", "i64", "float", "double"];
+    if (numberTypes.includes(type1.toString()) && numberTypes.includes(type2.toString())) {
+        return true;
+    }
+    if (type1 instanceof PrimitiveType && type2 instanceof PrimitiveType) {
+        return type1.name === type2.name;
+    }
+    return false;
 }

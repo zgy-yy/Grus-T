@@ -1,5 +1,5 @@
 fun main() i32 {
-  float x = 5;
-  float y = -x;
-  printf("%f\\n", y);
+  float  x = 1;
+  i8  a =x<<10;
+  printf("%d", a);
 }
