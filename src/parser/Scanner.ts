@@ -24,7 +24,7 @@ const keywords = new Map<string, TokenType>([
   ['return', TokenType.Return],
 
   ['null', TokenType.Null],
-  
+
   ['true', TokenType.True],
   ['false', TokenType.False],
 ]);
@@ -50,6 +50,7 @@ export class Scanner {
     }
 
     this.tokens.push(new Token(TokenType.EOF, '', null, this.line, this.column));
+    console.log(this.tokens)
     return this.tokens;
   }
 
@@ -193,6 +194,51 @@ export class Scanner {
 
   // 处理数字字面量
   private number(): void {
+    const hexadecimal = () => {
+      while (isHexDigit(this.peek())) {
+        this.advance();
+      }
+    }
+    const octal = () => {
+      while (isOctalDigit(this.peek())) {
+        this.advance();
+      }
+    }
+    const binary = () => {
+      while (isBinaryDigit(this.peek())) {
+        this.advance();
+      }
+    }
+    if (['x', 'o', 'b'].includes(this.peek())) {
+      let base = 10;
+      switch (this.peek()) {
+        case 'x':
+          this.advance();
+          hexadecimal();
+          base = 16;
+          break;
+        case 'o':
+          this.advance();
+          octal();
+          base = 8;
+          break;
+        case 'b':
+          this.advance();
+          binary();
+          base = 2;
+          break
+        default:
+          this.error(this.line, this.column, `Invalid number literal: ${this.source.substring(this.start, this.current)}`);
+          break;
+      }
+      const num=this.source.substring(this.start, this.current).slice(2);
+      const value = parseInt(num, base);
+      console.log(value)
+      this.addToken(TokenType.Number, value);
+      return;
+    }
+
+
     while (isDigit(this.peek())) {
       this.advance();
     }
@@ -209,6 +255,7 @@ export class Scanner {
 
     const value = parseFloat(this.source.substring(this.start, this.current));
     this.addToken(TokenType.Number, value);
+
   }
 
   // 处理标识符和关键字
@@ -268,6 +315,17 @@ export class Scanner {
 
 function isDigit(c: string): boolean {
   return c >= "0" && c <= "9";
+}
+
+function isHexDigit(c: string): boolean {
+  return (c >= "0" && c <= "9") || (c >= "a" && c <= "f") || (c >= "A" && c <= "F");
+}
+
+function isOctalDigit(c: string): boolean {
+  return c >= "0" && c <= "7";
+}
+function isBinaryDigit(c: string): boolean {
+  return c === "0" || c === "1";
 }
 
 function isAlpha(c: string): boolean {

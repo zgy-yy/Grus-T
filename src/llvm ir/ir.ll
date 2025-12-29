@@ -8,7 +8,7 @@ declare i32 @printf(ptr, ...)
 define i32 @main() {
 entry:
   %x = alloca i8, align 1
-  %turn_reg_0 = zext i1 false to i8
+  %turn_reg_0 = trunc i32 0 to i8
   store i8 %turn_reg_0, ptr %x, align 1
   %val_reg_2 = load i8, ptr %x, align 1
   %extend_reg_3 = sext i8 %val_reg_2 to i32

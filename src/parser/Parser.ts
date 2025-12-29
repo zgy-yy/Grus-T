@@ -357,7 +357,7 @@ export class Parser {
             case TokenType.Null:
                 return new LiteralExpr(null);
             case TokenType.Number:
-                return new LiteralExpr(parseFloat(token.lexeme));
+                return new LiteralExpr(parseFloat(token.literal!.toString()));
             case TokenType.String:
                 return new LiteralExpr(token.literal);
             case TokenType.This:

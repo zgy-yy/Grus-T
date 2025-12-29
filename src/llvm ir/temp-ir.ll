@@ -3,7 +3,7 @@ declare i32 @printf(i8*, ...)
 define i32 @main() {
         entry:
         %x = alloca i8
-%turn_reg_0 = zext i1 0 to i8
+%turn_reg_0 = trunc i32 0 to i8
 store i8 %turn_reg_0, i8* %x
 
 %val_reg_2 = load i8 , i8* %x
