@@ -16,6 +16,9 @@ export class PrimitiveType extends TypeExpr {
     name: string;
     constructor(name: string) {
         super();
+        if (name === 'bool') {
+            name = 'i1';
+        }
         this.name = name;
     }
     accept<R>(visitor: TypesVisitor<R>): R {

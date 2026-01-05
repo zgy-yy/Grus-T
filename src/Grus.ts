@@ -44,7 +44,7 @@ export class Grus {
         for (let i = 0; i < token.lexeme.length; i++) {
             this.reportError(token.line, token.column - i);
         }
-        console.error(`resolver error [${token.line}:${token.column}] ${message}`);
+        console.error(`resolver error  [${token.line}:${token.column}] ${token.lexeme}, ${message}`);
     }
     compilerErrorHandler(token: Token, message: string) {
         for (let i = 0; i < token.lexeme.length; i++) {

@@ -1,5 +1,5 @@
 import { AssignExpr, BinaryExpr, CallExpr, ConditionalExpr, Expr, ExprVisitor, GetExpr, GroupingExpr, LiteralExpr, LogicalExpr, PostfixExpr, SetExpr, ThisExpr, UnaryExpr, VariableExpr } from "@/ast/Expr";
-import { FunctionType, TypeExpr, PrimitiveType, TempOmittedType } from "@/ast/TypeExpr";
+import { FunctionType, TypeExpr, PrimitiveType, TempOmittedType, VoidType } from "@/ast/TypeExpr";
 import { BlockStmt, BreakStmt, ClassStmt, ContinueStmt, ExpressionStmt, ForStmt, FunctionStmt, IfStmt, ReturnStmt, Stmt, StmtVisitor, VarStmt, WhileStmt } from "@/ast/Stmt";
 import { Token } from "@/ast/Token";
 import { ParserErrorHandler } from "@/parser/ErrorHandler";
@@ -54,11 +54,8 @@ export class Resolver implements ExprVisitor<TypeExpr>, StmtVisitor<void> {
         this.declare(stmt.name);
         if (stmt.initializer) {
             const initType = this.resolveExpr(stmt.initializer);
-            if (!stmt.type) {
-                stmt.type = initType;
-            }
-            if (!stmt.type) {
-                throw this.error(stmt.name, `Initializer type ${initType} does not match variable type ${stmt.type}.`);
+            if (!checkSameType(initType, stmt.type)) {
+                throw this.error(stmt.name, `Type mismatch: ${initType} != ${stmt.type}`);
             }
         } else {
             if (!stmt.type) {
@@ -84,43 +81,43 @@ export class Resolver implements ExprVisitor<TypeExpr>, StmtVisitor<void> {
 
 
     visitClassStmt(stmt: ClassStmt): void {
-        const enclosingClass = this.currentClass;
-        this.currentClass = "CLASS";
-        this.declare(stmt.name);
-        // this.define(stmt.name, stmt.type);
+        // const enclosingClass = this.currentClass;
+        // this.currentClass = "CLASS";
+        // this.declare(stmt.name);
+        // // this.define(stmt.name, stmt.type);
 
-        this.beginScope();
-        this.scopes[this.scopes.length - 1].set("this", { type: new PrimitiveType("this"), defined: true });
-        for (const method of stmt.methods) {
-            this.resolveFunction(method);
-        }
-        this.endScope();
-        this.currentClass = enclosingClass;
+        // this.beginScope();
+        // this.scopes[this.scopes.length - 1].set("this", { type: new PrimitiveType("this"), defined: true });
+        // for (const method of stmt.methods) {
+        //     this.resolveFunction(method);
+        // }
+        // this.endScope();
+        // this.currentClass = enclosingClass;
     }
     visitExpressionStmt(stmt: ExpressionStmt): void {
         this.resolveExpr(stmt.expression);
     }
     visitIfStmt(stmt: IfStmt): void {
-        this.resolveExpr(stmt.condition);
-        this.resolveStmt(stmt.thenBranch);
-        if (stmt.elseBranch) {
-            this.resolveStmt(stmt.elseBranch);
-        }
+        // this.resolveExpr(stmt.condition);
+        // this.resolveStmt(stmt.thenBranch);
+        // if (stmt.elseBranch) {
+        //     this.resolveStmt(stmt.elseBranch);
+        // }
     }
     visitWhileStmt(stmt: WhileStmt): void {
 
-        this.resolveExpr(stmt.condition);
-        this.loopDepth++;
-        this.resolveStmt(stmt.body);
-        this.loopDepth--;
+        // this.resolveExpr(stmt.condition);
+        // this.loopDepth++;
+        // this.resolveStmt(stmt.body);
+        // this.loopDepth--;
     }
     visitForStmt(stmt: ForStmt): void {
-        this.resolveStmt(stmt.initializer);
-        this.resolveExpr(stmt.condition);
-        this.resolveExpr(stmt.increment);
-        this.loopDepth++;
-        this.resolveStmt(stmt.body);
-        this.loopDepth--;
+        // this.resolveStmt(stmt.initializer);
+        // this.resolveExpr(stmt.condition);
+        // this.resolveExpr(stmt.increment);
+        // this.loopDepth++;
+        // this.resolveStmt(stmt.body);
+        // this.loopDepth--;
     }
     visitBreakStmt(stmt: BreakStmt): void {
         if (this.loopDepth <= 0) {
@@ -153,7 +150,7 @@ export class Resolver implements ExprVisitor<TypeExpr>, StmtVisitor<void> {
     visitAssignExpr(expr: AssignExpr): TypeExpr {
         const leftType = this.resolveLocal(expr.name);
         const rightType = this.resolveExpr(expr.value);
-        if (!sameType(leftType, rightType)) {
+        if (!checkSameType(leftType, rightType)) {
             throw this.error(expr.name, `Type mismatch: ${leftType} != ${rightType}`);
         }
         return leftType;
@@ -172,69 +169,39 @@ export class Resolver implements ExprVisitor<TypeExpr>, StmtVisitor<void> {
     visitBinaryExpr(expr: BinaryExpr): TypeExpr {
         const leftType = this.resolveExpr(expr.left);
         const rightType = this.resolveExpr(expr.right);
-
-        if (leftType.toString() === "i1" && rightType.toString() === "i1") {
-            if (!(['&', '|', '^', '!', '&&', '||', '==', '!='].includes(expr.operator.lexeme))) {
-                throw this.error(expr.operator, `Logical operators do not support boolean types`);
+        if (['<<', '>>', '|', '&', '^'].includes(expr.operator.lexeme)) {
+            if (!checkIntegerType(leftType) || !checkIntegerType(rightType)) {
+                throw this.error(expr.operator, `Type mismatch: ${leftType} != ${rightType}`);
             }
-        }
-        if ((['&', '|', '^', ].includes(expr.operator.lexeme))) {
-            if(['i8','i16','i32','i64'].includes(leftType.toString()) && ['i8','i16','i32','i64'].includes(rightType.toString())) {
-                return leftType;
-            } else {
+        } else {
+            if (!checkSameType(leftType, rightType)) {
                 throw this.error(expr.operator, `Type mismatch: ${leftType} != ${rightType}`);
             }
         }
-        
-
-
-        if (['float', 'double'].includes(leftType.toString()) || ['float', 'double'].includes(rightType.toString())) {
-            switch (expr.operator.type) {
-                case TokenType.GreaterGreater:
-                    {
-                        throw this.error(expr.operator, `Float arithmetic does not support shift operators`);
-                    }
-                case TokenType.LessLess:
-                    throw this.error(expr.operator, `Float arithmetic does not support shift operators`);
-            }
-        }
-
-        if (!sameType(leftType, rightType)) {
-            throw this.error(expr.operator, `Type mismatch: ${leftType} != ${rightType}`);
-        }
-
         return leftType;
     }
     visitUnaryExpr(expr: UnaryExpr): TypeExpr {
-        const rightType = this.resolveExpr(expr.right);
-        let returnType: TypeExpr;
+        const type = this.resolveExpr(expr.right);
         switch (expr.operator.type) {
-            case TokenType.Bang:
-                if (rightType instanceof PrimitiveType && rightType.name === "bool") {
-                    returnType = new PrimitiveType("bool");
-                } else {
-                    throw this.error(expr.operator, `Type mismatch: ${rightType} != bool`);
-                }
-                break;
             case TokenType.Minus:
-                const allowedTypes = ["i8", "i16", "i32", "i64", "float", "double"];
-                if (allowedTypes.includes(rightType.toString())) {
-                    returnType = rightType;
-                } else {
-                    throw this.error(expr.operator, `Type mismatch: ${rightType} != ${allowedTypes.join(", ")}`);
+                if (!checkNumberType(type)) {
+                    throw this.error(expr.operator, `Type mismatch: ${type} not a number type`);
                 }
                 break;
             case TokenType.Tilde:
-                if (['i8', 'i16', 'i32', 'i64'].includes(rightType.toString())) {
-                    returnType = rightType;
-                } else {
-                    throw this.error(expr.operator, `Type mismatch: ${rightType} != ${['i8', 'i16', 'i32', 'i64'].join(", ")}`);
+                if (!checkIntegerType(type)) {
+                    throw this.error(expr.operator, `Type mismatch: ${type} not an integer type`);
+                }
+                break;
+            case TokenType.Bang:
+                if (!checkBooleanType(type)) {
+                    throw this.error(expr.operator, `Type mismatch: ${type} != bool`);
                 }
                 break;
             default:
                 throw this.error(expr.operator, `Unsupported unary operator: ${expr.operator.type}`);
         }
-        return returnType;
+        return type;
     }
     visitLiteralExpr(expr: LiteralExpr): TypeExpr {
         let literalType: TypeExpr;
@@ -250,7 +217,7 @@ export class Resolver implements ExprVisitor<TypeExpr>, StmtVisitor<void> {
         } else if (typeof expr.value === "boolean") {
             literalType = new PrimitiveType("i1");
         } else {
-            literalType = new PrimitiveType("void64");
+            literalType = new VoidType();
         }
         return literalType;
     }
@@ -353,16 +320,40 @@ export class Resolver implements ExprVisitor<TypeExpr>, StmtVisitor<void> {
 }
 
 
-function sameType(type1: TypeExpr, type2: TypeExpr): boolean {
+function checkSameType(left: TypeExpr, right: TypeExpr): boolean {
     const numberTypes = ["i8", "i16", "i32", "i64", "float", "double"];
-    if (type1.toString() === "i1" && type2.toString() === "i1") {
-        return true;
-    }
-    if (numberTypes.includes(type1.toString()) && numberTypes.includes(type2.toString())) {
-        return true;
-    }
-    if (type1 instanceof PrimitiveType && type2 instanceof PrimitiveType) {
-        return type1.name === type2.name;
+    if (left instanceof PrimitiveType && right instanceof PrimitiveType) {
+        if (left.name === "i1" && right.name === "i1") {
+            return true;
+        }
+        if (numberTypes.includes(left.name) && numberTypes.includes(right.name)) {
+            return true;
+        }
+        return left.name === right.name;
     }
     return false;
+}
+
+function checkBooleanType(type: TypeExpr): boolean {
+    return type instanceof PrimitiveType && type.name === "i1";
+}
+
+function checkNumberType(type: TypeExpr): boolean {
+    return checkIntegerType(type) || checkFloatType(type);
+}
+
+function checkIntegerType(type: TypeExpr): boolean {
+    const integerTypes = ["i8", "i16", "i32", "i64"];
+    if (type instanceof PrimitiveType) {
+        return integerTypes.includes(type.name);
+    }
+    return false;
+}
+
+function checkFloatType(type: TypeExpr): boolean {
+    if (type instanceof PrimitiveType) {
+        return type.name === "float" || type.name === "double";
+    }
+    return false;
+
 }
