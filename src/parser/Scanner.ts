@@ -233,7 +233,6 @@ export class Scanner {
       }
       const num=this.source.substring(this.start, this.current).slice(2);
       const value = parseInt(num, base);
-      console.log(value)
       this.addToken(TokenType.Number, value);
       return;
     }

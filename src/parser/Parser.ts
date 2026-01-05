@@ -62,7 +62,7 @@ export class Parser {
         [TokenType.PlusPlus]: [this.unary.bind(this), this.postfix.bind(this), Precedence.TERM],//++
         [TokenType.MinusMinus]: [this.unary.bind(this), this.postfix.bind(this), Precedence.TERM],//--
         [TokenType.New]: [null, null, Precedence.NONE],//new
-        [TokenType.Tilde]: [null, null, Precedence.NONE],//~
+        [TokenType.Tilde]: [this.unary.bind(this), null, Precedence.NONE],//~
 
         [TokenType.Star]: [null, this.binary.bind(this), Precedence.FACTOR],//*
         [TokenType.Slash]: [null, this.binary.bind(this), Precedence.FACTOR],// /
@@ -111,7 +111,7 @@ export class Parser {
         [TokenType.RightParen]: [null, null, Precedence.NONE],//)
         [TokenType.LeftBrace]: [null, null, Precedence.NONE],//{
         [TokenType.RightBrace]: [null, null, Precedence.NONE],//}
-
+        [TokenType.Question]: [null, null, Precedence.NONE],// ?
 
         [TokenType.This]: [null, null, Precedence.NONE],// this
         [TokenType.Super]: [null, null, Precedence.NONE],// super
@@ -122,7 +122,7 @@ export class Parser {
         [TokenType.Break]: [null, null, Precedence.NONE],// break       
         [TokenType.Continue]: [null, null, Precedence.NONE],// continue
         [TokenType.Semicolon]: [null, null, Precedence.NONE],// ;
-        [TokenType.Question]: [null, null, Precedence.NONE],// ?
+
         [TokenType.Colon]: [null, null, Precedence.NONE],// :
         [TokenType.Class]: [null, null, Precedence.NONE],// class
         [TokenType.Else]: [null, null, Precedence.NONE],// else

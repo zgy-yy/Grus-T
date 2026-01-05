@@ -178,6 +178,14 @@ export class Resolver implements ExprVisitor<TypeExpr>, StmtVisitor<void> {
                 throw this.error(expr.operator, `Logical operators do not support boolean types`);
             }
         }
+        if ((['&', '|', '^', ].includes(expr.operator.lexeme))) {
+            if(['i8','i16','i32','i64'].includes(leftType.toString()) && ['i8','i16','i32','i64'].includes(rightType.toString())) {
+                return leftType;
+            } else {
+                throw this.error(expr.operator, `Type mismatch: ${leftType} != ${rightType}`);
+            }
+        }
+        
 
 
         if (['float', 'double'].includes(leftType.toString()) || ['float', 'double'].includes(rightType.toString())) {
@@ -214,6 +222,13 @@ export class Resolver implements ExprVisitor<TypeExpr>, StmtVisitor<void> {
                     returnType = rightType;
                 } else {
                     throw this.error(expr.operator, `Type mismatch: ${rightType} != ${allowedTypes.join(", ")}`);
+                }
+                break;
+            case TokenType.Tilde:
+                if (['i8', 'i16', 'i32', 'i64'].includes(rightType.toString())) {
+                    returnType = rightType;
+                } else {
+                    throw this.error(expr.operator, `Type mismatch: ${rightType} != ${['i8', 'i16', 'i32', 'i64'].join(", ")}`);
                 }
                 break;
             default:

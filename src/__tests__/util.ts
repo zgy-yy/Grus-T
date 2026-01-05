@@ -12,7 +12,7 @@ const lliPath = '/opt/homebrew/opt/llvm/bin/lli';
  */
 export function compileAndRun(source: string): string {
   // 编译源代码为 IR
-  const grus = new Grus(source, () => {});
+  const grus = new Grus(source, () => {})
   const irCode = grus.run();
   
   if (!irCode || irCode.trim() === '') {

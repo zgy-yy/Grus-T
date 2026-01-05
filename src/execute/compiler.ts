@@ -222,6 +222,15 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
                 ir_code += `${result_reg} = ${binaryOperator(ir_type, '<=')} ${ir_type} ${left_comp.reg}, ${right_comp.reg}\n`;
                 ir_type = "i1"
                 break;
+            case TokenType.BitOr:
+                ir_code += `${result_reg} = or ${ir_type} ${left_comp.reg}, ${right_comp.reg}\n`;
+                break;
+            case TokenType.BitAnd:
+                ir_code += `${result_reg} = and ${ir_type} ${left_comp.reg}, ${right_comp.reg}\n`;
+                break;
+            case TokenType.Caret:
+                ir_code += `${result_reg} = xor ${ir_type} ${left_comp.reg}, ${right_comp.reg}\n`;
+                break;
         }
         return new ExprCompose(ir_type, result_reg, ir_code);
     }
@@ -240,6 +249,11 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
                     ir_code += `${resultReg} = sub ${ir_type} 0, ${comp.reg}\n`;
                 }
                 break;
+            case TokenType.Tilde:
+                ir_code += `${resultReg} = xor ${ir_type} ${comp.reg}, -1\n`;
+                break;
+            default:
+                throw new Error(`Unsupported unary operator: ${expr.operator.type}`);
         }
         return new ExprCompose(ir_type, resultReg, ir_code);
     }
