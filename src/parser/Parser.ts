@@ -2,7 +2,7 @@ import { Token } from "@/ast/Token";
 import { ParserErrorHandler } from "./ErrorHandler";
 import { TokenType } from "@/ast/TokenType";
 import { AssignExpr, BinaryExpr, CallExpr, Expr, LiteralExpr, PostfixExpr, ThisExpr, UnaryExpr, VariableExpr } from "@/ast/Expr";
-import { BlockStmt, ExpressionStmt, FunctionStmt, Parameter, Stmt, VarStmt } from "@/ast/Stmt";
+import { BlockStmt, ExpressionStmt, FunctionStmt, IfStmt, Parameter, Stmt, VarStmt } from "@/ast/Stmt";
 import { PrimitiveType, TypeExpr } from "@/ast/TypeExpr";
 
 class SyntaxError extends Error {
@@ -279,6 +279,13 @@ export class Parser {
         if (this.match(TokenType.LeftBrace)) {
             const block = this.block();
             return new BlockStmt(block);
+        }if(this.match(TokenType.If)){
+            this.consume(TokenType.LeftParen, "Expect '(' after 'if'.");
+            const condition = this.expression();
+            this.consume(TokenType.RightParen, "Expect ')' after condition.");
+            const thenBranch = this.statement();
+            const elseBranch = this.match(TokenType.Else) ? this.statement() : null;
+            return new IfStmt(condition, thenBranch, elseBranch);
         }
         return this.expressionStatement();
     }

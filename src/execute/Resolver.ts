@@ -54,6 +54,9 @@ export class Resolver implements ExprVisitor<TypeExpr>, StmtVisitor<void> {
         this.declare(stmt.name);
         if (stmt.initializer) {
             const initType = this.resolveExpr(stmt.initializer);
+            if(stmt.type === null){
+                stmt.type = initType;
+            }
             if (!checkSameType(initType, stmt.type)) {
                 throw this.error(stmt.name, `Type mismatch: ${initType} != ${stmt.type}`);
             }
@@ -98,11 +101,11 @@ export class Resolver implements ExprVisitor<TypeExpr>, StmtVisitor<void> {
         this.resolveExpr(stmt.expression);
     }
     visitIfStmt(stmt: IfStmt): void {
-        // this.resolveExpr(stmt.condition);
-        // this.resolveStmt(stmt.thenBranch);
-        // if (stmt.elseBranch) {
-        //     this.resolveStmt(stmt.elseBranch);
-        // }
+        this.resolveExpr(stmt.condition);
+        this.resolveStmt(stmt.thenBranch);
+        if (stmt.elseBranch) {
+            this.resolveStmt(stmt.elseBranch);
+        }
     }
     visitWhileStmt(stmt: WhileStmt): void {
 
@@ -167,13 +170,13 @@ export class Resolver implements ExprVisitor<TypeExpr>, StmtVisitor<void> {
         this.resolveExpr(expr.right);
     }
     visitBinaryExpr(expr: BinaryExpr): TypeExpr {
-        let  leftType = this.resolveExpr(expr.left);
+        let leftType = this.resolveExpr(expr.left);
         const rightType = this.resolveExpr(expr.right);
         if (['<<', '>>', '|', '&', '^'].includes(expr.operator.lexeme)) {
             if (!checkIntegerType(leftType) || !checkIntegerType(rightType)) {
                 throw this.error(expr.operator, `Type mismatch: ${leftType} != ${rightType}`);
             }
-        } else if(['!=', '==', '>', '>=', '<', '<='].includes(expr.operator.lexeme)){
+        } else if (['!=', '==', '>', '>=', '<', '<='].includes(expr.operator.lexeme)) {
             leftType = new PrimitiveType("i1");
         } else {
             if (!checkSameType(leftType, rightType)) {
@@ -298,19 +301,21 @@ export class Resolver implements ExprVisitor<TypeExpr>, StmtVisitor<void> {
         }
     }
 
-    resolveLocal(name: Token): TypeExpr {
+    //本地变量
+    resolveLocal(vname: Token): TypeExpr {
+        const name = vname.lexeme;
         for (let i = this.scopes.length - 1; i >= 0; i--) {
             const scope = this.scopes[i];
-            if (scope.has(name.lexeme)) {
-                const type = scope.get(name.lexeme)?.type;
+            if (scope.has(name)) {
+                const type = scope.get(name)?.type;
                 if (!type) {
-                    throw new Error(`Variable ${name.lexeme} not defined`);
+                    throw new Error(`Variable ${name} type not defined`);
                 }
                 // distance is the number of scopes from the current scope to the global scope
                 return type;
             }
         }
-        throw new Error(`Variable ${name.lexeme} not found`);
+        throw new Error(`Variable ${name} not found`);
         // not found Assume global
     }
 

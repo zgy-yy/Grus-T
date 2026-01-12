@@ -8,7 +8,7 @@
     "compile": "tsx src/index.ts",
     "format-ir": "/opt/homebrew/opt/llvm/bin/opt -S \"src/llvm ir/ir.ll\" -o \"src/llvm ir/ir.ll\"",
     "format-temp-to-ir": "node scripts/format-temp-to-ir.js",
-    "program": "node scripts/compile-and-run.js",
+    "p": "node scripts/compile-and-run.js",
     "watch": "npm-watch",
     "build": "tsc && vite build",
     "preview": "vite preview",

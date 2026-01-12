@@ -34,6 +34,7 @@ class IrVar {
 export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragment>, TypesVisitor<IrFragment> {
     static constStrI: number = 0;
     static regI: number = 0;
+    static ifI: number = 0;
     scopes: Map<string, IrVar>[] = []; // sourceName -> compiledName
     globals: string[] = ["declare i32 @printf(i8*, ...)\n"];
     code: string = "";
@@ -100,6 +101,7 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
     visitFunctionStmt(stmt: FunctionStmt): IrFragment {
         this.beginScope();
         Compiler.regI = 0;
+        Compiler.ifI = 0;
         const fn_name = stmt.name.lexeme;
         const fn_type = stmt.returnType.accept(this);
         const fn_body = stmt.body.map(stmt => stmt.accept(this)).join("\n");
@@ -117,7 +119,27 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
         return ir_code;
     }
     visitIfStmt(stmt: IfStmt): IrFragment {
-        throw new Error("Method not implemented.");
+        const condition = stmt.condition.accept(this);
+        const thenBranch = stmt.thenBranch.accept(this);
+        const elseBranch = stmt.elseBranch?.accept(this) ?? "";
+        const ifI = Compiler.ifI++;
+        const thenLabel = `if${ifI}.then`;
+        const elseLabel = `if${ifI}.else`;
+        const endLabel = `if${ifI}.end`;
+        const compReg = this.reg();
+        const code = `
+        ${condition.ir}
+        ${compReg}= ${binaryOperator(condition.irtype, '!=')} ${condition.irtype} ${condition.reg}, 0\n
+        br i1 ${compReg}, label %${thenLabel}, label %${elseLabel}
+        ${thenLabel}:
+            ${thenBranch}
+            br label %${endLabel}
+        ${elseLabel}:
+            ${elseBranch}
+            br label %${endLabel}
+        ${endLabel}:
+        `;
+        return code;
     }
     visitWhileStmt(stmt: WhileStmt): IrFragment {
         throw new Error("Method not implemented.");
