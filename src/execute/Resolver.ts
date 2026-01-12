@@ -167,12 +167,14 @@ export class Resolver implements ExprVisitor<TypeExpr>, StmtVisitor<void> {
         this.resolveExpr(expr.right);
     }
     visitBinaryExpr(expr: BinaryExpr): TypeExpr {
-        const leftType = this.resolveExpr(expr.left);
+        let  leftType = this.resolveExpr(expr.left);
         const rightType = this.resolveExpr(expr.right);
         if (['<<', '>>', '|', '&', '^'].includes(expr.operator.lexeme)) {
             if (!checkIntegerType(leftType) || !checkIntegerType(rightType)) {
                 throw this.error(expr.operator, `Type mismatch: ${leftType} != ${rightType}`);
             }
+        } else if(['!=', '==', '>', '>=', '<', '<='].includes(expr.operator.lexeme)){
+            leftType = new PrimitiveType("i1");
         } else {
             if (!checkSameType(leftType, rightType)) {
                 throw this.error(expr.operator, `Type mismatch: ${leftType} != ${rightType}`);
@@ -302,7 +304,7 @@ export class Resolver implements ExprVisitor<TypeExpr>, StmtVisitor<void> {
             if (scope.has(name.lexeme)) {
                 const type = scope.get(name.lexeme)?.type;
                 if (!type) {
-                    throw new Error(`Variable ${name.lexeme} not found`);
+                    throw new Error(`Variable ${name.lexeme} not defined`);
                 }
                 // distance is the number of scopes from the current scope to the global scope
                 return type;

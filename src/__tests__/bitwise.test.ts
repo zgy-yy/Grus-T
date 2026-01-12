@@ -485,7 +485,7 @@ fun main() i32 {
     it('应该正确处理位运算与比较运算的组合', () => {
       const source = `
 fun main() i32 {
-  i32 x = (5 & 3) > 0;
+  bool x = (5 & 3) > 0;
   printf("%d\\n", x);
 }
 `;
@@ -545,7 +545,7 @@ fun main() i32 {
 fun main() i32 {
   i32 x = 5;
   i32 mask = 4;
-  i32 result = (x & mask) != 0;
+  bool result = (x & mask) != 0;
   printf("%d\\n", result);
 }
 `;

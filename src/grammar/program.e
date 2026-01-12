@@ -1,4 +1,4 @@
 fun main() i32 {
-  i32 x = -5 & 3;
+  bool x = 3.0 == 3.0;
   printf("%d", x);
 }

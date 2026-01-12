@@ -6,7 +6,7 @@ describe('比较运算测试', () => {
     it('应该正确执行整数相等比较（true）', () => {
       const source = `
 fun main() i32 {
-  i32 x = 5 == 5;
+  bool x = 5 == 5;
   printf("%d\\n", x);
 }
 `;
@@ -17,7 +17,7 @@ fun main() i32 {
     it('应该正确执行整数相等比较（false）', () => {
       const source = `
 fun main() i32 {
-  i32 x = 5 == 3;
+  bool x = 5 == 3;
   printf("%d\\n", x);
 }
 `;
@@ -30,7 +30,7 @@ fun main() i32 {
 fun main() i32 {
   i32 a = 10;
   i32 b = 10;
-  i32 x = a == b;
+  bool x = a == b;
   printf("%d\\n", x);
 }
 `;
@@ -41,7 +41,7 @@ fun main() i32 {
     it('应该正确处理浮点数相等比较', () => {
       const source = `
 fun main() i32 {
-  i32 x = 3.5 == 3.5;
+  bool x = 3.5 == 3.5;
   printf("%d\\n", x);
 }
 `;
@@ -52,7 +52,7 @@ fun main() i32 {
     it('应该正确处理零值相等比较', () => {
       const source = `
 fun main() i32 {
-  i32 x = 0 == 0;
+  bool x = 0 == 0;
   printf("%d\\n", x);
 }
 `;
@@ -65,7 +65,7 @@ fun main() i32 {
     it('应该正确执行整数不等比较（true）', () => {
       const source = `
 fun main() i32 {
-  i32 x = 5 != 3;
+  bool x = 5 != 3;
   printf("%d\\n", x);
 }
 `;
@@ -76,7 +76,7 @@ fun main() i32 {
     it('应该正确执行整数不等比较（false）', () => {
       const source = `
 fun main() i32 {
-  i32 x = 5 != 5;
+  bool x = 5 != 5;
   printf("%d\\n", x);
 }
 `;
@@ -89,7 +89,7 @@ fun main() i32 {
 fun main() i32 {
   i32 a = 10;
   i32 b = 20;
-  i32 x = a != b;
+  bool x = a != b;
   printf("%d\\n", x);
 }
 `;
@@ -100,7 +100,7 @@ fun main() i32 {
     it('应该正确处理浮点数不等比较', () => {
       const source = `
 fun main() i32 {
-  i32 x = 3.5 != 2.5;
+  bool x = 3.5 != 2.5;
   printf("%d\\n", x);
 }
 `;
@@ -113,7 +113,7 @@ fun main() i32 {
     it('应该正确执行整数大于比较（true）', () => {
       const source = `
 fun main() i32 {
-  i32 x = 10 > 5;
+  bool x = 10 > 5;
   printf("%d\\n", x);
 }
 `;
@@ -124,7 +124,7 @@ fun main() i32 {
     it('应该正确执行整数大于比较（false）', () => {
       const source = `
 fun main() i32 {
-  i32 x = 5 > 10;
+  bool x = 5 > 10;
   printf("%d\\n", x);
 }
 `;
@@ -135,7 +135,7 @@ fun main() i32 {
     it('应该正确处理相等时不大于', () => {
       const source = `
 fun main() i32 {
-  i32 x = 5 > 5;
+  bool x = 5 > 5;
   printf("%d\\n", x);
 }
 `;
@@ -148,7 +148,7 @@ fun main() i32 {
 fun main() i32 {
   i32 a = 20;
   i32 b = 10;
-  i32 x = a > b;
+  bool x = a > b;
   printf("%d\\n", x);
 }
 `;
@@ -159,7 +159,7 @@ fun main() i32 {
     it('应该正确处理浮点数大于比较', () => {
       const source = `
 fun main() i32 {
-  i32 x = 5.0 > 3.0;
+  bool x = 5.0 > 3.0;
   printf("%d\\n", x);
 }
 `;
@@ -170,7 +170,7 @@ fun main() i32 {
     it('应该正确处理负数大于比较', () => {
       const source = `
 fun main() i32 {
-  i32 x = -5 > -10;
+  bool x = -5 > -10;
   printf("%d\\n", x);
 }
 `;
@@ -183,7 +183,7 @@ fun main() i32 {
     it('应该正确执行整数大于等于比较（大于）', () => {
       const source = `
 fun main() i32 {
-  i32 x = 10 >= 5;
+  bool x = 10 >= 5;
   printf("%d\\n", x);
 }
 `;
@@ -194,7 +194,7 @@ fun main() i32 {
     it('应该正确执行整数大于等于比较（等于）', () => {
       const source = `
 fun main() i32 {
-  i32 x = 5 >= 5;
+  bool x = 5 >= 5;
   printf("%d\\n", x);
 }
 `;
@@ -205,7 +205,7 @@ fun main() i32 {
     it('应该正确执行整数大于等于比较（false）', () => {
       const source = `
 fun main() i32 {
-  i32 x = 5 >= 10;
+  bool x = 5 >= 10;
   printf("%d\\n", x);
 }
 `;
@@ -218,7 +218,7 @@ fun main() i32 {
 fun main() i32 {
   i32 a = 15;
   i32 b = 15;
-  i32 x = a >= b;
+  bool x = a >= b;
   printf("%d\\n", x);
 }
 `;
@@ -229,7 +229,7 @@ fun main() i32 {
     it('应该正确处理浮点数大于等于比较', () => {
       const source = `
 fun main() i32 {
-  i32 x = 5.0 >= 5.0;
+  bool x = 5.0 >= 5.0;
   printf("%d\\n", x);
 }
 `;
@@ -242,7 +242,7 @@ fun main() i32 {
     it('应该正确执行整数小于比较（true）', () => {
       const source = `
 fun main() i32 {
-  i32 x = 5 < 10;
+  bool x = 5 < 10;
   printf("%d\\n", x);
 }
 `;
@@ -253,7 +253,7 @@ fun main() i32 {
     it('应该正确执行整数小于比较（false）', () => {
       const source = `
 fun main() i32 {
-  i32 x = 10 < 5;
+  bool x = 10 < 5;
   printf("%d\\n", x);
 }
 `;
@@ -264,7 +264,7 @@ fun main() i32 {
     it('应该正确处理相等时不小于', () => {
       const source = `
 fun main() i32 {
-  i32 x = 5 < 5;
+  bool x = 5 < 5;
   printf("%d\\n", x);
 }
 `;
@@ -277,7 +277,7 @@ fun main() i32 {
 fun main() i32 {
   i32 a = 10;
   i32 b = 20;
-  i32 x = a < b;
+  bool x = a < b;
   printf("%d\\n", x);
 }
 `;
@@ -288,7 +288,7 @@ fun main() i32 {
     it('应该正确处理浮点数小于比较', () => {
       const source = `
 fun main() i32 {
-  i32 x = 3.0 < 5.0;
+  bool x = 3.0 < 5.0;
   printf("%d\\n", x);
 }
 `;
@@ -299,7 +299,7 @@ fun main() i32 {
     it('应该正确处理负数小于比较', () => {
       const source = `
 fun main() i32 {
-  i32 x = -10 < -5;
+  bool x = -10 < -5;
   printf("%d\\n", x);
 }
 `;
@@ -312,7 +312,7 @@ fun main() i32 {
     it('应该正确执行整数小于等于比较（小于）', () => {
       const source = `
 fun main() i32 {
-  i32 x = 5 <= 10;
+  bool x = 5 <= 10;
   printf("%d\\n", x);
 }
 `;
@@ -323,7 +323,7 @@ fun main() i32 {
     it('应该正确执行整数小于等于比较（等于）', () => {
       const source = `
 fun main() i32 {
-  i32 x = 5 <= 5;
+  bool x = 5 <= 5;
   printf("%d\\n", x);
 }
 `;
@@ -334,7 +334,7 @@ fun main() i32 {
     it('应该正确执行整数小于等于比较（false）', () => {
       const source = `
 fun main() i32 {
-  i32 x = 10 <= 5;
+  bool x = 10 <= 5;
   printf("%d\\n", x);
 }
 `;
@@ -347,7 +347,7 @@ fun main() i32 {
 fun main() i32 {
   i32 a = 15;
   i32 b = 15;
-  i32 x = a <= b;
+  bool x = a <= b;
   printf("%d\\n", x);
 }
 `;
@@ -358,7 +358,7 @@ fun main() i32 {
     it('应该正确处理浮点数小于等于比较', () => {
       const source = `
 fun main() i32 {
-  i32 x = 5.0 <= 5.0;
+  bool x = 5.0 <= 5.0;
   printf("%d\\n", x);
 }
 `;
@@ -371,9 +371,9 @@ fun main() i32 {
     it('应该正确处理零值比较', () => {
       const source = `
 fun main() i32 {
-  i32 x = 0 > 0;
-  i32 y = 0 < 0;
-  i32 z = 0 == 0;
+  bool x = 0 > 0;
+  bool y = 0 < 0;
+  bool z = 0 == 0;
   printf("%d\\n", x);
   printf("%d\\n", y);
   printf("%d\\n", z);
@@ -388,8 +388,8 @@ fun main() i32 {
     it('应该正确处理负数比较', () => {
       const source = `
 fun main() i32 {
-  i32 x = -5 > -10;
-  i32 y = -5 < -10;
+  bool x = -5 > -10;
+  bool y = -5 < -10;
   printf("%d\\n", x);
   printf("%d\\n", y);
 }
@@ -402,8 +402,8 @@ fun main() i32 {
     it('应该正确处理正负数比较', () => {
       const source = `
 fun main() i32 {
-  i32 x = 5 > -5;
-  i32 y = -5 > 5;
+  bool x = 5 > -5;
+  bool y = -5 > 5;
   printf("%d\\n", x);
   printf("%d\\n", y);
 }
@@ -416,8 +416,8 @@ fun main() i32 {
     it('应该正确处理大数比较', () => {
       const source = `
 fun main() i32 {
-  i32 x = 1000 > 500;
-  i32 y = 1000 < 2000;
+  bool x = 1000 > 500;
+  bool y = 1000 < 2000;
   printf("%d\\n", x);
   printf("%d\\n", y);
 }
@@ -432,7 +432,7 @@ fun main() i32 {
     it('应该正确处理比较运算的优先级', () => {
       const source = `
 fun main() i32 {
-  i32 x = 5 + 3 > 2 * 3;
+  bool x = 5 + 3 > 2 * 3;
   printf("%d\\n", x);
 }
 `;
@@ -444,7 +444,7 @@ fun main() i32 {
     it('应该正确处理括号中的比较运算', () => {
       const source = `
 fun main() i32 {
-  i32 x = (5 > 3) == 1;
+  bool x = (5 > 3) == 1;
   printf("%d\\n", x);
 }
 `;
@@ -456,8 +456,8 @@ fun main() i32 {
     it('应该正确处理多个比较运算', () => {
       const source = `
 fun main() i32 {
-  i32 x = 5 > 3;
-  i32 y = 10 < 20;
+  bool x = 5 > 3;
+  bool y = 10 < 20;
   printf("%d\\n", x);
   printf("%d\\n", y);
 }
@@ -473,8 +473,8 @@ fun main() i32 {
   i32 a = 5;
   i32 b = 10;
   i32 c = 15;
-  i32 x = a < b;
-  i32 y = b < c;
+  bool x = a < b;
+  bool y = b < c;
   printf("%d\\n", x);
   printf("%d\\n", y);
 }
@@ -491,7 +491,7 @@ fun main() i32 {
 fun main() i32 {
   i32 a = 5;
   float b = 5.0;
-  i32 x = a == b;
+  bool x = a == b;
   printf("%d\\n", x);
 }
 `;
@@ -504,7 +504,7 @@ fun main() i32 {
 fun main() i32 {
   i8 a = 5;
   i32 b = 5;
-  i32 x = a == b;
+  bool x = a == b;
   printf("%d\\n", x);
 }
 `;
@@ -517,9 +517,9 @@ fun main() i32 {
     it('应该正确处理变量赋值后的比较', () => {
       const source = `
 fun main() i32 {
-  i32 x = 10;
+  i32 x = 23;
   x = 20;
-  i32 y = x > 15;
+  bool y = x > 15;
   printf("%d\\n", y);
 }
 `;
@@ -533,7 +533,7 @@ fun main() i32 {
   i32 a = 5;
   i32 b = 10;
   a = a + 5;
-  i32 x = a == b;
+  bool x = a == b;
   printf("%d\\n", x);
 }
 `;
@@ -546,7 +546,7 @@ fun main() i32 {
     it('应该正确处理包含算术运算的比较', () => {
       const source = `
 fun main() i32 {
-  i32 x = (10 + 5) > (3 * 4);
+  bool x = (10 + 5) > (3 * 4);
   printf("%d\\n", x);
 }
 `;
@@ -561,7 +561,7 @@ fun main() i32 {
   i32 a = 5;
   i32 b = 10;
   i32 c = 15;
-  i32 x = (a < b) == (b < c);
+  bool x = (a < b) == (b < c);
   printf("%d\\n", x);
 }
 `;
@@ -573,7 +573,7 @@ fun main() i32 {
     it('应该正确处理包含取模的比较', () => {
       const source = `
 fun main() i32 {
-  i32 x = (10 % 3) > 1;
+  bool x = (10 % 3) > 1;
   printf("%d\\n", x);
 }
 `;
@@ -585,7 +585,7 @@ fun main() i32 {
     it('应该正确处理包含位移的比较', () => {
       const source = `
 fun main() i32 {
-  i32 x = (1 << 3) > 5;
+  bool x = (1 << 3) > 5;
   printf("%d\\n", x);
 }
 `;
@@ -597,7 +597,7 @@ fun main() i32 {
     it('应该正确处理多层嵌套的比较表达式', () => {
       const source = `
 fun main() i32 {
-  i32 x = ((5 + 3) * 2) > ((10 - 2) / 2);
+  bool x = ((5 + 3) * 2) > ((10 - 2) / 2);
   printf("%d\\n", x);
 }
 `;
@@ -611,7 +611,7 @@ fun main() i32 {
     it('应该正确处理浮点数相等比较', () => {
       const source = `
 fun main() i32 {
-  i32 x = 3.0 == 3.0;
+  bool x = 3.0 == 3.0;
   printf("%d\\n", x);
 }
 `;
@@ -647,8 +647,8 @@ fun main() i32 {
     it('应该正确处理浮点数零值比较', () => {
       const source = `
 fun main() i32 {
-  i32 x = 0.0 == 0.0;
-  i32 y = 0.0 > 0.0;
+  bool  x = 0.0 == 0.0;
+  bool y = 0.0 > 0.0;
   printf("%d\\n", x);
   printf("%d\\n", y);
 }
@@ -661,8 +661,8 @@ fun main() i32 {
     it('应该正确处理浮点数负数比较', () => {
       const source = `
 fun main() i32 {
-  i32 x = -3.0 > -5.0;
-  i32 y = -5.0 < -3.0;
+  bool x = -3.0 > -5.0;
+  bool y = -5.0 < -3.0;
   printf("%d\\n", x);
   printf("%d\\n", y);
 }
@@ -679,7 +679,7 @@ fun main() i32 {
 fun main() i32 {
   i8 a = 5;
   i8 b = 5;
-  i32 x = a == b;
+  bool x = a == b;
   printf("%d\\n", x);
 }
 `;
@@ -692,7 +692,7 @@ fun main() i32 {
 fun main() i32 {
   i8 a = 10;
   i8 b = 5;
-  i32 x = a > b;
+  bool x = a > b;
   printf("%d\\n", x);
 }
 `;
@@ -705,7 +705,7 @@ fun main() i32 {
 fun main() i32 {
   i8 a = -5;
   i8 b = -10;
-  i32 x = a > b;
+  bool x = a > b;
   printf("%d\\n", x);
 }
 `;

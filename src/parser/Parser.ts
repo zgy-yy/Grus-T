@@ -2,7 +2,7 @@ import { Token } from "@/ast/Token";
 import { ParserErrorHandler } from "./ErrorHandler";
 import { TokenType } from "@/ast/TokenType";
 import { AssignExpr, BinaryExpr, CallExpr, Expr, LiteralExpr, PostfixExpr, ThisExpr, UnaryExpr, VariableExpr } from "@/ast/Expr";
-import { ExpressionStmt, FunctionStmt, Parameter, Stmt, VarStmt } from "@/ast/Stmt";
+import { BlockStmt, ExpressionStmt, FunctionStmt, Parameter, Stmt, VarStmt } from "@/ast/Stmt";
 import { PrimitiveType, TypeExpr } from "@/ast/TypeExpr";
 
 class SyntaxError extends Error {
@@ -175,7 +175,7 @@ export class Parser {
      * }
      * print a;
      */
-    private declaration(program: boolean = false): Stmt[] | null {
+    private declaration(program: boolean = false): Stmt[] {
         if (this.match(TokenType.Let)) {
             return this.varDeclaration(null);
         }
@@ -276,6 +276,10 @@ export class Parser {
     }
 
     private statement(): Stmt {
+        if (this.match(TokenType.LeftBrace)) {
+            const block = this.block();
+            return new BlockStmt(block);
+        }
         return this.expressionStatement();
     }
 

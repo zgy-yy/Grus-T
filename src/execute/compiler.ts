@@ -76,7 +76,8 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
         let ir_code = init_comp.ir;
 
 
-        let ir_name = `%${varName}`;
+        const d = this.findVarDistance(varName);
+        let ir_name = `%${varName}${d > 0 ? d : ''}`;
         if (this.scopes.length > 1) {
             const scope = this.scopes[this.scopes.length - 1];
             scope.set(varName, new IrVar(ir_name, stmt.type));
@@ -161,7 +162,7 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
         const right_comp = expr.right.accept(this);
         let ir_code = left_comp.ir + right_comp.ir;
 
-        const result_reg = `%bin_reg_${Compiler.regI++}`;
+        const result_reg = this.reg();
         let [ir_type, compared] = compareType(left_comp.irtype, right_comp.irtype);
         if (compared === "l") {
             const comp = this.matchingTargetType(ir_type, left_comp.irtype, left_comp.reg);
@@ -238,7 +239,7 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
         const comp = expr.right.accept(this);
         let ir_code = comp.ir;
         const ir_type = comp.irtype;
-        const resultReg = `%unary_reg_${Compiler.regI++}`;
+        const resultReg = this.reg();
         const floatPoint = ["float", "double"];
         switch (expr.operator.type) {
             case TokenType.Minus:
@@ -262,7 +263,7 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
         throw new Error("Method not implemented.");
     }
     visitCallExpr(expr: CallExpr): ExprCompose {
-        const reg = `%call_reg_${Compiler.regI++}`;
+        const reg = this.reg();
         const callee = expr.callee.accept(this);
         const args = expr.arguments.map(argument => argument.accept(this));
         let ir_code = "";
@@ -323,7 +324,7 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
             // 对于函数类型，直接返回函数名（如 @printf），不需要创建寄存器
             return new ExprCompose(ir_type, irVar.name, "");
         }
-        const reg = `%val_reg_${Compiler.regI++}`;
+        const reg = this.reg();
         const ir_type = irVar.type.accept(this);
         const ir_code = `${reg} = load ${ir_type} , ${ir_type}* ${irVar.name}\n`;
         return new ExprCompose(ir_type, reg, ir_code);
@@ -391,11 +392,23 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
         throw new Error(`Variable ${sourceName} not found`);
     }
 
+    findVarDistance(sourceName: string): number {
+        let d = 0;
+        for (let i = this.scopes.length - 1; i >= 0; i--) {
+            const scope = this.scopes[i];
+            const var_ir = scope.get(sourceName);
+            if (var_ir) {
+                d++
+            }
+        }
+        return d;
+    }
+
     matchingTargetType(targetType: string, sourceType: string, reg: Reg): ExprCompose {
         const floatPoint = ["i8", "i16", "i32", "i64", "float", "double"];
         const targetI = floatPoint.indexOf(targetType);
         const sourceI = floatPoint.indexOf(sourceType);
-        const turnReg = `%turn_reg_${Compiler.regI++}`;
+        const turnReg = this.reg();
         if (targetI == sourceI) {
             return new ExprCompose(targetType, reg, "");
         } else if (targetI < sourceI) { //降级
@@ -427,6 +440,10 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
                 return new ExprCompose(targetType, turnReg, ir);
             }
         }
+    }
+
+    reg() {
+        return `%r${Compiler.regI++}`;
     }
 }
 
