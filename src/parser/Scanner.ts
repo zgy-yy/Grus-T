@@ -3,6 +3,7 @@ import { TokenType } from '@/ast/TokenType.ts';
 import { ScannerErrorHandler } from './ErrorHandler';
 import { GrusValue } from '@/ast/GrusValue';
 
+const PrimitiveTypes = ['bool', "i8", "i16", "i32", "i64", "float", "double"];
 
 // 关键字映射
 const keywords = new Map<string, TokenType>([
@@ -231,7 +232,7 @@ export class Scanner {
           this.error(this.line, this.column, `Invalid number literal: ${this.source.substring(this.start, this.current)}`);
           break;
       }
-      const num=this.source.substring(this.start, this.current).slice(2);
+      const num = this.source.substring(this.start, this.current).slice(2);
       const value = parseInt(num, base);
       this.addToken(TokenType.Number, value);
       return;
@@ -264,7 +265,14 @@ export class Scanner {
     }
 
     const text = this.source.substring(this.start, this.current);
-    const type = keywords.get(text) || TokenType.Identifier;
+    let type = keywords.get(text) || TokenType.Identifier;
+    if (PrimitiveTypes.includes(text)) {
+      type = TokenType.Symbol;
+    }
+    const lastToken = this.tokens[this.tokens.length - 1];
+    if (lastToken && lastToken.type === TokenType.Class) {
+      type = TokenType.Symbol;
+    }
     this.addToken(type);
   }
 

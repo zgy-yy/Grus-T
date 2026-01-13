@@ -1,5 +1,5 @@
 fun main() i32 {
-  let x =23;
+  let x =23,y=23;
   if (0) {
     printf("negative true");
   }else {

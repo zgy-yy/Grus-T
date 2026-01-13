@@ -51,21 +51,23 @@ export class Resolver implements ExprVisitor<TypeExpr>, StmtVisitor<void> {
     }
 
     visitVarStmt(stmt: VarStmt): void {
-        this.declare(stmt.name);
-        if (stmt.initializer) {
-            const initType = this.resolveExpr(stmt.initializer);
-            if(stmt.type === null){
-                stmt.type = initType;
+        for (const _var of stmt.vars) {
+            this.declare(_var.name);
+            if (_var.initializer) {
+                const initType = this.resolveExpr(_var.initializer);
+                if (_var.type === null) {
+                    _var.type = initType;
+                }
+                if (!checkSameType(initType, _var.type)) {
+                    throw this.error(_var.name, `Type mismatch: ${initType} != ${_var.type}`);
+                }
+            } else {
+                if (!_var.type) {
+                    throw this.error(_var.name, `Variable type is not specified.`);
+                }
             }
-            if (!checkSameType(initType, stmt.type)) {
-                throw this.error(stmt.name, `Type mismatch: ${initType} != ${stmt.type}`);
-            }
-        } else {
-            if (!stmt.type) {
-                throw this.error(stmt.name, `Variable type is not specified.`);
-            }
+            this.define(_var.name, _var.type);
         }
-        this.define(stmt.name, stmt.type);
     }
 
     visitBlockStmt(stmt: BlockStmt): void {

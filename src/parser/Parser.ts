@@ -2,7 +2,7 @@ import { Token } from "@/ast/Token";
 import { ParserErrorHandler } from "./ErrorHandler";
 import { TokenType } from "@/ast/TokenType";
 import { AssignExpr, BinaryExpr, CallExpr, Expr, LiteralExpr, PostfixExpr, ThisExpr, UnaryExpr, VariableExpr } from "@/ast/Expr";
-import { BlockStmt, ExpressionStmt, FunctionStmt, IfStmt, Parameter, Stmt, VarStmt } from "@/ast/Stmt";
+import { BlockStmt, ExpressionStmt, ForStmt, FunctionStmt, IfStmt, Parameter, Stmt, Variable, VarStmt, WhileStmt } from "@/ast/Stmt";
 import { PrimitiveType, TypeExpr } from "@/ast/TypeExpr";
 
 class SyntaxError extends Error {
@@ -49,6 +49,7 @@ type ParseRule = [
 ]
 
 export class Parser {
+    private GRUS_TYPES = ['bool', "i8", "i16", "i32", "i64", "float", "double"];
     private current: number = 0;
     private readonly tokens: Token[];
     public errorHandler: ParserErrorHandler;
@@ -125,11 +126,13 @@ export class Parser {
 
         [TokenType.Colon]: [null, null, Precedence.NONE],// :
         [TokenType.Class]: [null, null, Precedence.NONE],// class
+        [TokenType.Struct]: [null, null, Precedence.NONE],// struct
         [TokenType.Else]: [null, null, Precedence.NONE],// else
         [TokenType.For]: [null, null, Precedence.NONE],// for
         [TokenType.Fun]: [null, null, Precedence.NONE],// fun
         [TokenType.EOF]: [null, null, Precedence.NONE],// eof
         [TokenType.If]: [null, null, Precedence.NONE],// if
+        [TokenType.Symbol]: [null, null, Precedence.NONE],// symbol
         [TokenType.Return]: [null, null, Precedence.NONE],// return
     };
 
@@ -150,7 +153,7 @@ export class Parser {
             try {
                 const stmt = this.declaration(true);
                 if (stmt) {
-                    statements.push(...stmt);
+                    statements.push(stmt);
                 }
             } catch (error) {
                 if (error instanceof SyntaxError) {
@@ -167,39 +170,26 @@ export class Parser {
      * 声明
      * declaration → varDecl | funDecl 
      * 声明由变量声明、函数声明和语句组成
-     * 例如：
-     * let a = 1;
-     * Int a = 1;
-     * fun add(a, b) {
-     * return a + b;
-     * }
-     * print a;
      */
-    private declaration(program: boolean = false): Stmt[] {
+    private declaration(program: boolean = false): Stmt {
         if (this.match(TokenType.Let)) {
             return this.varDeclaration(null);
         }
-        if (this.check(TokenType.Identifier)) {
-            const saved = this.current;
-            const type = this.type(); // 解析类型表达式
-            //如果下一个token是标识符，则解析变量声明
-            if (this.check(TokenType.Identifier)) {
-                return this.varDeclaration(type);
-            } else {
-                //如果下一个token不是标识符，则回退
-                this.current = saved;
-            }
+        if (this.typeCheck()) {
+            const type = this.type();
+            return this.varDeclaration(type);
         }
         if (this.match(TokenType.Fun)) {
-            return [this.funDeclaration()];
+            return this.funDeclaration();
         }
         if (this.match(TokenType.Class)) {
             // return this.classDeclaration();
         }
+
         if (program) {
             throw this.error(this.peek(), "Expect declaration.");
         }
-        return [this.statement()];
+        return this.statement();
     }
 
 
@@ -207,17 +197,18 @@ export class Parser {
      * 解析 let 变量声明
      * let IDENTIFIER ( "=" expression )? ";" 
      */
-    private varDeclaration(t: TypeExpr | null): VarStmt[] {
-        const varStmts: VarStmt[] = [];
+    private varDeclaration(t: TypeExpr | null): VarStmt {
+        const vars: Variable[] = [];
         do {
             const name = this.consume(TokenType.Identifier, "Expect variable name.");
             const initializer = this.match(TokenType.Equal) ? this.expression(Precedence.ASSIGNMENT) : null;
             const type = t as unknown as TypeExpr;
-            varStmts.push(new VarStmt(name, type, initializer));
+            vars.push({ name, type, initializer });
         } while (this.match(TokenType.Comma));
         this.consume(TokenType.Semicolon, "Expect ';' after variable declaration.");
-        return varStmts;
+        return new VarStmt(vars);
     }
+
 
     private funDeclaration(): FunctionStmt {
         const name = this.consume(TokenType.Identifier, "Expect function name.");
@@ -268,7 +259,7 @@ export class Parser {
         while (!this.check(TokenType.RightBrace) && !this.isAtEnd()) {
             const stmt = this.declaration();
             if (stmt) {
-                statements.push(...stmt);
+                statements.push(stmt);
             }
         }
         this.consume(TokenType.RightBrace, "Expect '}' after block.");
@@ -279,18 +270,60 @@ export class Parser {
         if (this.match(TokenType.LeftBrace)) {
             const block = this.block();
             return new BlockStmt(block);
-        }if(this.match(TokenType.If)){
-            this.consume(TokenType.LeftParen, "Expect '(' after 'if'.");
-            const condition = this.expression();
-            this.consume(TokenType.RightParen, "Expect ')' after condition.");
-            const thenBranch = this.statement();
-            const elseBranch = this.match(TokenType.Else) ? this.statement() : null;
-            return new IfStmt(condition, thenBranch, elseBranch);
+        } if (this.match(TokenType.If)) {
+            return this.ifStatement();
+        } if (this.match(TokenType.While)) {
+            return this.whileStatement();
         }
         return this.expressionStatement();
     }
 
+    /**
+     * 解析 if 语句
+     * if (expression) statement (else statement)?
+     */
+    private ifStatement(): IfStmt {
+        this.consume(TokenType.LeftParen, "Expect '(' after 'if'.");
+        const condition = this.expression();
+        this.consume(TokenType.RightParen, "Expect ')' after condition.");
+        const thenBranch = this.statement();
+        const elseBranch = this.match(TokenType.Else) ? this.statement() : null;
+        return new IfStmt(condition, thenBranch, elseBranch);
+    }
 
+    /**
+     * 解析 while 语句
+     * while (expression) statement
+     */
+    private whileStatement(): WhileStmt {
+        this.consume(TokenType.LeftParen, "Expect '(' after 'while'.");
+        const condition = this.expression();
+        this.consume(TokenType.RightParen, "Expect ')' after condition.");
+        const body = this.statement();
+        return new WhileStmt(condition, body);
+    }
+    /**
+     * 解析 for 语句
+     * for (declaration | expression; expression; expression) statement
+     */
+    private forStatement(): ForStmt {
+        throw new Error("Not implemented");
+        // this.consume(TokenType.LeftParen, "Expect '(' after 'for'.");
+        // let initializer = null;
+        // if (this.match(TokenType.Let)) {
+        //     initializer = this.varDeclaration(null);
+        // } else {
+        //     initializer = this.expression();
+        // }
+        // const condition = this.expression();
+        // this.consume(TokenType.RightParen, "Expect ')' after condition.");
+        // const body = this.statement();
+        // return new ForStmt(condition, body);
+    }
+    /**
+     * 解析表达式语句
+     * expression ";"
+     */
     private expressionStatement(): Stmt {
         const expr = this.expression();
         this.consume(TokenType.Semicolon, "Expect ';' after expression.");
@@ -386,10 +419,18 @@ export class Parser {
 
 
     private type(): TypeExpr {
-        const name = this.consume(TokenType.Identifier, "Expect type name.");
-        return new PrimitiveType(name.lexeme);
+        if (this.match(TokenType.Symbol)) {
+            return new PrimitiveType(this.previous().lexeme);
+        }
+        throw new Error("Expect type.");
     }
 
+    private typeCheck(): boolean {
+        if (this.check(TokenType.Symbol)) {
+            return true;
+        }
+        return false;
+    }
 
 
     //辅助方法

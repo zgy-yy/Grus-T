@@ -112,15 +112,18 @@ export class ExpressionStmt extends Stmt {
     }
 }
 
-export class VarStmt extends Stmt {
+
+export type Variable = {
     name: Token;
     type: TypeExpr;
     initializer: Expr | null;
-    constructor(name: Token, type: TypeExpr, initializer: Expr | null) {
+
+}
+export class VarStmt extends Stmt {
+    vars: Variable[];
+    constructor(vars: Variable[]) {
         super();
-        this.name = name;
-        this.type = type;
-        this.initializer = initializer;
+        this.vars = vars;
     }
     accept<R>(visitor: StmtVisitor<R>): R {
         return visitor.visitVarStmt(this);

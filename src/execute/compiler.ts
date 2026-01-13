@@ -68,32 +68,37 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
         return ir_code;
     }
     visitVarStmt(stmt: VarStmt): IrFragment {
-        const varName = stmt.name.lexeme;
-        const var_ir_type = stmt.type.accept(this);
 
-        const init_comp = stmt.initializer?.accept(this) ?? new ExprCompose("void", "zeroinitializer", "");
-        const init_reg = init_comp.reg;
-        const init_ir_type = init_comp.irtype;
-        let ir_code = init_comp.ir;
+        let ir_code = "";
+        for (const _var of stmt.vars) {
+            const varName = _var.name.lexeme;
+            const var_ir_type = _var.type.accept(this);
+
+            const init_comp = _var.initializer?.accept(this) ?? new ExprCompose("void", "zeroinitializer", "");
+            const init_reg = init_comp.reg;
+            const init_ir_type = init_comp.irtype;
+            ir_code += init_comp.ir;
 
 
-        const d = this.findVarDistance(varName);
-        let ir_name = `%${varName}${d > 0 ? d : ''}`;
-        if (this.scopes.length > 1) {
-            const scope = this.scopes[this.scopes.length - 1];
-            scope.set(varName, new IrVar(ir_name, stmt.type));
-            ir_code += `${ir_name} = alloca ${var_ir_type}\n`;
+            const d = this.findVarDistance(varName);
+            let ir_name = `%${varName}${d > 0 ? d : ''}`;
+            if (this.scopes.length > 1) {
+                const scope = this.scopes[this.scopes.length - 1];
+                scope.set(varName, new IrVar(ir_name, _var.type));
+                ir_code += `${ir_name} = alloca ${var_ir_type}\n`;
 
-            if (init_reg != "zeroinitializer") {
-                const comp = this.matchingTargetType(var_ir_type, init_ir_type, init_reg);
-                ir_code += comp.ir;
-                ir_code += `store ${var_ir_type} ${comp.reg}, ${var_ir_type}* ${ir_name}\n`;
+                if (init_reg != "zeroinitializer") {
+                    const comp = this.matchingTargetType(var_ir_type, init_ir_type, init_reg);
+                    ir_code += comp.ir;
+                    ir_code += `store ${var_ir_type} ${comp.reg}, ${var_ir_type}* ${ir_name}\n`;
+                }
+            } else {
+                ir_name = `@.${varName}`;
+                const scope = this.scopes[this.scopes.length - 1];
+                scope.set(varName, new IrVar(ir_name, _var.type));
+                ir_code = `${ir_name} = global ${var_ir_type} ${init_reg}\n`;
             }
-        } else {
-            ir_name = `@.${varName}`;
-            const scope = this.scopes[this.scopes.length - 1];
-            scope.set(varName, new IrVar(ir_name, stmt.type));
-            ir_code = `${ir_name} = global ${var_ir_type} ${init_reg}\n`;
+
         }
 
         return ir_code;
