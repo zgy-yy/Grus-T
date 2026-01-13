@@ -4,6 +4,17 @@ import { BlockStmt, BreakStmt, ClassStmt, ContinueStmt, ExpressionStmt, ForStmt,
 import { Stmt } from "@/ast/Stmt";
 import { CompilerErrorHandler } from "@/parser/ErrorHandler";
 import { TokenType } from "@/ast/TokenType";
+import { Token } from "@/ast/Token";
+
+
+class CompilerError extends Error {
+    public token: Token;
+    constructor(token: Token, message: string) {
+        super(message);
+        this.token = token;
+    }
+}
+
 
 type Reg = string;
 type IrFragment = string;
@@ -39,8 +50,7 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
     scopes: Map<string, IrVar>[] = []; // sourceName -> compiledName
     globals: string[] = ["declare i32 @printf(i8*, ...)\n"];
     code: string = "";
-    constructor(private readonly error: CompilerErrorHandler) {
-        // this.error = error;
+    constructor(private readonly errorHandler: CompilerErrorHandler) {
     }
 
     compileProgram(nodes: Stmt[]): string {
@@ -199,7 +209,7 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
     // Expr
 
     visitAssignExpr(expr: AssignExpr): ExprCompose {
-        const irVar = this.findIrVar(expr.name.lexeme);
+        const irVar = this.findIrVar(expr.name);
         const ir_type = irVar.type.accept(this);
 
         const ir_value = expr.value.accept(this);
@@ -311,7 +321,7 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
                 ir_code += `${resultReg} = xor ${ir_type} ${comp.reg}, -1\n`;
                 break;
             default:
-                throw new Error(`Unsupported unary operator: ${expr.operator.type}`);
+                throw this.error(expr.operator, `Unsupported unary operator: ${expr.operator.type}`);
         }
         return new ExprCompose(ir_type, resultReg, ir_code);
     }
@@ -328,7 +338,7 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
         // 检查是否是可变参数函数（如printf）
         let isVariadic = false;
         if (expr.callee instanceof VariableExpr) {
-            const irVar = this.findIrVar(expr.callee.name.lexeme);
+            const irVar = this.findIrVar(expr.callee.name);
             if (irVar.type instanceof FunctionType) {
                 // 检查参数列表中是否包含"..."（可变参数）
                 isVariadic = irVar.type.parameters.some(param =>
@@ -375,7 +385,7 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
         throw new Error("Method not implemented.");
     }
     visitVariableExpr(expr: VariableExpr): ExprCompose {
-        const irVar = this.findIrVar(expr.name.lexeme);
+        const irVar = this.findIrVar(expr.name);
         if (irVar.type instanceof FunctionType) {
             const ir_type = irVar.type.accept(this);
             // 对于函数类型，直接返回函数名（如 @printf），不需要创建寄存器
@@ -437,15 +447,15 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
     define(name: string, type: TypeExpr): void {
         this.scopes[this.scopes.length - 1].set(name, new IrVar(name, type));
     }
-    findIrVar(sourceName: string): IrVar {
+    findIrVar(sourceName: Token): IrVar {
         for (let i = this.scopes.length - 1; i >= 0; i--) {
             const scope = this.scopes[i];
-            const ir_var = scope.get(sourceName);
+            const ir_var = scope.get(sourceName.lexeme);
             if (ir_var) {
                 return ir_var;
             }
         }
-        throw new Error(`Variable ${sourceName} not found`);
+        throw this.error(sourceName, `Variable ${sourceName} not found`);
     }
 
     findVarDistance(sourceName: string): number {
@@ -501,6 +511,11 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
     reg() {
         return `%r${Compiler.regI++}`;
     }
+
+    error(token: Token, message: string): void {
+        this.errorHandler(token, message);
+        throw new CompilerError(token, message);
+    }
 }
 
 //比较两个类型，返回最大类型和 需要改变类型的  l 左边，r 右边
@@ -545,7 +560,7 @@ function binaryOperator(type: IrType, operator: '+' | '-' | '*' | '/' | '%' | '>
 
 
         default:
-            throw new Error(`Unsupported operator: ${operator}`);
+            throw new CompilerError(operator, `Unsupported operator: ${operator}`);
     }
 
 }
