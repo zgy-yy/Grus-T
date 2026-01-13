@@ -35,6 +35,7 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
     static constStrI: number = 0;
     static regI: number = 0;
     static ifI: number = 0;
+    static forI: number = 0;
     scopes: Map<string, IrVar>[] = []; // sourceName -> compiledName
     globals: string[] = ["declare i32 @printf(i8*, ...)\n"];
     code: string = "";
@@ -134,7 +135,7 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
         const compReg = this.reg();
         const code = `
         ${condition.ir}
-        ${compReg}= ${binaryOperator(condition.irtype, '!=')} ${condition.irtype} ${condition.reg}, 0\n
+        ${compReg}= ${binaryOperator(condition.irtype, '!=')} ${condition.irtype} ${condition.reg}, 0
         br i1 ${compReg}, label %${thenLabel}, label %${elseLabel}
         ${thenLabel}:
             ${thenBranch}
@@ -150,7 +151,36 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
         throw new Error("Method not implemented.");
     }
     visitForStmt(stmt: ForStmt): IrFragment {
-        throw new Error("Method not implemented.");
+        const forI = Compiler.forI++;
+        const conditionLabel = `for${forI}.condition`;
+        const bodyLabel = `for${forI}.body`;
+        const endLabel = `for${forI}.end`;
+        const compReg = this.reg();
+        const initializer = stmt.initializer?.accept(this) ?? "";
+        const condition = stmt.condition.accept(this);
+        let increment = {
+            ir: "",
+            reg: "",
+        };
+        if (stmt.increment) {
+            increment = stmt.increment.accept(this);
+        }
+        const body = stmt.body.accept(this);
+        const code = `
+        ${initializer}
+        br label %${conditionLabel}
+        ${conditionLabel}:
+            ${condition.ir}
+            ${compReg}= ${binaryOperator(condition.irtype, '!=')} ${condition.irtype} ${condition.reg}, 0
+            br i1 ${compReg}, label %${bodyLabel}, label %${endLabel}
+        ${bodyLabel}:
+            ${body}
+            ${increment.ir}
+            br label %${conditionLabel}
+        ${endLabel}:
+        `;
+        return code;
+
     }
     visitBreakStmt(stmt: BreakStmt): IrFragment {
         throw new Error("Method not implemented.");
@@ -360,7 +390,6 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
     visitLiteralExpr(expr: LiteralExpr): ExprCompose {
         const globalReg = `@.constant_${Compiler.constStrI++}`
         if (typeof expr.value === "string") {
-            // private unnamed_addr constant [15 x i8] c"Hello, World!\0A\00", align 1
             const g_ir = `${globalReg} = private unnamed_addr constant [${expr.value.length + 2} x i8] c"${expr.value}\\0A\\00", align 1\n`;
             this.globals.push(g_ir);
             // 不在这里返回 g_ir，因为它会被添加到全局作用域

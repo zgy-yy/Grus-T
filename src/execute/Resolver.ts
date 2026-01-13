@@ -117,12 +117,16 @@ export class Resolver implements ExprVisitor<TypeExpr>, StmtVisitor<void> {
         // this.loopDepth--;
     }
     visitForStmt(stmt: ForStmt): void {
-        // this.resolveStmt(stmt.initializer);
-        // this.resolveExpr(stmt.condition);
-        // this.resolveExpr(stmt.increment);
-        // this.loopDepth++;
-        // this.resolveStmt(stmt.body);
-        // this.loopDepth--;
+        if (stmt.initializer) {
+            this.resolveStmt(stmt.initializer);
+        }
+        this.resolveExpr(stmt.condition);
+        if (stmt.increment) {
+            this.resolveExpr(stmt.increment);
+        }
+        this.loopDepth++;
+        this.resolveStmt(stmt.body);
+        this.loopDepth--;
     }
     visitBreakStmt(stmt: BreakStmt): void {
         if (this.loopDepth <= 0) {
@@ -317,8 +321,7 @@ export class Resolver implements ExprVisitor<TypeExpr>, StmtVisitor<void> {
                 return type;
             }
         }
-        throw new Error(`Variable ${name} not found`);
-        // not found Assume global
+        throw this.error(vname, `Variable ${name} not found`);
     }
 
 

@@ -274,6 +274,8 @@ export class Parser {
             return this.ifStatement();
         } if (this.match(TokenType.While)) {
             return this.whileStatement();
+        } if (this.match(TokenType.For)) {
+            return this.forStatement();
         }
         return this.expressionStatement();
     }
@@ -307,18 +309,24 @@ export class Parser {
      * for (declaration | expression; expression; expression) statement
      */
     private forStatement(): ForStmt {
-        throw new Error("Not implemented");
-        // this.consume(TokenType.LeftParen, "Expect '(' after 'for'.");
-        // let initializer = null;
-        // if (this.match(TokenType.Let)) {
-        //     initializer = this.varDeclaration(null);
-        // } else {
-        //     initializer = this.expression();
-        // }
-        // const condition = this.expression();
-        // this.consume(TokenType.RightParen, "Expect ')' after condition.");
-        // const body = this.statement();
-        // return new ForStmt(condition, body);
+        this.consume(TokenType.LeftParen, "Expect '(' after 'for'.");
+        let initializer: Stmt | null = null;
+        if (this.match(TokenType.Semicolon)) {
+            initializer = null;
+        } else if (this.match(TokenType.Let)) {
+            initializer = this.varDeclaration(null);
+        } else if (this.typeCheck()) {
+            const type = this.type();
+            initializer = this.varDeclaration(type);
+        } else {
+            initializer = this.expressionStatement();
+        }
+        const condition = this.check(TokenType.Semicolon) ? new LiteralExpr(true) : this.expression();
+        this.consume(TokenType.Semicolon, "Expect ';' after condition.");
+        const increment = this.check(TokenType.RightParen) ? null : this.expression();
+        this.consume(TokenType.RightParen, "Expect ')' after condition.");
+        const body = this.statement();
+        return new ForStmt(initializer, condition, increment, body);
     }
     /**
      * 解析表达式语句

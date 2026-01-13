@@ -36,12 +36,12 @@ export class WhileStmt extends Stmt {
 }
 
 export class ForStmt extends Stmt {
-    initializer: Stmt;
+    initializer: Stmt | null;
     condition: Expr;
-    increment: Expr;
+    increment: Expr | null;
     body: Stmt;
 
-    constructor(initializer: Stmt, condition: Expr, increment: Expr, body: Stmt) {
+    constructor(initializer: Stmt | null, condition: Expr, increment: Expr | null, body: Stmt) {
         super();
         this.initializer = initializer;
         this.condition = condition;
