@@ -47,6 +47,7 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
     static regI: number = 0;
     static ifI: number = 0;
     static forI: number = 0;
+    static whileI: number = 0;
     scopes: Map<string, IrVar>[] = []; // sourceName -> compiledName
     globals: string[] = ["declare i32 @printf(i8*, ...)\n"];
     code: string = "";
@@ -158,7 +159,25 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
         return code;
     }
     visitWhileStmt(stmt: WhileStmt): IrFragment {
-        throw new Error("Method not implemented.");
+        const condition = stmt.condition.accept(this);
+        const body = stmt.body.accept(this);
+        const whileI = Compiler.whileI++;
+        const conditionLabel = `while${whileI}.condition`;
+        const bodyLabel = `while${whileI}.body`;
+        const endLabel = `while${whileI}.end`;
+        const compReg = this.reg();
+        const code = `
+        br label %${conditionLabel}
+        ${conditionLabel}:
+            ${condition.ir}
+        ${compReg}= ${binaryOperator(condition.irtype, '!=')} ${condition.irtype} ${condition.reg}, 0
+        br i1 ${compReg}, label %${bodyLabel}, label %${endLabel}
+        ${bodyLabel}:
+            ${body}
+            br label %${conditionLabel}
+        ${endLabel}:
+        `;
+        return code;
     }
     visitForStmt(stmt: ForStmt): IrFragment {
         const forI = Compiler.forI++;

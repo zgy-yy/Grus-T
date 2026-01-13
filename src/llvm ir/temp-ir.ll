@@ -1,28 +1,27 @@
 declare i32 @printf(i8*, ...)
-@.constant_2 = private unnamed_addr constant [6 x i8] c"i=%d\0A\00", align 1
+@.constant_2 = private unnamed_addr constant [4 x i8] c"%d\0A\00", align 1
 define i32 @main() {
         entry:
-        
         %i = alloca i32
-store i32 0, i32* %i
+store i32 1, i32* %i
 
-        br label %for0.condition
-        for0.condition:
-            %r2 = load i32 , i32* %i
-%r3 = icmp slt i32 %r2, 3
 
-            %r0= icmp ne i1 %r3, 0
-            br i1 %r0, label %for0.body, label %for0.end
-        for0.body:
-            %r6 = load i32 , i32* %i
-%r5 = call i32(i8*, ...) @printf(i8* @.constant_2, i32 %r6)
-%r7 = load i32 , i32* %i
-%r8 = add i32 %r7, 1
-store i32 %r8, i32* %i
+        br label %while0.condition
+        while0.condition:
+            %r1 = load i32 , i32* %i
+%r2 = icmp slt i32 %r1, 23
 
-            
-            br label %for0.condition
-        for0.end:
+        %r9= icmp ne i1 %r2, 0
+        br i1 %r9, label %while0.body, label %while0.end
+        while0.body:
+            %r5 = load i32 , i32* %i
+%r4 = call i32(i8*, ...) @printf(i8* @.constant_2, i32 %r5)
+%r6 = load i32 , i32* %i
+%r7 = add i32 %r6, 1
+store i32 %r7, i32* %i
+
+            br label %while0.condition
+        while0.end:
         
         ret i32 0
        }

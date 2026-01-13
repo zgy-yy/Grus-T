@@ -110,11 +110,10 @@ export class Resolver implements ExprVisitor<TypeExpr>, StmtVisitor<void> {
         }
     }
     visitWhileStmt(stmt: WhileStmt): void {
-
-        // this.resolveExpr(stmt.condition);
-        // this.loopDepth++;
-        // this.resolveStmt(stmt.body);
-        // this.loopDepth--;
+        this.resolveExpr(stmt.condition);
+        this.loopDepth++;
+        this.resolveStmt(stmt.body);
+        this.loopDepth--;
     }
     visitForStmt(stmt: ForStmt): void {
         if (stmt.initializer) {
