@@ -1,4 +1,4 @@
-import { AssignExpr, BinaryExpr, CallExpr, ConditionalExpr, Expr, ExprVisitor, GetExpr, GroupingExpr, LiteralExpr, LogicalExpr, PostfixExpr, SetExpr, ThisExpr, UnaryExpr, VariableExpr } from "@/ast/Expr";
+import { AssignExpr, BinaryExpr, CallExpr, ConditionalExpr, Expr, ExprVisitor, GetExpr, GroupingExpr, LiteralExpr, LogicalExpr, PostfixExpr, PrefixExpr, SetExpr, ThisExpr, UnaryExpr, VariableExpr } from "@/ast/Expr";
 
 
 
@@ -8,7 +8,7 @@ export class AstPrinter implements ExprVisitor<string> {
         return expr.accept(this);
     }
     visitAssignExpr(expr: AssignExpr): string {
-        return this.parenthesize("=", expr.name.lexeme, expr.value);
+        return this.parenthesize("=", expr.target.accept(this), expr.value.accept(this));
     }
     visitConditionalExpr(expr: ConditionalExpr): string {
         return this.parenthesize("?", expr.condition, expr.trueExpr, expr.falseExpr);
@@ -26,7 +26,10 @@ export class AstPrinter implements ExprVisitor<string> {
     }
 
     visitPostfixExpr(expr: PostfixExpr): string {
-        return this.parenthesize(expr.left.accept(this), expr.operator.lexeme);
+        return this.parenthesize(expr.target.accept(this), expr.operator.lexeme);
+    }
+    visitPrefixExpr(expr: PrefixExpr): string {
+        return this.parenthesize(expr.operator.lexeme, expr.target);
     }
     visitCallExpr(expr: CallExpr): string {
         return this.parenthesize("call", expr.callee, ...expr.arguments);

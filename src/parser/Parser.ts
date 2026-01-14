@@ -1,7 +1,7 @@
 import { Token } from "@/ast/Token";
 import { ParserErrorHandler } from "./ErrorHandler";
 import { TokenType } from "@/ast/TokenType";
-import { AssignExpr, BinaryExpr, CallExpr, Expr, LiteralExpr, PostfixExpr, ThisExpr, UnaryExpr, VariableExpr } from "@/ast/Expr";
+import { AssignExpr, BinaryExpr, CallExpr, Expr, LiteralExpr, PostfixExpr, PrefixExpr, ThisExpr, UnaryExpr, VariableExpr } from "@/ast/Expr";
 import { BlockStmt, ExpressionStmt, ForStmt, FunctionStmt, IfStmt, Parameter, Stmt, Variable, VarStmt, WhileStmt } from "@/ast/Stmt";
 import { PrimitiveType, TypeExpr } from "@/ast/TypeExpr";
 
@@ -10,6 +10,7 @@ class SyntaxError extends Error {
     constructor(token: Token, message: string) {
         super(message);
         this.token = token;
+
     }
 }
 
@@ -60,8 +61,8 @@ export class Parser {
 
         [TokenType.Bang]: [this.unary.bind(this), null, Precedence.NONE],//!
         [TokenType.Minus]: [this.unary.bind(this), this.binary.bind(this), Precedence.TERM],//-
-        [TokenType.PlusPlus]: [this.unary.bind(this), this.postfix.bind(this), Precedence.TERM],//++
-        [TokenType.MinusMinus]: [this.unary.bind(this), this.postfix.bind(this), Precedence.TERM],//--
+        [TokenType.PlusPlus]: [this.prefix.bind(this), this.postfix.bind(this), Precedence.UNARY],//++
+        [TokenType.MinusMinus]: [this.prefix.bind(this), this.postfix.bind(this), Precedence.UNARY],//--
         [TokenType.New]: [null, null, Precedence.NONE],//new
         [TokenType.Tilde]: [this.unary.bind(this), null, Precedence.NONE],//~
 
@@ -150,17 +151,9 @@ export class Parser {
     public parse(): Stmt[] | null {
         const statements: Stmt[] = [];
         while (!this.isAtEnd()) {
-            try {
-                const stmt = this.declaration(true);
-                if (stmt) {
-                    statements.push(stmt);
-                }
-            } catch (error) {
-                if (error instanceof SyntaxError) {
-                    this.synchronize();
-                } else {
-                    throw error;
-                }
+            const stmt = this.declaration(true);
+            if (stmt) {
+                statements.push(stmt);
             }
         }
         return statements;
@@ -171,25 +164,36 @@ export class Parser {
      * declaration → varDecl | funDecl 
      * 声明由变量声明、函数声明和语句组成
      */
-    private declaration(program: boolean = false): Stmt {
-        if (this.match(TokenType.Let)) {
-            return this.varDeclaration(null);
+    private declaration(program: boolean = false): Stmt | null {
+        try {
+            if (this.match(TokenType.Let)) {
+                return this.varDeclaration(null);
+            }
+            if (this.typeCheck()) {
+                const type = this.type();
+                return this.varDeclaration(type);
+            }
+            if (this.match(TokenType.Fun)) {
+                return this.funDeclaration();
+            }
+            if (this.match(TokenType.Class)) {
+                // return this.classDeclaration();
+            }
+
+            if (program) {
+                throw this.error(this.peek(), "Expect declaration.");
+            }
+            return this.statement();
         }
-        if (this.typeCheck()) {
-            const type = this.type();
-            return this.varDeclaration(type);
-        }
-        if (this.match(TokenType.Fun)) {
-            return this.funDeclaration();
-        }
-        if (this.match(TokenType.Class)) {
-            // return this.classDeclaration();
+        catch (error) {
+            if (error instanceof SyntaxError) {
+                this.synchronize();
+                return null
+            } else {
+                throw error;
+            }
         }
 
-        if (program) {
-            throw this.error(this.peek(), "Expect declaration.");
-        }
-        return this.statement();
     }
 
 
@@ -217,7 +221,7 @@ export class Parser {
         if (!this.check(TokenType.RightParen)) {
             do {
                 if (parameters.length >= 255) {
-                    this.error(this.previous(), "Can't have more than 255 parameters.");
+                    throw this.error(this.previous(), "Can't have more than 255 parameters.");
                 }
                 const parameter = this.parameter();
                 parameters.push(...parameter);
@@ -384,7 +388,7 @@ export class Parser {
             //todo 赋值运算符需要检查左值是否可赋值
             if (left instanceof VariableExpr) {
                 const right = this.parsePrecedence(precedence);
-                return new AssignExpr(left.name, right);
+                return new AssignExpr(left, right, operator);
             }
             this.error(operator, "Invalid assignment target.");
         }
@@ -397,7 +401,21 @@ export class Parser {
         return new UnaryExpr(operator, right);
     }
     private postfix(left: Expr, operator: Token): Expr {
-        return new PostfixExpr(left, operator);
+        //todo 赋值运算符需要检查左值是否可赋值 移到 resolve 中检查
+        if (left instanceof VariableExpr) {
+            return new PostfixExpr(left, operator);
+        }
+        this.error(operator, "Invalid assignment target.");
+        return left;
+    }
+
+    private prefix(operator: Token): Expr {
+        const right = this.parsePrecedence(Precedence.UNARY);
+        //todo 赋值运算符需要检查左值是否可赋值
+        if (right instanceof VariableExpr) {
+            return new PrefixExpr(right, operator);
+        }
+        throw this.error(operator, "Invalid assignment target.");
     }
 
     private primary(token: Token): Expr {
@@ -528,10 +546,11 @@ export class Parser {
  * 
  * */
     private synchronize(): void {
-        this.advance();
+        const token = this.peek();
+        console.log("synchronize", token.type);
         while (!this.isAtEnd()) {
-            if (this.previous().type === TokenType.Semicolon) return;
-            switch (this.peek().type) {
+            if (token.type === TokenType.Semicolon) return;
+            switch (token.type) {
                 case TokenType.Class:
                 case TokenType.Fun:
                 case TokenType.Let:
@@ -540,13 +559,16 @@ export class Parser {
                 case TokenType.While:
                 case TokenType.Return:
                     return
+                default: ;
             }
             this.advance();
         }
     }
 
-    private error(token: Token, message: string): SyntaxError {
+    private error(token: Token, message: string) {
         this.errorHandler(token, message);
+        this.synchronize();
+
         return new SyntaxError(token, message);
     }
 

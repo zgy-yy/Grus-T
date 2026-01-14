@@ -1,4 +1,4 @@
-import { AssignExpr, BinaryExpr, CallExpr, ConditionalExpr, Expr, ExprVisitor, GetExpr, GroupingExpr, LiteralExpr, LogicalExpr, PostfixExpr, SetExpr, ThisExpr, UnaryExpr, VariableExpr } from "@/ast/Expr";
+import { AssignExpr, BinaryExpr, CallExpr, ConditionalExpr, Expr, ExprVisitor, GetExpr, GroupingExpr, LiteralExpr, LogicalExpr, PostfixExpr, PrefixExpr, SetExpr, ThisExpr, UnaryExpr, VariableExpr } from "@/ast/Expr";
 import { FunctionType, PrimitiveType, TempOmittedType, TypeExpr, TypesVisitor, VoidType } from "@/ast/TypeExpr";
 import { BlockStmt, BreakStmt, ClassStmt, ContinueStmt, ExpressionStmt, ForStmt, FunctionStmt, IfStmt, ReturnStmt, StmtVisitor, VarStmt, WhileStmt } from "@/ast/Stmt";
 import { Stmt } from "@/ast/Stmt";
@@ -25,10 +25,12 @@ class ExprCompose {
     ir: IrFragment;
     reg: Reg;
     irtype: IrType;
-    constructor(irtype: IrType, reg: Reg, ir: IrFragment,) {
+    addr: Reg;
+    constructor(irtype: IrType, reg: Reg, ir: IrFragment, addr?: Reg) {
         this.ir = ir;
         this.reg = reg;
         this.irtype = irtype;
+        this.addr = addr ?? "";
     }
 }
 
@@ -228,12 +230,12 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
     // Expr
 
     visitAssignExpr(expr: AssignExpr): ExprCompose {
-        const irVar = this.findIrVar(expr.name);
-        const ir_type = irVar.type.accept(this);
+        const left_comp = expr.target.accept(this);
+        const ir_type = left_comp.irtype;
 
         const ir_value = expr.value.accept(this);
         let ir_code = ir_value.ir;
-        ir_code += `store ${ir_type} ${ir_value.reg}, ${ir_type}* ${irVar.name}\n`;
+        ir_code += `store ${ir_type} ${ir_value.reg}, ${ir_type}* ${left_comp.addr}\n`;
         return new ExprCompose(ir_type, ir_value.reg, ir_code);
     }
     visitConditionalExpr(expr: ConditionalExpr): ExprCompose {
@@ -346,8 +348,43 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
     }
 
     visitPostfixExpr(expr: PostfixExpr): ExprCompose {
-        throw new Error("Method not implemented.");
+        const left_comp = expr.target.accept(this);
+        const ir_type = left_comp.irtype;
+        const resultReg = this.reg();
+        let opt = ""
+        if (expr.operator.type === TokenType.PlusPlus) {
+            opt = "add"
+        } else {
+            opt = "sub"
+        }
+        const tempReg = this.reg();
+        let ir_code = `
+        ${resultReg} = load ${ir_type} , ${ir_type}* ${left_comp.addr}
+        ${tempReg} = ${opt} ${ir_type} ${resultReg}, 1
+        store ${ir_type} ${tempReg}, ${ir_type}* ${left_comp.addr}
+        `;
+        return new ExprCompose(ir_type, resultReg, ir_code);
     }
+
+    visitPrefixExpr(expr: PrefixExpr): ExprCompose {
+        const left_comp = expr.target.accept(this);
+        const ir_type = left_comp.irtype;
+        const resultReg = this.reg();
+        let opt = ""
+        if (expr.operator.type === TokenType.PlusPlus) {
+            opt = "add"
+        } else {
+            opt = "sub"
+        }
+        const tempReg = this.reg();
+        let ir_code = `
+        ${tempReg} = load ${ir_type} , ${ir_type}* ${left_comp.addr}
+        ${resultReg} = ${opt} ${ir_type} ${tempReg}, 1
+        store ${ir_type} ${resultReg}, ${ir_type}* ${left_comp.addr}
+        `;
+        return new ExprCompose(ir_type, resultReg, ir_code);
+    }
+
     visitCallExpr(expr: CallExpr): ExprCompose {
         const reg = this.reg();
         const callee = expr.callee.accept(this);
@@ -408,12 +445,12 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
         if (irVar.type instanceof FunctionType) {
             const ir_type = irVar.type.accept(this);
             // 对于函数类型，直接返回函数名（如 @printf），不需要创建寄存器
-            return new ExprCompose(ir_type, irVar.name, "");
+            return new ExprCompose(ir_type, irVar.name, "", irVar.name);
         }
         const reg = this.reg();
         const ir_type = irVar.type.accept(this);
         const ir_code = `${reg} = load ${ir_type} , ${ir_type}* ${irVar.name}\n`;
-        return new ExprCompose(ir_type, reg, ir_code);
+        return new ExprCompose(ir_type, reg, ir_code, irVar.name);
     }
 
     visitLiteralExpr(expr: LiteralExpr): ExprCompose {

@@ -1,6 +1,6 @@
 import { GrusValue } from "./GrusValue";
 import { Token } from "./Token";
-export abstract class Expr  {
+export abstract class Expr {
     abstract accept<R>(visitor: ExprVisitor<R>): R;
 }
 
@@ -12,6 +12,7 @@ export interface ExprVisitor<R> {
     visitUnaryExpr(expr: UnaryExpr): R;
     visitLiteralExpr(expr: LiteralExpr): R;
     visitPostfixExpr(expr: PostfixExpr): R;
+    visitPrefixExpr(expr: PrefixExpr): R;
     visitCallExpr(expr: CallExpr): R;
     visitSetExpr(expr: SetExpr): R;
     visitGetExpr(expr: GetExpr): R;
@@ -26,12 +27,15 @@ export interface ExprVisitor<R> {
  * 赋值表达式
  */
 export class AssignExpr extends Expr {
-    name: Token;
+    target: Expr;
     value: Expr;
-    constructor(name: Token, value: Expr) {
+    equal: Token;
+
+    constructor(target: Expr, value: Expr, equal: Token) {
         super();
-        this.name = name;
+        this.target = target;
         this.value = value;
+        this.equal = equal;
     }
     accept<R>(visitor: ExprVisitor<R>): R {
         return visitor.visitAssignExpr(this);
@@ -60,7 +64,7 @@ export class ConditionalExpr extends Expr {
 
 
 /**
- * 逻辑或表达式
+ * 逻辑表达式
  */
 export class LogicalExpr extends Expr {
     left: Expr;
@@ -120,11 +124,11 @@ export class UnaryExpr extends Expr {
  * 后缀表达式
  */
 export class PostfixExpr extends Expr {
-    left: Expr;
+    target: Expr;
     operator: Token;
-    constructor(expr: Expr, operator: Token) {
+    constructor(target: Expr, operator: Token) {
         super();
-        this.left = expr;
+        this.target = target;
         this.operator = operator;
     }
     accept<R>(visitor: ExprVisitor<R>): R {
@@ -132,6 +136,18 @@ export class PostfixExpr extends Expr {
     }
 }
 
+export class PrefixExpr extends Expr {
+    target: Expr;
+    operator: Token;
+    constructor(target: Expr, operator: Token) {
+        super();
+        this.target = target;
+        this.operator = operator;
+    }
+    accept<R>(visitor: ExprVisitor<R>): R {
+       return visitor.visitPrefixExpr(this);
+    }
+}
 
 
 export class CallExpr extends Expr {

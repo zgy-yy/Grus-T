@@ -1,4 +1,4 @@
-import { AssignExpr, BinaryExpr, CallExpr, ConditionalExpr, Expr, ExprVisitor, GetExpr, GroupingExpr, LiteralExpr, LogicalExpr, PostfixExpr, SetExpr, ThisExpr, UnaryExpr, VariableExpr } from "@/ast/Expr";
+import { AssignExpr, BinaryExpr, CallExpr, ConditionalExpr, Expr, ExprVisitor, GetExpr, GroupingExpr, LiteralExpr, LogicalExpr, PostfixExpr, PrefixExpr, SetExpr, ThisExpr, UnaryExpr, VariableExpr } from "@/ast/Expr";
 import { FunctionType, TypeExpr, PrimitiveType, TempOmittedType, VoidType } from "@/ast/TypeExpr";
 import { BlockStmt, BreakStmt, ClassStmt, ContinueStmt, ExpressionStmt, ForStmt, FunctionStmt, IfStmt, ReturnStmt, Stmt, StmtVisitor, VarStmt, WhileStmt } from "@/ast/Stmt";
 import { Token } from "@/ast/Token";
@@ -156,10 +156,10 @@ export class Resolver implements ExprVisitor<TypeExpr>, StmtVisitor<void> {
     }
 
     visitAssignExpr(expr: AssignExpr): TypeExpr {
-        const leftType = this.resolveLocal(expr.name);
+        const leftType = this.resolveExpr(expr.target);
         const rightType = this.resolveExpr(expr.value);
         if (!checkSameType(leftType, rightType)) {
-            throw this.error(expr.name, `Type mismatch: ${leftType} != ${rightType}`);
+            throw this.error(expr.equals, `Type mismatch: ${leftType} != ${rightType}`);
         }
         return leftType;
     }
@@ -232,8 +232,22 @@ export class Resolver implements ExprVisitor<TypeExpr>, StmtVisitor<void> {
         return literalType;
     }
     visitPostfixExpr(expr: PostfixExpr): TypeExpr {
-        throw new Error("Method not implemented.");
-        this.resolveExpr(expr.left);
+        const leftType = this.resolveExpr(expr.target);
+        if (expr.operator.type === TokenType.PlusPlus || expr.operator.type === TokenType.MinusMinus) {
+            if (!checkIntegerType(leftType)) {
+                throw this.error(expr.operator, `Type mismatch: ${leftType} != integer type`);
+            }
+        }
+        return leftType;
+    }
+    visitPrefixExpr(expr: PrefixExpr): TypeExpr {
+        const leftType = this.resolveExpr(expr.target);
+        if (expr.operator.type === TokenType.PlusPlus || expr.operator.type === TokenType.MinusMinus) {
+            if (!checkIntegerType(leftType)) {
+                throw this.error(expr.operator, `Type mismatch: ${leftType} != integer type`);
+            }
+        }
+        return leftType;
     }
     visitCallExpr(expr: CallExpr): TypeExpr {
         const calleeType = this.resolveExpr(expr.callee);
