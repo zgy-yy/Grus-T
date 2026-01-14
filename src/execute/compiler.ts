@@ -1,6 +1,6 @@
 import { AssignExpr, BinaryExpr, CallExpr, ConditionalExpr, Expr, ExprVisitor, GetExpr, GroupingExpr, LiteralExpr, LogicalExpr, PostfixExpr, PrefixExpr, SetExpr, ThisExpr, UnaryExpr, VariableExpr } from "@/ast/Expr";
 import { FunctionType, PrimitiveType, TempOmittedType, TypeExpr, TypesVisitor, VoidType } from "@/ast/TypeExpr";
-import { BlockStmt, BreakStmt, ClassStmt, ContinueStmt, ExpressionStmt, ForStmt, FunctionStmt, IfStmt, ReturnStmt, StmtVisitor, VarStmt, WhileStmt } from "@/ast/Stmt";
+import { BlockStmt, BreakStmt, ClassStmt, ContinueStmt, DoWhileStmt, ExpressionStmt, ForStmt, FunctionStmt, IfStmt, ReturnStmt, StmtVisitor, VarStmt, WhileStmt } from "@/ast/Stmt";
 import { Stmt } from "@/ast/Stmt";
 import { CompilerErrorHandler } from "@/parser/ErrorHandler";
 import { TokenType } from "@/ast/TokenType";
@@ -50,6 +50,7 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
     static ifI: number = 0;
     static forI: number = 0;
     static whileI: number = 0;
+    static doWhileI: number = 0;
     scopes: Map<string, IrVar>[] = []; // sourceName -> compiledName
     globals: string[] = ["declare i32 @printf(i8*, ...)\n"];
     code: string = "";
@@ -177,6 +178,27 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
         ${bodyLabel}:
             ${body}
             br label %${conditionLabel}
+        ${endLabel}:
+        `;
+        return code;
+    }
+    visitDoWhileStmt(stmt: DoWhileStmt): IrFragment {
+        const body = stmt.body.accept(this);
+        const condition = stmt.condition.accept(this);
+        const doWhileI = Compiler.doWhileI++;
+        const conditionLabel = `doWhile${doWhileI}.condition`;
+        const bodyLabel = `doWhile${doWhileI}.body`;
+        const endLabel = `doWhile${doWhileI}.end`;
+        const compReg = this.reg();
+        const code = `
+        br label %${bodyLabel}
+        ${bodyLabel}:
+            ${body}
+             br label %${conditionLabel}
+        ${conditionLabel}:
+            ${condition.ir}
+            ${compReg}= ${binaryOperator(condition.irtype, '!=')} ${condition.irtype} ${condition.reg}, 0
+            br i1 ${compReg}, label %${bodyLabel}, label %${endLabel}
         ${endLabel}:
         `;
         return code;

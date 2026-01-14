@@ -1,6 +1,6 @@
 import { AssignExpr, BinaryExpr, CallExpr, ConditionalExpr, Expr, ExprVisitor, GetExpr, GroupingExpr, LiteralExpr, LogicalExpr, PostfixExpr, PrefixExpr, SetExpr, ThisExpr, UnaryExpr, VariableExpr } from "@/ast/Expr";
 import { FunctionType, TypeExpr, PrimitiveType, TempOmittedType, VoidType } from "@/ast/TypeExpr";
-import { BlockStmt, BreakStmt, ClassStmt, ContinueStmt, ExpressionStmt, ForStmt, FunctionStmt, IfStmt, ReturnStmt, Stmt, StmtVisitor, VarStmt, WhileStmt } from "@/ast/Stmt";
+import { BlockStmt, BreakStmt, ClassStmt, ContinueStmt, DoWhileStmt, ExpressionStmt, ForStmt, FunctionStmt, IfStmt, ReturnStmt, Stmt, StmtVisitor, VarStmt, WhileStmt } from "@/ast/Stmt";
 import { Token } from "@/ast/Token";
 import { ParserErrorHandler } from "@/parser/ErrorHandler";
 import { TokenType } from "@/ast/TokenType";
@@ -115,6 +115,12 @@ export class Resolver implements ExprVisitor<TypeExpr>, StmtVisitor<void> {
         this.resolveStmt(stmt.body);
         this.loopDepth--;
     }
+    visitDoWhileStmt(stmt: DoWhileStmt): void {
+        this.loopDepth++;
+        this.resolveStmt(stmt.body);
+        this.loopDepth--;
+        this.resolveExpr(stmt.condition);
+    }
     visitForStmt(stmt: ForStmt): void {
         if (stmt.initializer) {
             this.resolveStmt(stmt.initializer);
@@ -159,7 +165,7 @@ export class Resolver implements ExprVisitor<TypeExpr>, StmtVisitor<void> {
         const leftType = this.resolveExpr(expr.target);
         const rightType = this.resolveExpr(expr.value);
         if (!checkSameType(leftType, rightType)) {
-            throw this.error(expr.equals, `Type mismatch: ${leftType} != ${rightType}`);
+            throw this.error(expr.equal, `Type mismatch: ${leftType} != ${rightType}`);
         }
         return leftType;
     }

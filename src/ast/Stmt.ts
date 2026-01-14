@@ -18,6 +18,7 @@ export interface StmtVisitor<R> {
     visitContinueStmt(stmt: ContinueStmt): R;
     visitReturnStmt(stmt: ReturnStmt): R;
     visitClassStmt(stmt: ClassStmt): R;
+    visitDoWhileStmt(stmt: DoWhileStmt): R;
 }
 
 
@@ -34,6 +35,20 @@ export class WhileStmt extends Stmt {
         return visitor.visitWhileStmt(this);
     }
 }
+
+export class DoWhileStmt extends Stmt {
+    condition: Expr;
+    body: Stmt;
+    constructor(condition: Expr, body: Stmt) {
+        super();
+        this.condition = condition;
+        this.body = body;
+    }
+    accept<R>(visitor: StmtVisitor<R>): R {
+        return visitor.visitDoWhileStmt(this);
+    }
+}
+
 
 export class ForStmt extends Stmt {
     initializer: Stmt | null;

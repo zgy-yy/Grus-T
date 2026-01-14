@@ -1,5 +1,6 @@
 fun main() i32 {
-  let i=3;
-  let c = i=++i;
-  printf("%d,%d",c,i);
+  i32 i = 0;
+  do
+    printf("%d", i);
+  while (i < 1);
 }

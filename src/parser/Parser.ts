@@ -2,7 +2,7 @@ import { Token } from "@/ast/Token";
 import { ParserErrorHandler } from "./ErrorHandler";
 import { TokenType } from "@/ast/TokenType";
 import { AssignExpr, BinaryExpr, CallExpr, Expr, LiteralExpr, PostfixExpr, PrefixExpr, ThisExpr, UnaryExpr, VariableExpr } from "@/ast/Expr";
-import { BlockStmt, ExpressionStmt, ForStmt, FunctionStmt, IfStmt, Parameter, Stmt, Variable, VarStmt, WhileStmt } from "@/ast/Stmt";
+import { BlockStmt, DoWhileStmt, ExpressionStmt, ForStmt, FunctionStmt, IfStmt, Parameter, Stmt, Variable, VarStmt, WhileStmt } from "@/ast/Stmt";
 import { PrimitiveType, TypeExpr } from "@/ast/TypeExpr";
 
 class SyntaxError extends Error {
@@ -54,6 +54,7 @@ export class Parser {
     private current: number = 0;
     private readonly tokens: Token[];
     public errorHandler: ParserErrorHandler;
+    private PARSE_ERROR: boolean = false;
 
     private rules: Record<TokenType, ParseRule> = {
         [TokenType.Dot]: [null, null, Precedence.NONE],//.
@@ -155,6 +156,9 @@ export class Parser {
             if (stmt) {
                 statements.push(stmt);
             }
+        }
+        if (this.PARSE_ERROR) {
+            return null;
         }
         return statements;
     }
@@ -280,6 +284,8 @@ export class Parser {
             return this.whileStatement();
         } if (this.match(TokenType.For)) {
             return this.forStatement();
+        } if (this.match(TokenType.Do)) {
+            return this.doWhileStatement();
         }
         return this.expressionStatement();
     }
@@ -308,6 +314,17 @@ export class Parser {
         const body = this.statement();
         return new WhileStmt(condition, body);
     }
+
+    private doWhileStatement(): DoWhileStmt {
+        const body = this.statement();
+        this.consume(TokenType.While, "Expect 'while' in 'do/while' loop");
+        this.consume(TokenType.LeftParen, "Expect '(' after 'while'.");
+        const condition = this.expression();
+        this.consume(TokenType.RightParen, "Expect ')' after condition.");
+        this.consume(TokenType.Semicolon, "Expect ';' after condition.");
+        return new DoWhileStmt(condition, body);
+    }
+
     /**
      * 解析 for 语句
      * for (declaration | expression; expression; expression) statement
@@ -566,6 +583,7 @@ export class Parser {
     }
 
     private error(token: Token, message: string) {
+        this.PARSE_ERROR = true;
         this.errorHandler(token, message);
         this.synchronize();
 
