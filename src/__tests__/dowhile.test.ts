@@ -159,7 +159,7 @@ fun main() i32 {
   do {
     printf("%d\\n", i);
     i = i + 1;
-  } while (0);
+  } while (0==1);
 }
 `;
             const output = compileAndRun(source);

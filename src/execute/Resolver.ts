@@ -7,8 +7,8 @@ import { TokenType } from "@/ast/TokenType";
 
 
 class ResolverError extends Error {
-    public token: Token;
-    constructor(token: Token, message: string) {
+    public token: Token | Expr;
+    constructor(token: Token | Expr, message: string) {
         super(message);
         this.token = token;
     }
@@ -103,14 +103,20 @@ export class Resolver implements ExprVisitor<TypeExpr>, StmtVisitor<void> {
         this.resolveExpr(stmt.expression);
     }
     visitIfStmt(stmt: IfStmt): void {
-        this.resolveExpr(stmt.condition);
+        const conditionType = this.resolveExpr(stmt.condition);
+        if (!checkBooleanType(conditionType)) {
+            throw this.error(stmt.condition, "Type mismatch: boolean type expected");
+        }
         this.resolveStmt(stmt.thenBranch);
         if (stmt.elseBranch) {
             this.resolveStmt(stmt.elseBranch);
         }
     }
     visitWhileStmt(stmt: WhileStmt): void {
-        this.resolveExpr(stmt.condition);
+        const conditionType = this.resolveExpr(stmt.condition);
+        if (!checkBooleanType(conditionType)) {
+            throw this.error(stmt.condition, "Type mismatch: boolean type expected");
+        }
         this.loopDepth++;
         this.resolveStmt(stmt.body);
         this.loopDepth--;
@@ -119,13 +125,19 @@ export class Resolver implements ExprVisitor<TypeExpr>, StmtVisitor<void> {
         this.loopDepth++;
         this.resolveStmt(stmt.body);
         this.loopDepth--;
-        this.resolveExpr(stmt.condition);
+        const conditionType = this.resolveExpr(stmt.condition);
+        if (!checkBooleanType(conditionType)) {
+            throw this.error(stmt.condition, "Type mismatch: boolean type expected");
+        }
     }
     visitForStmt(stmt: ForStmt): void {
         if (stmt.initializer) {
             this.resolveStmt(stmt.initializer);
         }
-        this.resolveExpr(stmt.condition);
+        const conditionType = this.resolveExpr(stmt.condition);
+        if (!checkBooleanType(conditionType)) {
+            throw this.error(stmt.condition, "Type mismatch: boolean type expected");
+        }
         if (stmt.increment) {
             this.resolveExpr(stmt.increment);
         }
@@ -189,6 +201,10 @@ export class Resolver implements ExprVisitor<TypeExpr>, StmtVisitor<void> {
             }
         } else if (['!=', '==', '>', '>=', '<', '<='].includes(expr.operator.lexeme)) {
             leftType = new PrimitiveType("i1");
+        } else if (['&&', '||'].includes(expr.operator.lexeme)) {
+            if (!checkBooleanType(leftType) || !checkBooleanType(rightType)) {
+                throw this.error(expr.operator, "Type mismatch: boolean type expected");
+            }
         } else {
             if (!checkSameType(leftType, rightType)) {
                 throw this.error(expr.operator, `Type mismatch: ${leftType} != ${rightType}`);
@@ -344,9 +360,16 @@ export class Resolver implements ExprVisitor<TypeExpr>, StmtVisitor<void> {
     }
 
 
-    error(token: Token, message: string): ResolverError {
-        this.errorHandler(token, message);
+    error(token: Token | Expr, message: string): ResolverError {
+        if (token instanceof Expr) {
+            console.error(token, message);
+        } else {
+            token = token as Token;
+            this.errorHandler(token, message);
+
+        }
         return new ResolverError(token, message);
+
     }
 }
 

@@ -6,7 +6,7 @@ describe('if 语句测试', () => {
     it('应该正确执行 if 语句（true 条件）', () => {
       const source = `
 fun main() i32 {
-  if (1) {
+  if (true) {
     printf("true\\n");
   }
 }
@@ -18,7 +18,7 @@ fun main() i32 {
     it('应该正确执行 if 语句（false 条件）', () => {
       const source = `
 fun main() i32 {
-  if (0) {
+  if (false) {
     printf("true\\n");
   }
   printf("false\\n");
@@ -58,7 +58,7 @@ fun main() i32 {
     it('应该正确执行 if-else 语句（true 分支）', () => {
       const source = `
 fun main() i32 {
-  if (1) {
+  if (true) {
     printf("if\\n");
   } else {
     printf("else\\n");
@@ -73,7 +73,7 @@ fun main() i32 {
     it('应该正确执行 if-else 语句（false 分支）', () => {
       const source = `
 fun main() i32 {
-  if (0) {
+  if (false) {
     printf("if\\n");
   } else {
     printf("else\\n");
@@ -146,8 +146,8 @@ fun main() i32 {
     it('应该正确处理嵌套 if 语句', () => {
       const source = `
 fun main() i32 {
-  if (1) {
-    if (1) {
+  if (true) {
+    if (true) {
       printf("nested\\n");
     }
   }
@@ -160,8 +160,8 @@ fun main() i32 {
     it('应该正确处理嵌套 if-else 语句', () => {
       const source = `
 fun main() i32 {
-  if (1) {
-    if (0) {
+  if (true) {
+    if (false) {
       printf("inner if\\n");
     } else {
       printf("inner else\\n");
@@ -177,9 +177,9 @@ fun main() i32 {
     it('应该正确处理多层嵌套', () => {
       const source = `
 fun main() i32 {
-  if (1) {
-    if (1) {
-      if (1) {
+  if (true) {
+    if (true) {
+      if (true) {
         printf("deep\\n");
       }
     }
@@ -331,7 +331,7 @@ fun main() i32 {
     it('应该正确处理零值条件', () => {
       const source = `
 fun main() i32 {
-  if (0) {
+  if (false) {
     printf("zero true\\n");
   } else {
     printf("zero false\\n");
@@ -346,7 +346,7 @@ fun main() i32 {
     it('应该正确处理负数条件', () => {
       const source = `
 fun main() i32 {
-  if (-1) {
+  if (true) {
     printf("negative true\\n");
   }
 }
@@ -388,7 +388,7 @@ fun main() i32 {
     it('应该正确处理空的 if 语句块', () => {
       const source = `
 fun main() i32 {
-  if (1) {
+  if (true) {
   }
   printf("after if\\n");
 }
@@ -400,7 +400,7 @@ fun main() i32 {
     it('应该正确处理空的 else 语句块', () => {
       const source = `
 fun main() i32 {
-  if (0) {
+  if (false) {
     printf("if\\n");
   } else {
   }
@@ -417,10 +417,10 @@ fun main() i32 {
     it('应该正确处理连续的 if 语句', () => {
       const source = `
 fun main() i32 {
-  if (1) {
+  if (true) {
     printf("first\\n");
   }
-  if (1) {
+  if (true) {
     printf("second\\n");
   }
 }
@@ -433,10 +433,10 @@ fun main() i32 {
     it('应该正确处理混合的 if 和 if-else 语句', () => {
       const source = `
 fun main() i32 {
-  if (1) {
+    if (true) {
     printf("if1\\n");
   }
-  if (0) {
+  if (false) {
     printf("if2\\n");
   } else {
     printf("else2\\n");

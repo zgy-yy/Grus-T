@@ -51,6 +51,8 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
     static forI: number = 0;
     static whileI: number = 0;
     static doWhileI: number = 0;
+    static andI: number = 0;
+    static orI: number = 0;
     scopes: Map<string, IrVar>[] = []; // sourceName -> compiledName
     globals: string[] = ["declare i32 @printf(i8*, ...)\n"];
     code: string = "";
@@ -146,11 +148,9 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
         const thenLabel = `if${ifI}.then`;
         const elseLabel = `if${ifI}.else`;
         const endLabel = `if${ifI}.end`;
-        const compReg = this.reg();
         const code = `
         ${condition.ir}
-        ${compReg}= ${binaryOperator(condition.irtype, '!=')} ${condition.irtype} ${condition.reg}, 0
-        br i1 ${compReg}, label %${thenLabel}, label %${elseLabel}
+        br i1 ${condition.reg}, label %${thenLabel}, label %${elseLabel}
         ${thenLabel}:
             ${thenBranch}
             br label %${endLabel}
@@ -168,13 +168,11 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
         const conditionLabel = `while${whileI}.condition`;
         const bodyLabel = `while${whileI}.body`;
         const endLabel = `while${whileI}.end`;
-        const compReg = this.reg();
         const code = `
         br label %${conditionLabel}
         ${conditionLabel}:
             ${condition.ir}
-        ${compReg}= ${binaryOperator(condition.irtype, '!=')} ${condition.irtype} ${condition.reg}, 0
-        br i1 ${compReg}, label %${bodyLabel}, label %${endLabel}
+            br i1 ${condition.reg}, label %${bodyLabel}, label %${endLabel}
         ${bodyLabel}:
             ${body}
             br label %${conditionLabel}
@@ -189,7 +187,6 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
         const conditionLabel = `doWhile${doWhileI}.condition`;
         const bodyLabel = `doWhile${doWhileI}.body`;
         const endLabel = `doWhile${doWhileI}.end`;
-        const compReg = this.reg();
         const code = `
         br label %${bodyLabel}
         ${bodyLabel}:
@@ -197,8 +194,7 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
              br label %${conditionLabel}
         ${conditionLabel}:
             ${condition.ir}
-            ${compReg}= ${binaryOperator(condition.irtype, '!=')} ${condition.irtype} ${condition.reg}, 0
-            br i1 ${compReg}, label %${bodyLabel}, label %${endLabel}
+            br i1 ${condition.reg}, label %${bodyLabel}, label %${endLabel}
         ${endLabel}:
         `;
         return code;
@@ -208,7 +204,7 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
         const conditionLabel = `for${forI}.condition`;
         const bodyLabel = `for${forI}.body`;
         const endLabel = `for${forI}.end`;
-        const compReg = this.reg();
+
         const initializer = stmt.initializer?.accept(this) ?? "";
         const condition = stmt.condition.accept(this);
         let increment = {
@@ -224,8 +220,7 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
         br label %${conditionLabel}
         ${conditionLabel}:
             ${condition.ir}
-            ${compReg}= ${binaryOperator(condition.irtype, '!=')} ${condition.irtype} ${condition.reg}, 0
-            br i1 ${compReg}, label %${bodyLabel}, label %${endLabel}
+            br i1 ${condition.reg}, label %${bodyLabel}, label %${endLabel}
         ${bodyLabel}:
             ${body}
             ${increment.ir}
@@ -270,9 +265,10 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
     visitBinaryExpr(expr: BinaryExpr): ExprCompose {
         const left_comp = expr.left.accept(this);
         const right_comp = expr.right.accept(this);
-        let ir_code = left_comp.ir + right_comp.ir;
+        let ir_code = left_comp.ir;
 
         const result_reg = this.reg();
+
         let [ir_type, compared] = compareType(left_comp.irtype, right_comp.irtype);
         if (compared === "l") {
             const comp = this.matchingTargetType(ir_type, left_comp.irtype, left_comp.reg);
@@ -283,67 +279,86 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
             ir_code += comp.ir;
             right_comp.reg = comp.reg;
         }
-
+        let result_ir_type = ir_type;
+        let opt = "";
 
 
         switch (expr.operator.type) {
             case TokenType.Plus:
-                ir_code += `${result_reg} = ${binaryOperator(ir_type, '+')} ${ir_type} ${left_comp.reg}, ${right_comp.reg}\n`;
+                opt = binaryOperator(ir_type, '+');
                 break;
             case TokenType.Minus:
-                ir_code += `${result_reg} = ${binaryOperator(ir_type, '-')} ${ir_type} ${left_comp.reg}, ${right_comp.reg}\n`;
+                opt = binaryOperator(ir_type, '-');
                 break;
             case TokenType.Star:
-                ir_code += `${result_reg} = ${binaryOperator(ir_type, '*')} ${ir_type} ${left_comp.reg}, ${right_comp.reg}\n`;
+                opt = binaryOperator(ir_type, '*');
                 break;
             case TokenType.Slash:
                 //有符号除法
-                ir_code += `${result_reg} = ${binaryOperator(ir_type, '/')} ${ir_type} ${left_comp.reg}, ${right_comp.reg}\n`;
+                opt = binaryOperator(ir_type, '/');
                 break;
             case TokenType.Percent:
-                ir_code += `${result_reg} = ${binaryOperator(ir_type, '%')} ${ir_type} ${left_comp.reg}, ${right_comp.reg}\n`;
+                opt = binaryOperator(ir_type, '%');
                 break;
             case TokenType.GreaterGreater:
-                ir_code += `${result_reg} = ${binaryOperator(ir_type, '>>')} ${ir_type} ${left_comp.reg}, ${right_comp.reg}\n`;
+                opt = binaryOperator(ir_type, '>>');
                 break;
             case TokenType.LessLess:
-                ir_code += `${result_reg} = ${binaryOperator(ir_type, '<<')} ${ir_type} ${left_comp.reg}, ${right_comp.reg}\n`;
+                opt = binaryOperator(ir_type, '<<');
                 break;
             case TokenType.EqualEqual:
-                ir_code += `${result_reg} = ${binaryOperator(ir_type, '==')} ${ir_type} ${left_comp.reg}, ${right_comp.reg}\n`;
-                ir_type = "i1"
+                opt = binaryOperator(ir_type, '==');
+                result_ir_type = "i1"
                 break;
             case TokenType.BangEqual:
-                ir_code += `${result_reg} = ${binaryOperator(ir_type, '!=')} ${ir_type} ${left_comp.reg}, ${right_comp.reg}\n`;
-                ir_type = "i1"
+                opt = binaryOperator(ir_type, '!=');
+                result_ir_type = "i1"
                 break;
             case TokenType.Greater:
-                ir_code += `${result_reg} = ${binaryOperator(ir_type, '>')} ${ir_type} ${left_comp.reg}, ${right_comp.reg}\n`;
-                ir_type = "i1"
+                opt = binaryOperator(ir_type, '>');
+                result_ir_type = "i1"
                 break;
             case TokenType.GreaterEqual:
-                ir_code += `${result_reg} = ${binaryOperator(ir_type, '>=')} ${ir_type} ${left_comp.reg}, ${right_comp.reg}\n`;
-                ir_type = "i1"
+                opt = binaryOperator(ir_type, '>=');
+                result_ir_type = "i1"
                 break;
             case TokenType.Less:
-                ir_code += `${result_reg} = ${binaryOperator(ir_type, '<')} ${ir_type} ${left_comp.reg}, ${right_comp.reg}\n`;
-                ir_type = "i1"
+                opt = binaryOperator(ir_type, '<');
+                result_ir_type = "i1"
                 break;
             case TokenType.LessEqual:
-                ir_code += `${result_reg} = ${binaryOperator(ir_type, '<=')} ${ir_type} ${left_comp.reg}, ${right_comp.reg}\n`;
-                ir_type = "i1"
+                opt = binaryOperator(ir_type, '<=');
+                result_ir_type = "i1"
                 break;
             case TokenType.BitOr:
-                ir_code += `${result_reg} = or ${ir_type} ${left_comp.reg}, ${right_comp.reg}\n`;
+                opt = "or";
                 break;
             case TokenType.BitAnd:
-                ir_code += `${result_reg} = and ${ir_type} ${left_comp.reg}, ${right_comp.reg}\n`;
+                opt = "and";
                 break;
             case TokenType.Caret:
-                ir_code += `${result_reg} = xor ${ir_type} ${left_comp.reg}, ${right_comp.reg}\n`;
+                opt = "xor";
                 break;
         }
-        return new ExprCompose(ir_type, result_reg, ir_code);
+        if (expr.operator.type === TokenType.And) {
+            const andI = Compiler.andI++;
+            const checkLabel = `and${andI}.check`;
+            const exitLabel = `and${andI}.exit`;
+            const code = `
+            br label %${checkLabel}
+            ${checkLabel}:
+                ${right_comp.ir}
+                br label %${exitLabel}
+            ${exitLabel}:
+                ${result_reg} = phi i1 [false, %${checkLabel}], [%${right_comp.reg}, %${exitLabel}]
+            `
+
+        } else {
+            ir_code += right_comp.ir;
+            ir_code += `${result_reg} = ${opt} ${ir_type} ${left_comp.reg}, ${right_comp.reg}\n`;
+        }
+
+        return new ExprCompose(result_ir_type, result_reg, ir_code);
     }
     visitUnaryExpr(expr: UnaryExpr): ExprCompose {
         const comp = expr.right.accept(this);

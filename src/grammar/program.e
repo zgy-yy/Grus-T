@@ -1,6 +1,7 @@
 fun main() i32 {
   i32 i = 0;
-  do
+  do {
     printf("%d", i);
-  while (i < 1);
+    i = i + 1;
+  } while (i <=5);
 }

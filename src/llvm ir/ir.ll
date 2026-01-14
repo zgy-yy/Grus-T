@@ -14,13 +14,15 @@ entry:
 doWhile0.body:                                    ; preds = %doWhile0.condition, %entry
   %r2 = load i32, ptr %i, align 4
   %r1 = call i32 (ptr, ...) @printf(ptr @.constant_1, i32 %r2)
+  %r4 = load i32, ptr %i, align 4
+  %r5 = add i32 %r4, 1
+  store i32 %r5, ptr %i, align 4
   br label %doWhile0.condition
 
 doWhile0.condition:                               ; preds = %doWhile0.body
-  %r3 = load i32, ptr %i, align 4
-  %r4 = icmp slt i32 %r3, 1
-  %r6 = icmp ne i1 %r4, false
-  br i1 %r6, label %doWhile0.body, label %doWhile0.end
+  %r7 = load i32, ptr %i, align 4
+  %r8 = icmp sle i32 %r7, 5
+  br i1 %r8, label %doWhile0.body, label %doWhile0.end
 
 doWhile0.end:                                     ; preds = %doWhile0.condition
   ret i32 0

@@ -622,7 +622,7 @@ fun main() i32 {
     it('应该正确处理浮点数不等比较', () => {
       const source = `
 fun main() i32 {
-  i1 x = 3.0 != 2.0;
+  bool x = 3.0 != 2.0;
   printf("%d\\n", x);
 }
 `;
@@ -633,8 +633,8 @@ fun main() i32 {
     it('应该正确处理浮点数大小比较', () => {
       const source = `
 fun main() i32 {
-  i1 x = 5.0 > 3.0;
-  i1 y = 2.0 < 4.0;
+  bool x = 5.0 > 3.0;
+  bool y = 2.0 < 4.0;
   printf("%d\\n", x);
   printf("%d\\n", y);
 }
