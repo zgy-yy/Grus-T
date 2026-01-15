@@ -17,7 +17,6 @@ export interface ExprVisitor<R> {
     visitSetExpr(expr: SetExpr): R;
     visitGetExpr(expr: GetExpr): R;
     visitThisExpr(expr: ThisExpr): R;
-    visitGroupingExpr(expr: GroupingExpr): R;
     visitVariableExpr(expr: VariableExpr): R;
 }
 
@@ -223,20 +222,6 @@ export class LiteralExpr extends Expr {
     }
 }
 
-/**
- * 分组表达式
- */
-export class GroupingExpr extends Expr {
-    expression: Expr;
-    constructor(expression: Expr) {
-        super();
-        this.expression = expression;
-    }
-
-    accept<R>(visitor: ExprVisitor<R>): R {
-        return visitor.visitGroupingExpr(this);
-    }
-}
 
 
 export class VariableExpr extends Expr {

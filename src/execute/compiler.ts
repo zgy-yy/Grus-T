@@ -1,4 +1,4 @@
-import { AssignExpr, BinaryExpr, CallExpr, ConditionalExpr, Expr, ExprVisitor, GetExpr, GroupingExpr, LiteralExpr, LogicalExpr, PostfixExpr, PrefixExpr, SetExpr, ThisExpr, UnaryExpr, VariableExpr } from "@/ast/Expr";
+import { AssignExpr, BinaryExpr, CallExpr, ConditionalExpr, Expr, ExprVisitor, GetExpr, LiteralExpr, LogicalExpr, PostfixExpr, PrefixExpr, SetExpr, ThisExpr, UnaryExpr, VariableExpr } from "@/ast/Expr";
 import { FunctionType, PrimitiveType, TempOmittedType, TypeExpr, TypesVisitor, VoidType } from "@/ast/TypeExpr";
 import { BlockStmt, BreakStmt, ClassStmt, ContinueStmt, DoWhileStmt, ExpressionStmt, ForStmt, FunctionStmt, IfStmt, ReturnStmt, StmtVisitor, VarStmt, WhileStmt } from "@/ast/Stmt";
 import { Stmt } from "@/ast/Stmt";
@@ -267,18 +267,25 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
         const right_comp = expr.right.accept(this);
         let ir_code = left_comp.ir;
 
-        const result_reg = this.reg();
-
-        let [ir_type, compared] = compareType(left_comp.irtype, right_comp.irtype);
-        if (compared === "l") {
-            const comp = this.matchingTargetType(ir_type, left_comp.irtype, left_comp.reg);
-            ir_code += comp.ir;
-            left_comp.reg = comp.reg;
+        let result_reg = this.reg();
+        let ir_type = left_comp.irtype;
+        if (expr.operator.type === TokenType.Comma) {
+            ir_type = right_comp.irtype;
         } else {
-            const comp = this.matchingTargetType(ir_type, right_comp.irtype, right_comp.reg);
-            ir_code += comp.ir;
-            right_comp.reg = comp.reg;
+            const [ir_type_c, compared] = compareType(left_comp.irtype, right_comp.irtype);
+            if (compared === "l") {
+                const comp = this.matchingTargetType(ir_type, left_comp.irtype, left_comp.reg);
+                ir_code += comp.ir;
+                left_comp.reg = comp.reg;
+                ir_type = ir_type_c;
+            } else {
+                const comp = this.matchingTargetType(ir_type, right_comp.irtype, right_comp.reg);
+                ir_code += comp.ir;
+                right_comp.reg = comp.reg;
+                ir_type = ir_type_c;
+            }
         }
+
         let result_ir_type = ir_type;
         let opt = "";
 
@@ -342,17 +349,26 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
         }
         if (expr.operator.type === TokenType.And) {
             const andI = Compiler.andI++;
+            const startLabel = `and${andI}.start`;
             const checkLabel = `and${andI}.check`;
             const exitLabel = `and${andI}.exit`;
+            // 逻辑 AND: 如果 left 为 false，直接返回 false；否则计算 right 并返回其结果
             const code = `
-            br label %${checkLabel}
+            br label %${startLabel}
+            ${startLabel}:
+            br i1 ${left_comp.reg}, label %${checkLabel}, label %${exitLabel}
             ${checkLabel}:
                 ${right_comp.ir}
                 br label %${exitLabel}
             ${exitLabel}:
-                ${result_reg} = phi i1 [false, %${checkLabel}], [%${right_comp.reg}, %${exitLabel}]
-            `
-
+                ${result_reg} = phi i1 [false, %${startLabel}], [${right_comp.reg}, %${checkLabel}]
+            `;
+            ir_code += code;
+            result_ir_type = "i1";
+        } else if (expr.operator.type === TokenType.Comma) {
+            ir_code += right_comp.ir;
+            result_ir_type = right_comp.irtype;
+            result_reg = right_comp.reg;
         } else {
             ir_code += right_comp.ir;
             ir_code += `${result_reg} = ${opt} ${ir_type} ${left_comp.reg}, ${right_comp.reg}\n`;
@@ -472,9 +488,6 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
         throw new Error("Method not implemented.");
     }
     visitThisExpr(expr: ThisExpr): ExprCompose {
-        throw new Error("Method not implemented.");
-    }
-    visitGroupingExpr(expr: GroupingExpr): ExprCompose {
         throw new Error("Method not implemented.");
     }
     visitVariableExpr(expr: VariableExpr): ExprCompose {

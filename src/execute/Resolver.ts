@@ -1,4 +1,4 @@
-import { AssignExpr, BinaryExpr, CallExpr, ConditionalExpr, Expr, ExprVisitor, GetExpr, GroupingExpr, LiteralExpr, LogicalExpr, PostfixExpr, PrefixExpr, SetExpr, ThisExpr, UnaryExpr, VariableExpr } from "@/ast/Expr";
+import { AssignExpr, BinaryExpr, CallExpr, ConditionalExpr, Expr, ExprVisitor, GetExpr, LiteralExpr, LogicalExpr, PostfixExpr, PrefixExpr, SetExpr, ThisExpr, UnaryExpr, VariableExpr } from "@/ast/Expr";
 import { FunctionType, TypeExpr, PrimitiveType, TempOmittedType, VoidType } from "@/ast/TypeExpr";
 import { BlockStmt, BreakStmt, ClassStmt, ContinueStmt, DoWhileStmt, ExpressionStmt, ForStmt, FunctionStmt, IfStmt, ReturnStmt, Stmt, StmtVisitor, VarStmt, WhileStmt } from "@/ast/Stmt";
 import { Token } from "@/ast/Token";
@@ -205,6 +205,8 @@ export class Resolver implements ExprVisitor<TypeExpr>, StmtVisitor<void> {
             if (!checkBooleanType(leftType) || !checkBooleanType(rightType)) {
                 throw this.error(expr.operator, "Type mismatch: boolean type expected");
             }
+        } else if ([',', '='].includes(expr.operator.lexeme)) {
+            return rightType;
         } else {
             if (!checkSameType(leftType, rightType)) {
                 throw this.error(expr.operator, `Type mismatch: ${leftType} != ${rightType}`);
@@ -297,10 +299,6 @@ export class Resolver implements ExprVisitor<TypeExpr>, StmtVisitor<void> {
         } else {
             // this.resolveLocal(expr, expr.keyword);
         }
-    }
-    visitGroupingExpr(expr: GroupingExpr): TypeExpr {
-        throw new Error("Method not implemented.");
-        this.resolveExpr(expr.expression);
     }
 
 

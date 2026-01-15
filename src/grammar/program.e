@@ -1,7 +1,6 @@
 fun main() i32 {
-  i32 i = 0;
-  do {
-    printf("%d", i);
-    i = i + 1;
-  } while (i <=5);
+  bool a =false;
+  i32 i = 9;
+  a=(i++,i<8);
+   printf("%d",i);
 }
