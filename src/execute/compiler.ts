@@ -1,6 +1,6 @@
 import { AssignExpr, BinaryExpr, CallExpr, ConditionalExpr, Expr, ExprVisitor, GetExpr, LiteralExpr, LogicalExpr, PostfixExpr, PrefixExpr, SetExpr, ThisExpr, UnaryExpr, VariableExpr } from "@/ast/Expr";
 import { FunctionType, PrimitiveType, TempOmittedType, TypeExpr, TypesVisitor, VoidType } from "@/ast/TypeExpr";
-import { BlockStmt, BreakStmt, ClassStmt, ContinueStmt, DoWhileStmt, ExpressionStmt, ForStmt, FunctionStmt, IfStmt, ReturnStmt, StmtVisitor, VarStmt, WhileStmt } from "@/ast/Stmt";
+import { BlockStmt, BreakStmt, ClassStmt, ContinueStmt, DoWhileStmt, ExpressionStmt, ForStmt, FunctionStmt, IfStmt, LoopStmt, ReturnStmt, StmtVisitor, VarStmt, WhileStmt } from "@/ast/Stmt";
 import { Stmt } from "@/ast/Stmt";
 import { CompilerErrorHandler } from "@/parser/ErrorHandler";
 import { TokenType } from "@/ast/TokenType";
@@ -53,6 +53,7 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
     static whileI: number = 0;
     static doWhileI: number = 0;
     static andI: number = 0;
+    static loopI: number = 0;
     static orI: number = 0;
     scopes: Map<string, IrVar>[] = []; // sourceName -> compiledName
     globals: string[] = ["declare i32 @printf(i8*, ...)"];
@@ -223,6 +224,21 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
         `;
         return code;
 
+    }
+
+    visitLoopStmt(stmt: LoopStmt): IrFragment {
+        const body = stmt.body.accept(this);
+        const loopI = Compiler.loopI++;
+        const bodyLabel = `loop${loopI}.body`;
+        const endLabel = `loop${loopI}.end`;
+        const code = `
+        br label %${bodyLabel}
+        ${bodyLabel}:
+            ${body}
+            br label %${bodyLabel}
+        ${endLabel}:
+        `;
+        return code;
     }
     visitBreakStmt(stmt: BreakStmt): IrFragment {
         throw new Error("Method not implemented.");
@@ -449,7 +465,7 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
                 const extendReg = `%extend_reg_${Compiler.regI++}`;
                 // i1使用zext，其他使用sext
                 const extendOp = arg.irtype === "i1" ? "zext" : "sext";
-                    ir_code.push(`${extendReg} = ${extendOp} ${arg.irtype} ${arg.reg} to i32`);
+                ir_code.push(`${extendReg} = ${extendOp} ${arg.irtype} ${arg.reg} to i32`);
                 finalType = "i32";
                 finalReg = extendReg;
             }

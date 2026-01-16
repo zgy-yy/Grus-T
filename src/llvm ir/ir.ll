@@ -8,25 +8,17 @@ declare i32 @printf(ptr, ...)
 define i32 @main() {
 entry:
   %f = alloca float, align 4
-  %r0 = sitofp i32 0 to float
+  %r0 = sitofp i32 1 to float
   store float %r0, ptr %f, align 4
-  br label %doWhile0.body
+  br label %loop0.body
 
-doWhile0.body:                                    ; preds = %doWhile0.condition, %entry
+loop0.body:                                       ; preds = %loop0.body, %entry
   %r2 = load float, ptr %f, align 4
-  %r1 = call i32 (ptr, ...) @printf(ptr @.constant_1, float %r2)
-  %r4 = load float, ptr %f, align 4
-  %r6 = sitofp i32 1 to float
-  %r5 = fadd float %r4, %r6
-  store float %r5, ptr %f, align 4
-  br label %doWhile0.condition
+  %r4 = sitofp i32 1 to float
+  %r3 = fadd float %r2, %r4
+  %r1 = call i32 (ptr, ...) @printf(ptr @.constant_1, float %r3)
+  br label %loop0.body
 
-doWhile0.condition:                               ; preds = %doWhile0.body
-  %r7 = load float, ptr %f, align 4
-  %r9 = sitofp i32 3 to float
-  %r8 = fcmp olt float %r7, %r9
-  br i1 %r8, label %doWhile0.body, label %doWhile0.end
-
-doWhile0.end:                                     ; preds = %doWhile0.condition
+loop0.end:                                        ; No predecessors!
   ret i32 0
 }
