@@ -282,7 +282,7 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
         code.push(left_comp.ir);
         if (expr.operator.type === TokenType.Comma) {
             code.push(right_comp.ir);
-            return right_comp;
+            return new ExprCompose(right_comp.irtype, right_comp.reg, code.join("\n"));
         } else {
             if (expr.operator.type === TokenType.And) {
                 const andI = Compiler.andI++;
@@ -290,6 +290,7 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
                 const checkLabel = `and${andI}.check`;
                 const exitLabel = `and${andI}.exit`;
                 const result_reg = this.reg();
+                console.log("a",right_comp.ir);
                 // 逻辑 AND: 如果 left 为 false，直接返回 false；否则计算 right 并返回其结果
                 const ir_code =
                     `
@@ -303,7 +304,25 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
                     ${result_reg} = phi i1 [false, %${startLabel}], [${right_comp.reg}, %${checkLabel}]
                 `;
                 code.push(ir_code);
-                return new ExprCompose("i1", result_reg, ir_code);
+                return new ExprCompose("i1", result_reg, code.join("\n"));
+            } else if (expr.operator.type === TokenType.Or) {
+                const orI = Compiler.orI++;
+                const startLabel = `or${orI}.start`;
+                const checkLabel = `or${orI}.check`;
+                const exitLabel = `or${orI}.exit`;
+                const result_reg = this.reg();
+                const ir_code = `
+                br label %${startLabel}
+                ${startLabel}:
+                    br i1 ${left_comp.reg}, label %${exitLabel}, label %${checkLabel}
+                ${checkLabel}:
+                    ${right_comp.ir}
+                    br label %${exitLabel}
+                ${exitLabel}:
+                    ${result_reg} = phi i1 [true, %${startLabel}], [${right_comp.reg}, %${checkLabel}]
+                `;
+                code.push(ir_code);
+                return new ExprCompose("i1", result_reg, code.join("\n"));
             } else {
                 code.push(right_comp.ir);
                 const max_comp = this.matchingMaxType(left_comp, right_comp);

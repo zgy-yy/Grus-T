@@ -1,6 +1,5 @@
 fun main() i32 {
-  float f = 1.0;
-  loop{
-    printf("%.0f", f+1);
-  }
+  let a =12;
+  bool b = a>11||(a++,a==12);
+  printf("%d,%d",a,b);
 }
