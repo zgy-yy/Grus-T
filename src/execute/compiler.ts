@@ -1,6 +1,6 @@
 import { AssignExpr, BinaryExpr, CallExpr, ConditionalExpr, Expr, ExprVisitor, GetExpr, LiteralExpr, LogicalExpr, PostfixExpr, PrefixExpr, SetExpr, ThisExpr, UnaryExpr, VariableExpr } from "@/ast/Expr";
 import { FunctionType, PrimitiveType, TempOmittedType, TypeExpr, TypesVisitor, VoidType } from "@/ast/TypeExpr";
-import { BlockStmt, BreakStmt, ClassStmt, ContinueStmt, DoWhileStmt, ExpressionStmt, ForStmt, FunctionStmt, IfStmt, LoopStmt, ReturnStmt, StmtVisitor, VarStmt, WhileStmt } from "@/ast/Stmt";
+import { BlockStmt, BreakStmt, ClassStmt, ContinueStmt, DoWhileStmt, ExpressionStmt, ForStmt, FunctionStmt, GotoStmt, IfStmt, LabelStmt, LoopStmt, ReturnStmt, StmtVisitor, VarStmt, WhileStmt } from "@/ast/Stmt";
 import { Stmt } from "@/ast/Stmt";
 import { CompilerErrorHandler } from "@/parser/ErrorHandler";
 import { TokenType } from "@/ast/TokenType";
@@ -271,6 +271,18 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
     visitContinueStmt(stmt: ContinueStmt): IrFragment {
         const currentLoop = this.LoopStack[this.LoopStack.length - 1];
         return `br label %${currentLoop.startLabel}`;
+    }
+    visitLabelStmt(stmt: LabelStmt): IrFragment {
+        const code: IrFragment[] = [];
+        code.push(`br label %${stmt.label.lexeme}`);
+        code.push(`${stmt.label.lexeme}:`);
+        if (stmt.body) {
+            code.push(stmt.body.accept(this));
+        }
+        return code.join("\n");
+    }
+    visitGotoStmt(stmt: GotoStmt): IrFragment {
+        return `br label %${stmt.label.lexeme}`;
     }
     visitReturnStmt(stmt: ReturnStmt): IrFragment {
         throw new Error("Method not implemented.");

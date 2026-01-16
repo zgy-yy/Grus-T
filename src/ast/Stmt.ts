@@ -20,6 +20,8 @@ export interface StmtVisitor<R> {
     visitContinueStmt(stmt: ContinueStmt): R;
     visitReturnStmt(stmt: ReturnStmt): R;
     visitClassStmt(stmt: ClassStmt): R;
+    visitLabelStmt(stmt: LabelStmt): R;
+    visitGotoStmt(stmt: GotoStmt): R;
 
 }
 
@@ -125,6 +127,30 @@ export class ContinueStmt extends Stmt {
     }
     accept<R>(visitor: StmtVisitor<R>): R {
         return visitor.visitContinueStmt(this);
+    }
+}
+
+export class LabelStmt extends Stmt {
+    label: Token;
+    body: Stmt | null;
+    constructor(label: Token, body: Stmt | null) {
+        super();
+        this.label = label;
+        this.body = body;
+    }
+    accept<R>(visitor: StmtVisitor<R>): R {
+        return visitor.visitLabelStmt(this);
+    }
+}
+
+export class GotoStmt extends Stmt {
+    label: Token;
+    constructor(label: Token) {
+        super();
+        this.label = label;
+    }
+    accept<R>(visitor: StmtVisitor<R>): R {
+        return visitor.visitGotoStmt(this);
     }
 }
 

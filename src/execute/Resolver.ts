@@ -1,6 +1,6 @@
 import { AssignExpr, BinaryExpr, CallExpr, ConditionalExpr, Expr, ExprVisitor, GetExpr, LiteralExpr, LogicalExpr, PostfixExpr, PrefixExpr, SetExpr, ThisExpr, UnaryExpr, VariableExpr } from "@/ast/Expr";
 import { FunctionType, TypeExpr, PrimitiveType, TempOmittedType, VoidType } from "@/ast/TypeExpr";
-import { BlockStmt, BreakStmt, ClassStmt, ContinueStmt, DoWhileStmt, ExpressionStmt, ForStmt, FunctionStmt, IfStmt, LoopStmt, ReturnStmt, Stmt, StmtVisitor, VarStmt, WhileStmt } from "@/ast/Stmt";
+import { BlockStmt, BreakStmt, ClassStmt, ContinueStmt, DoWhileStmt, ExpressionStmt, ForStmt, FunctionStmt, GotoStmt, IfStmt, LabelStmt, LoopStmt, ReturnStmt, Stmt, StmtVisitor, VarStmt, WhileStmt } from "@/ast/Stmt";
 import { Token } from "@/ast/Token";
 import { ParserErrorHandler } from "@/parser/ErrorHandler";
 import { TokenType } from "@/ast/TokenType";
@@ -23,6 +23,8 @@ export class Resolver implements ExprVisitor<TypeExpr>, StmtVisitor<void> {
         type: TypeExpr | null;
         defined: boolean;
     }>[] = [];
+    private labels: string[] = [];
+    private gotoLabels: Token[] = [];
     private errorHandler: ParserErrorHandler;
     private currentClass: ClassType = "NONE";
     constructor(errorHandler: ParserErrorHandler) {
@@ -79,9 +81,16 @@ export class Resolver implements ExprVisitor<TypeExpr>, StmtVisitor<void> {
     }
 
     visitFunctionStmt(stmt: FunctionStmt): void {
+        this.labels.slice(0, this.labels.length - 1);
         this.declare(stmt.name);
         this.define(stmt.name, stmt.returnType);
         this.resolveFunction(stmt);
+        this.labels.forEach(label => {
+            this.gotoLabels = this.gotoLabels.filter(gotoLabel => gotoLabel.lexeme !== label);
+        });
+        this.gotoLabels.forEach(label => {
+            throw this.error(label, `Label ${label.lexeme} not found`);
+        });
     }
 
 
@@ -161,6 +170,21 @@ export class Resolver implements ExprVisitor<TypeExpr>, StmtVisitor<void> {
         if (this.loopDepth <= 0) {
             throw this.error(stmt.keyword, `Unexpected continue statement`);
         }
+    }
+    visitLabelStmt(stmt: LabelStmt): void {
+        const label = stmt.label.lexeme;
+        if(this.labels.includes(label)){
+            throw this.error(stmt.label, `Label ${label} already defined`);
+        }
+        this.labels.push(label);
+        if(stmt.body){
+            this.resolveStmt(stmt.body);
+        }
+    }
+
+    visitGotoStmt(stmt: GotoStmt): void {
+        const label = stmt.label;
+        this.gotoLabels.push(label);
     }
     visitReturnStmt(stmt: ReturnStmt): void {
         throw new Error("Method not implemented.");

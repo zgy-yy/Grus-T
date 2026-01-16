@@ -52,6 +52,7 @@ export enum TokenType {
     // Arrow = 'ARROW',// =>
 
     // 关键字
+    Goto = 'GOTO',// goto
     Class = 'CLASS',// class
     Struct = 'STRUCT',// struct
     New = 'NEW',// new

@@ -2,7 +2,7 @@ import { Token } from "@/ast/Token";
 import { ParserErrorHandler } from "./ErrorHandler";
 import { TokenType } from "@/ast/TokenType";
 import { AssignExpr, BinaryExpr, CallExpr, Expr, LiteralExpr, PostfixExpr, PrefixExpr, ThisExpr, UnaryExpr, VariableExpr } from "@/ast/Expr";
-import { BlockStmt, BreakStmt, ContinueStmt, DoWhileStmt, ExpressionStmt, ForStmt, FunctionStmt, IfStmt, LoopStmt, Parameter, ReturnStmt, Stmt, Variable, VarStmt, WhileStmt } from "@/ast/Stmt";
+import { BlockStmt, BreakStmt, ContinueStmt, DoWhileStmt, ExpressionStmt, ForStmt, FunctionStmt, GotoStmt, IfStmt, LabelStmt, LoopStmt, Parameter, ReturnStmt, Stmt, Variable, VarStmt, WhileStmt } from "@/ast/Stmt";
 import { PrimitiveType, TypeExpr } from "@/ast/TypeExpr";
 
 class SyntaxError extends Error {
@@ -136,6 +136,7 @@ export class Parser {
         [TokenType.If]: [null, null, Precedence.NONE],// if
         [TokenType.Symbol]: [null, null, Precedence.NONE],// symbol
         [TokenType.Return]: [null, null, Precedence.NONE],// return
+        [TokenType.Goto]: [null, null, Precedence.NONE],// goto
     };
 
     constructor(tokens: Token[], errorHandler: ParserErrorHandler) {
@@ -301,6 +302,18 @@ export class Parser {
             const value = this.match(TokenType.Semicolon) ? null : this.expression();
             this.consume(TokenType.Semicolon, "Expect ';' after return.");
             return new ReturnStmt(keyword, value);
+        } if (this.match(TokenType.Identifier)) {
+            const label = this.previous();
+            if (this.check(TokenType.Colon)) {
+                this.consume(TokenType.Colon, "Expect ':' after label.");
+                const body = this.declaration();
+                return new LabelStmt(label, body);
+            }
+            this.back();
+        } if (this.match(TokenType.Goto)) {
+            const label = this.consume(TokenType.Identifier, "Expect label name.");
+            this.consume(TokenType.Semicolon, "Expect ';' after goto.");
+            return new GotoStmt(label);
         }
         return this.expressionStatement();
     }
@@ -548,6 +561,15 @@ export class Parser {
         }
         return this.previous();
     }
+
+
+    private back(): Token {
+        if (this.current > 0) {
+            this.current--;
+        }
+        return this.previous();
+    }
+
     /**
  * 判断是否到达末尾
  * 检查是否已经解析完所有 token
