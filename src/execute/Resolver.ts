@@ -163,9 +163,10 @@ export class Resolver implements ExprVisitor<TypeExpr>, StmtVisitor<void> {
         }
     }
     visitReturnStmt(stmt: ReturnStmt): void {
-        if (stmt.value) {
-            this.resolveExpr(stmt.value);
-        }
+        throw new Error("Method not implemented.");
+        // if (stmt.value) {
+        //     this.resolveExpr(stmt.value);
+        // }
     }
 
 

@@ -2,7 +2,7 @@ import { Token } from "@/ast/Token";
 import { ParserErrorHandler } from "./ErrorHandler";
 import { TokenType } from "@/ast/TokenType";
 import { AssignExpr, BinaryExpr, CallExpr, Expr, LiteralExpr, PostfixExpr, PrefixExpr, ThisExpr, UnaryExpr, VariableExpr } from "@/ast/Expr";
-import { BlockStmt, DoWhileStmt, ExpressionStmt, ForStmt, FunctionStmt, IfStmt, LoopStmt, Parameter, Stmt, Variable, VarStmt, WhileStmt } from "@/ast/Stmt";
+import { BlockStmt, BreakStmt, ContinueStmt, DoWhileStmt, ExpressionStmt, ForStmt, FunctionStmt, IfStmt, LoopStmt, Parameter, ReturnStmt, Stmt, Variable, VarStmt, WhileStmt } from "@/ast/Stmt";
 import { PrimitiveType, TypeExpr } from "@/ast/TypeExpr";
 
 class SyntaxError extends Error {
@@ -286,8 +286,21 @@ export class Parser {
             return this.forStatement();
         } if (this.match(TokenType.Do)) {
             return this.doWhileStatement();
-        }if(this.match(TokenType.Loop)) {
+        } if (this.match(TokenType.Loop)) {
             return this.loopStatement();
+        } if (this.match(TokenType.Continue)) {
+            this.consume(TokenType.Semicolon, "Expect ';' after continue.");
+            const keyword = this.previous();
+            return new ContinueStmt(keyword);
+        } if (this.match(TokenType.Break)) {
+            this.consume(TokenType.Semicolon, "Expect ';' after break.");
+            const keyword = this.previous();
+            return new BreakStmt(keyword);
+        } if (this.match(TokenType.Return)) {
+            const keyword = this.previous();
+            const value = this.match(TokenType.Semicolon) ? null : this.expression();
+            this.consume(TokenType.Semicolon, "Expect ';' after return.");
+            return new ReturnStmt(keyword, value);
         }
         return this.expressionStatement();
     }

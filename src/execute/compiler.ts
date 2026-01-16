@@ -55,6 +55,10 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
     static andI: number = 0;
     static loopI: number = 0;
     static orI: number = 0;
+    LoopStack: {
+        startLabel: string,
+        endLabel: string,
+    }[] = [];
     scopes: Map<string, IrVar>[] = []; // sourceName -> compiledName
     globals: string[] = ["declare i32 @printf(i8*, ...)"];
     code: string = "";
@@ -157,12 +161,16 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
         return code;
     }
     visitWhileStmt(stmt: WhileStmt): IrFragment {
-        const condition = stmt.condition.accept(this);
-        const body = stmt.body.accept(this);
         const whileI = Compiler.whileI++;
         const conditionLabel = `while${whileI}.condition`;
         const bodyLabel = `while${whileI}.body`;
         const endLabel = `while${whileI}.end`;
+        this.LoopStack.push({
+            startLabel: conditionLabel,
+            endLabel: endLabel,
+        });
+        const condition = stmt.condition.accept(this);
+        const body = stmt.body.accept(this);
         const code = `
         br label %${conditionLabel}
         ${conditionLabel}:
@@ -173,15 +181,20 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
             br label %${conditionLabel}
         ${endLabel}:
         `;
+        this.LoopStack.pop();
         return code;
     }
     visitDoWhileStmt(stmt: DoWhileStmt): IrFragment {
-        const body = stmt.body.accept(this);
-        const condition = stmt.condition.accept(this);
         const doWhileI = Compiler.doWhileI++;
         const conditionLabel = `doWhile${doWhileI}.condition`;
         const bodyLabel = `doWhile${doWhileI}.body`;
         const endLabel = `doWhile${doWhileI}.end`;
+        this.LoopStack.push({
+            startLabel: bodyLabel,
+            endLabel: endLabel,
+        });
+        const body = stmt.body.accept(this);
+        const condition = stmt.condition.accept(this);
         const code = `
         br label %${bodyLabel}
         ${bodyLabel}:
@@ -192,6 +205,7 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
             br i1 ${condition.reg}, label %${bodyLabel}, label %${endLabel}
         ${endLabel}:
         `;
+        this.LoopStack.pop();
         return code;
     }
     visitForStmt(stmt: ForStmt): IrFragment {
@@ -199,6 +213,10 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
         const conditionLabel = `for${forI}.condition`;
         const bodyLabel = `for${forI}.body`;
         const endLabel = `for${forI}.end`;
+        this.LoopStack.push({
+            startLabel: conditionLabel,
+            endLabel: endLabel,
+        });
 
         const initializer = stmt.initializer?.accept(this) ?? "";
         const condition = stmt.condition.accept(this);
@@ -222,15 +240,20 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
             br label %${conditionLabel}
         ${endLabel}:
         `;
+        this.LoopStack.pop();
         return code;
 
     }
 
     visitLoopStmt(stmt: LoopStmt): IrFragment {
-        const body = stmt.body.accept(this);
         const loopI = Compiler.loopI++;
         const bodyLabel = `loop${loopI}.body`;
         const endLabel = `loop${loopI}.end`;
+        this.LoopStack.push({
+            startLabel: bodyLabel,
+            endLabel: endLabel,
+        });
+        const body = stmt.body.accept(this);
         const code = `
         br label %${bodyLabel}
         ${bodyLabel}:
@@ -238,13 +261,16 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
             br label %${bodyLabel}
         ${endLabel}:
         `;
+        this.LoopStack.pop();
         return code;
     }
     visitBreakStmt(stmt: BreakStmt): IrFragment {
-        throw new Error("Method not implemented.");
+        const currentLoop = this.LoopStack[this.LoopStack.length - 1];
+        return `br label %${currentLoop.endLabel}`;
     }
     visitContinueStmt(stmt: ContinueStmt): IrFragment {
-        throw new Error("Method not implemented.");
+        const currentLoop = this.LoopStack[this.LoopStack.length - 1];
+        return `br label %${currentLoop.startLabel}`;
     }
     visitReturnStmt(stmt: ReturnStmt): IrFragment {
         throw new Error("Method not implemented.");
@@ -290,7 +316,7 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
                 const checkLabel = `and${andI}.check`;
                 const exitLabel = `and${andI}.exit`;
                 const result_reg = this.reg();
-                console.log("a",right_comp.ir);
+                console.log("a", right_comp.ir);
                 // 逻辑 AND: 如果 left 为 false，直接返回 false；否则计算 right 并返回其结果
                 const ir_code =
                     `

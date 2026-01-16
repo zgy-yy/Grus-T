@@ -1,36 +1,28 @@
 ; ModuleID = '/Users/tal/Desktop/Grus-T/src/llvm ir/temp-ir.ll'
 source_filename = "/Users/tal/Desktop/Grus-T/src/llvm ir/temp-ir.ll"
 
-@.constant_3 = private unnamed_addr constant [7 x i8] c"%d,%d\0A\00", align 1
+@.constant_2 = private unnamed_addr constant [4 x i8] c"%d\0A\00", align 1
 
 declare i32 @printf(ptr, ...)
 
 define i32 @main() {
 entry:
-  %a = alloca i32, align 4
-  store i32 12, ptr %a, align 4
-  %b = alloca i1, align 1
-  %r1 = load i32, ptr %a, align 4
-  %r2 = icmp sgt i32 %r1, 11
-  br label %or0.start
+  %i = alloca i32, align 4
+  store i32 0, ptr %i, align 4
+  br label %while0.condition
 
-or0.start:                                        ; preds = %entry
-  br i1 %r2, label %or0.exit, label %or0.check
+while0.condition:                                 ; preds = %while0.body, %entry
+  %r1 = load i32, ptr %i, align 4
+  %r2 = icmp slt i32 %r1, 1
+  br i1 %r2, label %while0.body, label %while0.end
 
-or0.check:                                        ; preds = %or0.start
-  %r5 = load i32, ptr %a, align 4
-  %r6 = add i32 %r5, 1
-  store i32 %r6, ptr %a, align 4
-  %r7 = load i32, ptr %a, align 4
-  %r8 = icmp eq i32 %r7, 12
-  br label %or0.exit
+while0.body:                                      ; preds = %while0.condition
+  %r6 = load i32, ptr %i, align 4
+  %r7 = add i32 %r6, 1
+  store i32 %r7, ptr %i, align 4
+  %r4 = call i32 (ptr, ...) @printf(ptr @.constant_2, i32 %r6)
+  br label %while0.condition
 
-or0.exit:                                         ; preds = %or0.check, %or0.start
-  %r12 = phi i1 [ true, %or0.start ], [ %r8, %or0.check ]
-  store i1 %r12, ptr %b, align 1
-  %r15 = load i32, ptr %a, align 4
-  %r16 = load i1, ptr %b, align 1
-  %extend_reg_17 = zext i1 %r16 to i32
-  %r14 = call i32 (ptr, ...) @printf(ptr @.constant_3, i32 %r15, i32 %extend_reg_17)
+while0.end:                                       ; preds = %while0.condition
   ret i32 0
 }
