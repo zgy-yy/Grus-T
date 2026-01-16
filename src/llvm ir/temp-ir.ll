@@ -1,23 +1,32 @@
 declare i32 @printf(i8*, ...)
-@.constant_3 = private unnamed_addr constant [4 x i8] c"%d\0A\00", align 1
+@.constant_1 = private unnamed_addr constant [6 x i8] c"%.0f\0A\00", align 1
 define i32 @main() {
-        entry:
-        %a = alloca i1
-store i1 0, i1* %a
+    entry:
+    %f = alloca float
 
-%i = alloca i32
-store i32 9, i32* %i
+%r0 = sitofp i32 0 to float
+store float %r0, float* %f
+
+        br label %doWhile0.body
+        doWhile0.body:
+            %r2 = load float , float* %f
+%r1 = call i32(i8*, ...) @printf(i8* @.constant_1, float %r2)
+
+%r4 = load float , float* %f
 
 
-        %r4 = load i32 , i32* %i
-        %r5 = add i32 %r4, 1
-        store i32 %r5, i32* %i
-        %r6 = load i32 , i32* %i
-%r7 = icmp slt i32 %r6, 8
-store i1 %r7, i1* %a
+%r6 = sitofp i32 1 to float
+%r5 = fadd float %r4, %r6
+store float %r5, float* %f
+             br label %doWhile0.condition
+        doWhile0.condition:
+            %r7 = load float , float* %f
 
-%r11 = load i32 , i32* %i
-%r10 = call i32(i8*, ...) @printf(i8* @.constant_3, i32 %r11)
 
-        ret i32 0
-       }
+%r9 = sitofp i32 3 to float
+%r8 = fcmp olt float %r7, %r9
+            br i1 %r8, label %doWhile0.body, label %doWhile0.end
+        doWhile0.end:
+        
+    ret i32 0
+}

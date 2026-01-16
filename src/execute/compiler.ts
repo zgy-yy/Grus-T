@@ -5,9 +5,10 @@ import { Stmt } from "@/ast/Stmt";
 import { CompilerErrorHandler } from "@/parser/ErrorHandler";
 import { TokenType } from "@/ast/TokenType";
 import { Token } from "@/ast/Token";
+import { binaryOperator } from "./utils";
 
 
-class CompilerError extends Error {
+export class CompilerError extends Error {
     public token: Token;
     constructor(token: Token, message: string) {
         super(message);
@@ -16,9 +17,9 @@ class CompilerError extends Error {
 }
 
 
-type Reg = string;
-type IrFragment = string;
-type IrType = string;
+export type Reg = string;
+export type IrFragment = string;
+export type IrType = string;
 
 //表达式编译结果
 class ExprCompose {
@@ -54,20 +55,18 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
     static andI: number = 0;
     static orI: number = 0;
     scopes: Map<string, IrVar>[] = []; // sourceName -> compiledName
-    globals: string[] = ["declare i32 @printf(i8*, ...)\n"];
+    globals: string[] = ["declare i32 @printf(i8*, ...)"];
     code: string = "";
     constructor(private readonly errorHandler: CompilerErrorHandler) {
     }
 
-    compileProgram(nodes: Stmt[]): string {
+    compileProgram(stmts: Stmt[]): string {
         this.beginScope();
         this.scopes[this.scopes.length - 1].set("printf", new IrVar("@printf", new FunctionType(new PrimitiveType("i32"), [new PrimitiveType("i8*"), new PrimitiveType("...")])));
-        for (const stmt of nodes) {
-            this.code += this.compileStmt(stmt);
-        }
-        for (const global of this.globals.reverse()) {
-            this.code = global + this.code;
-        }
+
+        this.code = stmts.map(stmt => stmt.accept(this)).join("\n");
+        const globalCode = this.globals.join("\n");
+        this.code = globalCode + this.code;
         this.endScope();
         return this.code;
     }
@@ -77,48 +76,42 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
     }
     visitBlockStmt(stmt: BlockStmt): IrFragment {
         this.beginScope();
-        let ir_code = "";
-        for (const statement of stmt.statements) {
-            ir_code += statement.accept(this);
-        }
+        const code = stmt.statements.map(stmt => stmt.accept(this)).join("\n");
         this.endScope();
-        return ir_code;
+        return code;
     }
     visitVarStmt(stmt: VarStmt): IrFragment {
 
-        let ir_code = "";
-        for (const _var of stmt.vars) {
-            const varName = _var.name.lexeme;
-            const var_ir_type = _var.type.accept(this);
+        if (this.scopes.length > 1) {
+            return stmt.vars.map(var_ => {
+                const code: IrFragment[] = [];
 
-            const init_comp = _var.initializer?.accept(this) ?? new ExprCompose("void", "zeroinitializer", "");
-            const init_reg = init_comp.reg;
-            const init_ir_type = init_comp.irtype;
-            ir_code += init_comp.ir;
-
-
-            const d = this.findVarDistance(varName);
-            let ir_name = `%${varName}${d > 0 ? d : ''}`;
-            if (this.scopes.length > 1) {
+                const varName = var_.name.lexeme;
+                const var_ir_type = var_.type.accept(this);
+                const init_comp = var_.initializer?.accept(this) ?? new ExprCompose("void", "zeroinitializer", "");
+                const d = this.findVarDistance(varName);
+                let ir_name = `%${varName}${d > 0 ? d : ''}`;
+                code.push(`${ir_name} = alloca ${var_ir_type}`);
+                code.push(init_comp.ir);
                 const scope = this.scopes[this.scopes.length - 1];
-                scope.set(varName, new IrVar(ir_name, _var.type));
-                ir_code += `${ir_name} = alloca ${var_ir_type}\n`;
-
-                if (init_reg != "zeroinitializer") {
-                    const comp = this.matchingTargetType(var_ir_type, init_ir_type, init_reg);
-                    ir_code += comp.ir;
-                    ir_code += `store ${var_ir_type} ${comp.reg}, ${var_ir_type}* ${ir_name}\n`;
-                }
-            } else {
-                ir_name = `@.${varName}`;
+                scope.set(varName, new IrVar(ir_name, var_.type));
+                const comp = this.matchingTargetType(var_ir_type, init_comp.irtype, init_comp.reg);
+                code.push(comp.ir);
+                code.push(`store ${var_ir_type} ${comp.reg}, ${var_ir_type}* ${ir_name}`);
+                return code.join("\n");
+            }).join("\n");
+        } else {
+            return stmt.vars.map(var_ => {
+                const varName = var_.name.lexeme;
+                const var_ir_type = var_.type.accept(this);
+                const init_comp = var_.initializer?.accept(this) ?? new ExprCompose("void", "zeroinitializer", "");
+                const init_reg = init_comp.reg;
+                let ir_name = `@${varName}`;
                 const scope = this.scopes[this.scopes.length - 1];
-                scope.set(varName, new IrVar(ir_name, _var.type));
-                ir_code = `${ir_name} = global ${var_ir_type} ${init_reg}\n`;
-            }
-
+                scope.set(varName, new IrVar(ir_name, var_.type));
+                return `${ir_name} = global ${var_ir_type} ${init_reg}`
+            }).join("\n");
         }
-
-        return ir_code;
     }
     visitFunctionStmt(stmt: FunctionStmt): IrFragment {
         this.beginScope();
@@ -127,11 +120,12 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
         const fn_name = stmt.name.lexeme;
         const fn_type = stmt.returnType.accept(this);
         const fn_body = stmt.body.map(stmt => stmt.accept(this)).join("\n");
-        const code = `define ${fn_type} @${fn_name}() {
-        entry:
-        ${fn_body}
-        ret ${fn_type} 0
-       }`;
+        const code =
+            `define ${fn_type} @${fn_name}() {
+    entry:
+    ${fn_body}
+    ret ${fn_type} 0
+}`;
         this.endScope();
         return code;
     }
@@ -247,13 +241,14 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
     // Expr
 
     visitAssignExpr(expr: AssignExpr): ExprCompose {
+        const ir_code: IrFragment[] = [];
         const left_comp = expr.target.accept(this);
         const ir_type = left_comp.irtype;
 
         const ir_value = expr.value.accept(this);
-        let ir_code = ir_value.ir;
-        ir_code += `store ${ir_type} ${ir_value.reg}, ${ir_type}* ${left_comp.addr}\n`;
-        return new ExprCompose(ir_type, ir_value.reg, ir_code);
+        ir_code.push(ir_value.ir);
+        ir_code.push(`store ${ir_type} ${ir_value.reg}, ${ir_type}* ${left_comp.addr}`);
+        return new ExprCompose(ir_type, ir_value.reg, ir_code.join("\n"));
     }
     visitConditionalExpr(expr: ConditionalExpr): ExprCompose {
         throw new Error("Method not implemented.");
@@ -263,122 +258,110 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
         throw new Error("Method not implemented.");
     }
     visitBinaryExpr(expr: BinaryExpr): ExprCompose {
+        const code: IrFragment[] = [];
         const left_comp = expr.left.accept(this);
         const right_comp = expr.right.accept(this);
-        let ir_code = left_comp.ir;
-
-        let result_reg = this.reg();
-        let ir_type = left_comp.irtype;
+        let expr_ir_type = left_comp.irtype;
+        let expr_reg = this.reg();
+        code.push(left_comp.ir);
         if (expr.operator.type === TokenType.Comma) {
-            ir_type = right_comp.irtype;
+            code.push(right_comp.ir);
+            return right_comp;
         } else {
-            const [ir_type_c, compared] = compareType(left_comp.irtype, right_comp.irtype);
-            if (compared === "l") {
-                const comp = this.matchingTargetType(ir_type, left_comp.irtype, left_comp.reg);
-                ir_code += comp.ir;
-                left_comp.reg = comp.reg;
-                ir_type = ir_type_c;
+            if (expr.operator.type === TokenType.And) {
+                const andI = Compiler.andI++;
+                const startLabel = `and${andI}.start`;
+                const checkLabel = `and${andI}.check`;
+                const exitLabel = `and${andI}.exit`;
+                const result_reg = this.reg();
+                // 逻辑 AND: 如果 left 为 false，直接返回 false；否则计算 right 并返回其结果
+                const ir_code =
+                    `
+                br label %${startLabel}
+                ${startLabel}:
+                br i1 ${left_comp.reg}, label %${checkLabel}, label %${exitLabel}
+                ${checkLabel}:
+                    ${right_comp.ir}
+                    br label %${exitLabel}
+                ${exitLabel}:
+                    ${result_reg} = phi i1 [false, %${startLabel}], [${right_comp.reg}, %${checkLabel}]
+                `;
+                code.push(ir_code);
+                return new ExprCompose("i1", result_reg, ir_code);
             } else {
-                const comp = this.matchingTargetType(ir_type, right_comp.irtype, right_comp.reg);
-                ir_code += comp.ir;
-                right_comp.reg = comp.reg;
-                ir_type = ir_type_c;
+                code.push(right_comp.ir);
+                const max_comp = this.matchingMaxType(left_comp, right_comp);
+                code.push(max_comp.ir);
+                const opt_type = max_comp.irtype;
+                expr_ir_type = max_comp.irtype;
+                let opt = "";
+                switch (expr.operator.type) {
+                    case TokenType.Plus:
+                        opt = binaryOperator(opt_type, '+');
+                        break;
+                    case TokenType.Minus:
+                        opt = binaryOperator(opt_type, '-');
+                        break;
+                    case TokenType.Star:
+                        opt = binaryOperator(opt_type, '*');
+                        break;
+                    case TokenType.Slash:
+                        //有符号除法
+                        opt = binaryOperator(opt_type, '/');
+                        break;
+                    case TokenType.Percent:
+                        opt = binaryOperator(opt_type, '%');
+                        break;
+                    case TokenType.GreaterGreater:
+                        opt = binaryOperator(opt_type, '>>');
+                        break;
+                    case TokenType.LessLess:
+                        opt = binaryOperator(opt_type, '<<');
+                        break;
+                    case TokenType.EqualEqual:
+                        opt = binaryOperator(opt_type, '==');
+                        expr_ir_type = "i1"
+                        break;
+                    case TokenType.BangEqual:
+                        opt = binaryOperator(opt_type, '!=');
+                        expr_ir_type = "i1"
+                        break;
+                    case TokenType.Greater:
+                        opt = binaryOperator(opt_type, '>');
+                        expr_ir_type = "i1"
+                        break;
+                    case TokenType.GreaterEqual:
+                        opt = binaryOperator(opt_type, '>=');
+                        expr_ir_type = "i1"
+                        break;
+                    case TokenType.Less:
+                        opt = binaryOperator(opt_type, '<');
+                        expr_ir_type = "i1"
+                        break;
+                    case TokenType.LessEqual:
+                        opt = binaryOperator(opt_type, '<=');
+                        expr_ir_type = "i1"
+                        break;
+                    case TokenType.BitOr:
+                        opt = "or";
+                        break;
+                    case TokenType.BitAnd:
+                        opt = "and";
+                        break;
+                    case TokenType.Caret:
+                        opt = "xor";
+                        break;
+                }
+
+                code.push(`${expr_reg} = ${opt} ${opt_type} ${left_comp.reg}, ${right_comp.reg}`);
+                return new ExprCompose(expr_ir_type, expr_reg, code.join("\n"));
             }
         }
-
-        let result_ir_type = ir_type;
-        let opt = "";
-
-
-        switch (expr.operator.type) {
-            case TokenType.Plus:
-                opt = binaryOperator(ir_type, '+');
-                break;
-            case TokenType.Minus:
-                opt = binaryOperator(ir_type, '-');
-                break;
-            case TokenType.Star:
-                opt = binaryOperator(ir_type, '*');
-                break;
-            case TokenType.Slash:
-                //有符号除法
-                opt = binaryOperator(ir_type, '/');
-                break;
-            case TokenType.Percent:
-                opt = binaryOperator(ir_type, '%');
-                break;
-            case TokenType.GreaterGreater:
-                opt = binaryOperator(ir_type, '>>');
-                break;
-            case TokenType.LessLess:
-                opt = binaryOperator(ir_type, '<<');
-                break;
-            case TokenType.EqualEqual:
-                opt = binaryOperator(ir_type, '==');
-                result_ir_type = "i1"
-                break;
-            case TokenType.BangEqual:
-                opt = binaryOperator(ir_type, '!=');
-                result_ir_type = "i1"
-                break;
-            case TokenType.Greater:
-                opt = binaryOperator(ir_type, '>');
-                result_ir_type = "i1"
-                break;
-            case TokenType.GreaterEqual:
-                opt = binaryOperator(ir_type, '>=');
-                result_ir_type = "i1"
-                break;
-            case TokenType.Less:
-                opt = binaryOperator(ir_type, '<');
-                result_ir_type = "i1"
-                break;
-            case TokenType.LessEqual:
-                opt = binaryOperator(ir_type, '<=');
-                result_ir_type = "i1"
-                break;
-            case TokenType.BitOr:
-                opt = "or";
-                break;
-            case TokenType.BitAnd:
-                opt = "and";
-                break;
-            case TokenType.Caret:
-                opt = "xor";
-                break;
-        }
-        if (expr.operator.type === TokenType.And) {
-            const andI = Compiler.andI++;
-            const startLabel = `and${andI}.start`;
-            const checkLabel = `and${andI}.check`;
-            const exitLabel = `and${andI}.exit`;
-            // 逻辑 AND: 如果 left 为 false，直接返回 false；否则计算 right 并返回其结果
-            const code = `
-            br label %${startLabel}
-            ${startLabel}:
-            br i1 ${left_comp.reg}, label %${checkLabel}, label %${exitLabel}
-            ${checkLabel}:
-                ${right_comp.ir}
-                br label %${exitLabel}
-            ${exitLabel}:
-                ${result_reg} = phi i1 [false, %${startLabel}], [${right_comp.reg}, %${checkLabel}]
-            `;
-            ir_code += code;
-            result_ir_type = "i1";
-        } else if (expr.operator.type === TokenType.Comma) {
-            ir_code += right_comp.ir;
-            result_ir_type = right_comp.irtype;
-            result_reg = right_comp.reg;
-        } else {
-            ir_code += right_comp.ir;
-            ir_code += `${result_reg} = ${opt} ${ir_type} ${left_comp.reg}, ${right_comp.reg}\n`;
-        }
-
-        return new ExprCompose(result_ir_type, result_reg, ir_code);
     }
     visitUnaryExpr(expr: UnaryExpr): ExprCompose {
+        const ir_code: IrFragment[] = [];
         const comp = expr.right.accept(this);
-        let ir_code = comp.ir;
+        ir_code.push(comp.ir);
         const ir_type = comp.irtype;
         const resultReg = this.reg();
         const floatPoint = ["float", "double"];
@@ -386,18 +369,18 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
             case TokenType.Minus:
                 // 在 LLVM IR 中，整数取反使用 sub 指令：sub i32 0, %value
                 if (floatPoint.includes(ir_type)) {
-                    ir_code += `${resultReg} = fneg ${ir_type} ${comp.reg}\n`;
+                    ir_code.push(`${resultReg} = fneg ${ir_type} ${comp.reg}`);
                 } else {
-                    ir_code += `${resultReg} = sub ${ir_type} 0, ${comp.reg}\n`;
+                    ir_code.push(`${resultReg} = sub ${ir_type} 0, ${comp.reg}`);
                 }
                 break;
             case TokenType.Tilde:
-                ir_code += `${resultReg} = xor ${ir_type} ${comp.reg}, -1\n`;
+                ir_code.push(`${resultReg} = xor ${ir_type} ${comp.reg}, -1`);
                 break;
             default:
                 throw this.error(expr.operator, `Unsupported unary operator: ${expr.operator.type}`);
         }
-        return new ExprCompose(ir_type, resultReg, ir_code);
+        return new ExprCompose(ir_type, resultReg, ir_code.join("\n"));
     }
 
     visitPostfixExpr(expr: PostfixExpr): ExprCompose {
@@ -411,15 +394,16 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
             opt = "sub"
         }
         const tempReg = this.reg();
-        let ir_code = `
-        ${resultReg} = load ${ir_type} , ${ir_type}* ${left_comp.addr}
-        ${tempReg} = ${opt} ${ir_type} ${resultReg}, 1
-        store ${ir_type} ${tempReg}, ${ir_type}* ${left_comp.addr}
-        `;
-        return new ExprCompose(ir_type, resultReg, ir_code);
+        const ir_code: IrFragment[] = [];
+        ir_code.push(`${resultReg} = load ${ir_type} , ${ir_type}* ${left_comp.addr}`);
+        ir_code.push(`${tempReg} = ${opt} ${ir_type} ${resultReg}, 1`);
+        ir_code.push(`store ${ir_type} ${tempReg}, ${ir_type}* ${left_comp.addr}`);
+
+        return new ExprCompose(ir_type, resultReg, ir_code.join("\n"));
     }
 
     visitPrefixExpr(expr: PrefixExpr): ExprCompose {
+        const ir_code: IrFragment[] = [];
         const left_comp = expr.target.accept(this);
         const ir_type = left_comp.irtype;
         const resultReg = this.reg();
@@ -430,19 +414,17 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
             opt = "sub"
         }
         const tempReg = this.reg();
-        let ir_code = `
-        ${tempReg} = load ${ir_type} , ${ir_type}* ${left_comp.addr}
-        ${resultReg} = ${opt} ${ir_type} ${tempReg}, 1
-        store ${ir_type} ${resultReg}, ${ir_type}* ${left_comp.addr}
-        `;
-        return new ExprCompose(ir_type, resultReg, ir_code);
+        ir_code.push(`${tempReg} = load ${ir_type} , ${ir_type}* ${left_comp.addr}`);
+        ir_code.push(`${resultReg} = ${opt} ${ir_type} ${tempReg}, 1`);
+        ir_code.push(`store ${ir_type} ${resultReg}, ${ir_type}* ${left_comp.addr}`);
+        return new ExprCompose(ir_type, resultReg, ir_code.join("\n"));
     }
 
     visitCallExpr(expr: CallExpr): ExprCompose {
         const reg = this.reg();
         const callee = expr.callee.accept(this);
         const args = expr.arguments.map(argument => argument.accept(this));
-        let ir_code = "";
+        const ir_code: IrFragment[] = [];
 
         // 检查是否是可变参数函数（如printf）
         let isVariadic = false;
@@ -457,7 +439,7 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
         }
 
         const arg_comps = args.map(arg => {
-            ir_code += arg.ir;
+            ir_code.push(arg.ir);
 
             // 对于可变参数函数，将较小的整数类型提升为i32
             let finalType = arg.irtype;
@@ -467,7 +449,7 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
                 const extendReg = `%extend_reg_${Compiler.regI++}`;
                 // i1使用zext，其他使用sext
                 const extendOp = arg.irtype === "i1" ? "zext" : "sext";
-                ir_code += `${extendReg} = ${extendOp} ${arg.irtype} ${arg.reg} to i32\n`;
+                    ir_code.push(`${extendReg} = ${extendOp} ${arg.irtype} ${arg.reg} to i32`);
                 finalType = "i32";
                 finalReg = extendReg;
             }
@@ -478,8 +460,8 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
             };
         });
 
-        ir_code += `${reg} = call ${callee.irtype} ${callee.reg}(${arg_comps.map(arg => `${arg.irtype} ${arg.reg}`).join(", ")})\n`;
-        return new ExprCompose(callee.irtype, reg, ir_code);
+        ir_code.push(`${reg} = call ${callee.irtype} ${callee.reg}(${arg_comps.map(arg => `${arg.irtype} ${arg.reg}`).join(", ")})`);
+        return new ExprCompose(callee.irtype, reg, ir_code.join("\n"));
     }
     visitSetExpr(expr: SetExpr): ExprCompose {
         throw new Error("Method not implemented.");
@@ -576,39 +558,56 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
         return d;
     }
 
+    //匹配最大类型
+    matchingMaxType(left_comp: ExprCompose, right_comp: ExprCompose): ExprCompose {
+        const [ir_type, compared] = compareType(left_comp.irtype, right_comp.irtype);
+        if (compared === "l") {
+            const comp = this.matchingTargetType(ir_type, left_comp.irtype, left_comp.reg);
+            left_comp.reg = comp.reg;
+            return comp
+        } else {
+            const comp = this.matchingTargetType(ir_type, right_comp.irtype, right_comp.reg);
+            right_comp.reg = comp.reg;
+            return comp
+        }
+    }
+
     matchingTargetType(targetType: string, sourceType: string, reg: Reg): ExprCompose {
         const floatPoint = ["i8", "i16", "i32", "i64", "float", "double"];
         const targetI = floatPoint.indexOf(targetType);
         const sourceI = floatPoint.indexOf(sourceType);
         const turnReg = this.reg();
+        if (sourceType === "void") {
+            return new ExprCompose(targetType, reg, "");
+        }
         if (targetI == sourceI) {
             return new ExprCompose(targetType, reg, "");
         } else if (targetI < sourceI) { //降级
             if (targetI < 4) {
                 if (sourceI < 4) {//整数间转换
-                    const ir = `${turnReg} = trunc ${sourceType} ${reg} to ${targetType}\n`;
+                    const ir = `${turnReg} = trunc ${sourceType} ${reg} to ${targetType}`;
                     return new ExprCompose(targetType, turnReg, ir);
                 } else { //浮点数转整数
-                    const ir = `${turnReg} = fptosi ${sourceType} ${reg} to ${targetType}\n`;
+                    const ir = `${turnReg} = fptosi ${sourceType} ${reg} to ${targetType}`;
                     return new ExprCompose(targetType, turnReg, ir);
                 }
             } else {
-                const ir = `${turnReg} = fptrunc ${sourceType} ${reg} to ${targetType}\n`;
+                const ir = `${turnReg} = fptrunc ${sourceType} ${reg} to ${targetType}`;
                 return new ExprCompose(targetType, turnReg, ir);
             }
         } else { //升级
             if (targetI > 3) {
                 if (sourceI > 3) {//浮点数间转换
-                    const ir = `${turnReg} = fpext ${sourceType} ${reg} to ${targetType}\n`;
+                    const ir = `${turnReg} = fpext ${sourceType} ${reg} to ${targetType}`;
                     return new ExprCompose(targetType, turnReg, ir);
                 } else { //整数转浮点数
-                    const ir = `${turnReg} = sitofp ${sourceType} ${reg} to ${targetType}\n`;
+                    const ir = `${turnReg} = sitofp ${sourceType} ${reg} to ${targetType}`;
                     return new ExprCompose(targetType, turnReg, ir);
                 }
             } else {
                 // 对于 i1 (布尔值)，使用 zext (零扩展)，其他整数类型使用 sext (符号扩展)
                 const extendOp = sourceType === "i1" ? "zext" : "sext";
-                const ir = `${turnReg} = ${extendOp} ${sourceType} ${reg} to ${targetType}\n`;
+                const ir = `${turnReg} = ${extendOp} ${sourceType} ${reg} to ${targetType}`;
                 return new ExprCompose(targetType, turnReg, ir);
             }
         }
@@ -634,39 +633,4 @@ function compareType(type1: string, type2: string): [IrType, 'r' | 'l'] {
     return [maxType, compared];
 }
 
-function binaryOperator(type: IrType, operator: '+' | '-' | '*' | '/' | '%' | '>>' | '<<' | '==' | '!=' | '>' | '>=' | '<' | '<='): string {
-    const floatArithmetic = ["float", "double"].includes(type);
-    switch (operator) {
-        case '+':
-            return floatArithmetic ? "fadd" : "add";
-        case '-':
-            return floatArithmetic ? "fsub" : "sub";
-        case '*':
-            return floatArithmetic ? "fmul" : "mul";
-        case '/':
-            return floatArithmetic ? "fdiv" : "sdiv";
-        case '%':
-            return floatArithmetic ? "frem" : "srem";
-        case '>>':
-            return "ashr"; //算术右移
-        case '<<':
-            return "shl";
-        case '==':
-            return floatArithmetic ? "fcmp oeq" : "icmp eq";
-        case '!=':
-            return floatArithmetic ? "fcmp une" : "icmp ne";
-        case '>':
-            return floatArithmetic ? "fcmp ogt" : "icmp sgt";
-        case '>=':
-            return floatArithmetic ? "fcmp oge" : "icmp sge";
-        case '<':
-            return floatArithmetic ? "fcmp olt" : "icmp slt";
-        case '<=':
-            return floatArithmetic ? "fcmp ole" : "icmp sle";
 
-
-        default:
-            throw new CompilerError(operator, `Unsupported operator: ${operator}`);
-    }
-
-}
