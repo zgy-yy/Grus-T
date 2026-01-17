@@ -3,7 +3,7 @@ import { ParserErrorHandler } from "./ErrorHandler";
 import { TokenType } from "@/ast/TokenType";
 import { AssignExpr, BinaryExpr, CallExpr, Expr, LiteralExpr, PostfixExpr, PrefixExpr, ThisExpr, UnaryExpr, VariableExpr } from "@/ast/Expr";
 import { BlockStmt, BreakStmt, ContinueStmt, DoWhileStmt, ExpressionStmt, ForStmt, FunctionStmt, GotoStmt, IfStmt, LabelStmt, LoopStmt, Parameter, ReturnStmt, Stmt, Variable, VarStmt, WhileStmt } from "@/ast/Stmt";
-import { PrimitiveType, TypeExpr } from "@/ast/TypeExpr";
+import { PrimitiveType, TypeExpr, VoidType } from "@/ast/TypeExpr";
 
 class SyntaxError extends Error {
     public token: Token;
@@ -233,7 +233,12 @@ export class Parser {
             } while (this.match(TokenType.Comma));
         }
         this.consume(TokenType.RightParen, "Expect ')' after parameters.");
-        const returnType = this.type();
+        let returnType: TypeExpr | null = null;
+        if(this.peek().type === TokenType.LeftBrace){
+            returnType = new VoidType();
+        } else {
+            returnType = this.type();
+        }
         this.consume(TokenType.LeftBrace, "Expect '{' after parameters.");
         const body = this.block();
         return new FunctionStmt(name, parameters, returnType, body);
@@ -495,7 +500,7 @@ export class Parser {
 
     private type(): TypeExpr {
         if (this.match(TokenType.Symbol)) {
-            return new PrimitiveType(this.previous().lexeme);
+            return new PrimitiveType(this.previous());
         }
         throw new Error("Expect type.");
     }
@@ -604,9 +609,10 @@ export class Parser {
  * 
  * */
     private synchronize(): void {
-        const token = this.peek();
-        console.log("synchronize", token.type);
+        this.advance();
         while (!this.isAtEnd()) {
+            const token = this.peek();
+            console.log("synchronize", token.type);
             if (token.type === TokenType.Semicolon) return;
             switch (token.type) {
                 case TokenType.Class:

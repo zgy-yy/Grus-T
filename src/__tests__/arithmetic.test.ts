@@ -9,6 +9,7 @@ describe('算数运算测试', () => {
 fun main() i32 {
   i32 x = 10 + 20;
   printf("%d\\n", x);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -20,6 +21,7 @@ fun main() i32 {
 fun main() i32 {
   i32 x = 50 - 20;
   printf("%d\\n", x);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -31,6 +33,7 @@ fun main() i32 {
 fun main() i32 {
   i32 x = 5 * 6;
   printf("%d\\n", x);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -42,6 +45,7 @@ fun main() i32 {
 fun main() i32 {
   i32 x = 100 / 4;
   printf("%d\\n", x);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -53,6 +57,7 @@ fun main() i32 {
 fun main() i32 {
   i32 x = 17 % 5;
   printf("%d\\n", x);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -66,6 +71,7 @@ fun main() i32 {
 fun main() i32 {
   i32 x = -13;
   printf("%d\\n", x);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -77,6 +83,7 @@ fun main() i32 {
 fun main() i32 {
   i32 x = -(10 + 5);
   printf("%d\\n", x);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -90,6 +97,7 @@ fun main() i32 {
 fun main() i32 {
   i32 x = 10 + 20 * 2;
   printf("%d\\n", x);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -101,6 +109,7 @@ fun main() i32 {
 fun main() i32 {
   i32 x = (10 + 5) * 2;
   printf("%d\\n", x);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -112,6 +121,7 @@ fun main() i32 {
 fun main() i32 {
   i32 x = 2 + 3 * 4 - 5;
   printf("%d\\n", x);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -123,6 +133,7 @@ fun main() i32 {
 fun main() i32 {
   i32 x = ((10 + 5) * 2) / 3;
   printf("%d\\n", x);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -138,6 +149,7 @@ fun main() i32 {
   i32 b = 20;
   i32 c = a + b;
   printf("%d\\n", c);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -150,6 +162,7 @@ fun main() i32 {
   i32 x = 42;
   x = x + 58;
   printf("%d\\n", x);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -164,6 +177,7 @@ fun main() i32 {
   i32 c = 2;
   i32 result = a * b + c;
   printf("%d\\n", result);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -179,6 +193,7 @@ fun main() i32 {
   float y = 2;
   float z = x + y;
   printf("%f\\n", z);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -192,6 +207,7 @@ fun main() i32 {
   float y = 3;
   float z = x - y;
   printf("%f\\n", z);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -205,6 +221,7 @@ fun main() i32 {
   float y = 2.5;
   float z = x * y;
   printf("%f\\n", z);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -218,6 +235,7 @@ fun main() i32 {
   float y = 4;
   float z = x / y;
   printf("%f\\n", z);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -231,6 +249,7 @@ fun main() i32 {
   float y = 3;
   float z = x % y;
   printf("%f\\n", z);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -243,6 +262,7 @@ fun main() i32 {
   float x = 5;
   float y = -x;
   printf("%f\\n", y);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -256,6 +276,7 @@ fun main() i32 {
 fun main() i32 {
   float x = 10;
   printf("%f\\n", x);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -269,6 +290,7 @@ fun main() i32 {
   float b = 2.5;
   float c = a + b;
   printf("%f\\n", c);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -282,6 +304,7 @@ fun main() i32 {
 fun main() i32 {
   i32 x = 0 + 0;
   printf("%d\\n", x);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -293,6 +316,7 @@ fun main() i32 {
 fun main() i32 {
   i32 x = -10 + 5;
   printf("%d\\n", x);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -304,6 +328,7 @@ fun main() i32 {
 fun main() i32 {
   i32 x = 1000 * 1000;
   printf("%d\\n", x);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -317,6 +342,7 @@ fun main() i32 {
 fun main() i32 {
   i32 x = ((((2 + 3) * 4) - 5) / 3) * 2;
   printf("%d\\n", x);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -328,6 +354,7 @@ fun main() i32 {
 fun main() i32 {
   i32 x = 1 + 2 * 3 - 4 / 2 + 5;
   printf("%d\\n", x);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -339,6 +366,7 @@ fun main() i32 {
 fun main() i32 {
   i32 x = (10 + 5) * (20 - 8) / 3 - 2;
   printf("%d\\n", x);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -350,6 +378,7 @@ fun main() i32 {
 fun main() i32 {
   i32 x = ((10 + 5) * 2) + ((20 - 8) / 2) - 3;
   printf("%d\\n", x);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -361,6 +390,7 @@ fun main() i32 {
 fun main() i32 {
   i32 x = (100 % 7) * 3 + (50 % 6) - 2;
   printf("%d\\n", x);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -372,6 +402,7 @@ fun main() i32 {
 fun main() i32 {
   i32 x = -(-(10 + 5));
   printf("%d\\n", x);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -386,6 +417,7 @@ fun main() i32 {
   i32 c = 30;
   i32 d = a + b * c - a * b;
   printf("%d\\n", d);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -400,6 +432,7 @@ fun main() i32 {
   i32 step3 = step2 - 5;
   i32 result = step3 / 3;
   printf("%d\\n", result);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -414,6 +447,7 @@ fun main() i32 {
   float c = 2;
   float result = (a + b) * c - (a / b) + (b % c);
   printf("%f\\n", result);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -425,6 +459,7 @@ fun main() i32 {
 fun main() i32 {
   float x = ((10.5 + 5.5) * 2.0) / 3.0 - 1.0;
   printf("%f\\n", x);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -440,6 +475,7 @@ fun main() i32 {
   x = x - 3;
   x = x / 2;
   printf("%d\\n", x);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -451,6 +487,7 @@ fun main() i32 {
 fun main() i32 {
   i32 x = (10 + 5) * 2 - 20 / 4 + 17 % 5;
   printf("%d\\n", x);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -462,6 +499,7 @@ fun main() i32 {
 fun main() i32 {
   i32 x = 100 - 50 - 20 - 10;
   printf("%d\\n", x);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -473,6 +511,7 @@ fun main() i32 {
 fun main() i32 {
   i32 x = 100 / 2 * 3 / 5 * 4;
   printf("%d\\n", x);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -484,6 +523,7 @@ fun main() i32 {
 fun main() i32 {
   i32 x = -10 + (-5) * (-2) - (-3);
   printf("%d\\n", x);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -495,6 +535,7 @@ fun main() i32 {
 fun main() i32 {
   i32 x = ((2 + 3) * (4 - 1)) / ((6 - 3) * 1) + 5;
   printf("%d\\n", x);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -510,6 +551,7 @@ fun main() i32 {
   float d = 5;
   float result = (a + b) * c / d - (a / b) + (c * d);
   printf("%f\\n", result);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -525,6 +567,7 @@ fun main() i32 {
   i32 d = c - a;
   i32 e = d / a;
   printf("%d\\n", e);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -536,6 +579,7 @@ fun main() i32 {
 fun main() i32 {
   i32 x = (100 % 7) + (50 % 6) * 2 - (30 % 4);
   printf("%d\\n", x);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -547,6 +591,7 @@ fun main() i32 {
 fun main() i32 {
   i32 x = (((((2 + 1) * 2) + 1) * 2) + 1) * 2;
   printf("%d\\n", x);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -561,6 +606,7 @@ fun main() i32 {
   float c = 2;
   float result = (a + b) * c - (a / b);
   printf("%f\\n", result);
+  return 0;
 }
 `;
       const output = compileAndRun(source);

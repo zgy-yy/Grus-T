@@ -11,6 +11,7 @@ fun main() i32 {
   printf("middle\\n");
   skip:
   printf("end\\n");
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -27,6 +28,7 @@ fun main() i32 {
   printf("skipped\\n");
   target:
   printf("after\\n");
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -48,6 +50,7 @@ fun main() i32 {
   goto label1;
   end:
   printf("4\\n");
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -72,6 +75,7 @@ fun main() i32 {
   printf("large\\n");
   end:
   printf("done\\n");
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -96,6 +100,7 @@ fun main() i32 {
   printf("small\\n");
   end:
   printf("done\\n");
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -123,6 +128,7 @@ fun main() i32 {
   printf("xonly\\n");
   end:
   printf("done\\n");
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -146,6 +152,7 @@ fun main() i32 {
   }
   exit:
   printf("exited\\n");
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -167,6 +174,7 @@ fun main() i32 {
   }
   exit:
   printf("exited\\n");
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -189,6 +197,7 @@ fun main() i32 {
   }
   exit:
   printf("exited\\n");
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -210,6 +219,7 @@ fun main() i32 {
   x = 20;
   skip:
   printf("%d\\n", x);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -225,6 +235,7 @@ fun main() i32 {
   modify:
   x = 10;
   printf("%d\\n", x);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -242,6 +253,7 @@ fun main() i32 {
   a = b;
   b = temp;
   printf("%d,%d\\n", a, b);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -263,6 +275,7 @@ fun main() i32 {
   goto outer;
   end:
   printf("end\\n");
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -287,6 +300,7 @@ fun main() i32 {
   goto level2;
   end:
   printf("end\\n");
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -306,6 +320,7 @@ fun main() i32 {
   goto end;
   end:
   printf("end\\n");
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -322,6 +337,7 @@ fun main() i32 {
   goto end;
   end:
   printf("end\\n");
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -337,6 +353,7 @@ fun main() i32 {
   goto end;
   end:
   printf("end\\n");
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -351,6 +368,7 @@ fun main() i32 {
   goto empty;
   empty:
   printf("after\\n");
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -381,6 +399,7 @@ fun main() i32 {
   printf("default\\n");
   end:
   printf("done\\n");
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -403,6 +422,7 @@ fun main() i32 {
   printf("error\\n");
   end:
   printf("done\\n");
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -424,6 +444,7 @@ fun main() i32 {
   goto loop_start;
   loop_end:
   printf("done\\n");
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -441,6 +462,7 @@ fun main() i32 {
   goto immediate;
   immediate:
   printf("immediate\\n");
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -454,6 +476,7 @@ fun main() i32 {
   label1:
   label2:
   printf("both\\n");
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -469,6 +492,7 @@ fun main() i32 {
   goto start;
   end:
   printf("end\\n");
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -491,6 +515,7 @@ fun main() i32 {
   printf("negative\\n");
   end:
   printf("done\\n");
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -517,6 +542,7 @@ fun main() i32 {
   printf("failure\\n");
   end:
   printf("done\\n");
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -541,6 +567,7 @@ fun main() i32 {
   printf("small\\n");
   end:
   printf("done\\n");
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -559,6 +586,7 @@ fun main() i32 {
   printf("skipped\\n");
   after:
   printf("after\\n");
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -573,6 +601,7 @@ fun main() i32 {
   goto call;
   call:
   printf("called\\n");
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -594,6 +623,7 @@ fun main() i32 {
   goto third;
   third:
   printf("third\\n");
+  return 0;
 }
 `;
       const output = compileAndRun(source);

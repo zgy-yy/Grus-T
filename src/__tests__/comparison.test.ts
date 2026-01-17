@@ -8,6 +8,7 @@ describe('比较运算测试', () => {
 fun main() i32 {
   bool x = 5 == 5;
   printf("%d\\n", x);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -19,6 +20,7 @@ fun main() i32 {
 fun main() i32 {
   bool x = 5 == 3;
   printf("%d\\n", x);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -32,6 +34,7 @@ fun main() i32 {
   i32 b = 10;
   bool x = a == b;
   printf("%d\\n", x);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -43,6 +46,7 @@ fun main() i32 {
 fun main() i32 {
   bool x = 3.5 == 3.5;
   printf("%d\\n", x);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -54,6 +58,7 @@ fun main() i32 {
 fun main() i32 {
   bool x = 0 == 0;
   printf("%d\\n", x);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -67,6 +72,7 @@ fun main() i32 {
 fun main() i32 {
   bool x = 5 != 3;
   printf("%d\\n", x);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -78,6 +84,7 @@ fun main() i32 {
 fun main() i32 {
   bool x = 5 != 5;
   printf("%d\\n", x);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -91,6 +98,7 @@ fun main() i32 {
   i32 b = 20;
   bool x = a != b;
   printf("%d\\n", x);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -102,6 +110,7 @@ fun main() i32 {
 fun main() i32 {
   bool x = 3.5 != 2.5;
   printf("%d\\n", x);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -115,6 +124,7 @@ fun main() i32 {
 fun main() i32 {
   bool x = 10 > 5;
   printf("%d\\n", x);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -126,6 +136,7 @@ fun main() i32 {
 fun main() i32 {
   bool x = 5 > 10;
   printf("%d\\n", x);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -137,6 +148,7 @@ fun main() i32 {
 fun main() i32 {
   bool x = 5 > 5;
   printf("%d\\n", x);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -150,6 +162,7 @@ fun main() i32 {
   i32 b = 10;
   bool x = a > b;
   printf("%d\\n", x);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -161,6 +174,7 @@ fun main() i32 {
 fun main() i32 {
   bool x = 5.0 > 3.0;
   printf("%d\\n", x);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -172,6 +186,7 @@ fun main() i32 {
 fun main() i32 {
   bool x = -5 > -10;
   printf("%d\\n", x);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -185,6 +200,7 @@ fun main() i32 {
 fun main() i32 {
   bool x = 10 >= 5;
   printf("%d\\n", x);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -196,6 +212,7 @@ fun main() i32 {
 fun main() i32 {
   bool x = 5 >= 5;
   printf("%d\\n", x);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -207,6 +224,7 @@ fun main() i32 {
 fun main() i32 {
   bool x = 5 >= 10;
   printf("%d\\n", x);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -220,6 +238,7 @@ fun main() i32 {
   i32 b = 15;
   bool x = a >= b;
   printf("%d\\n", x);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -231,6 +250,7 @@ fun main() i32 {
 fun main() i32 {
   bool x = 5.0 >= 5.0;
   printf("%d\\n", x);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -244,6 +264,7 @@ fun main() i32 {
 fun main() i32 {
   bool x = 5 < 10;
   printf("%d\\n", x);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -255,6 +276,7 @@ fun main() i32 {
 fun main() i32 {
   bool x = 10 < 5;
   printf("%d\\n", x);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -266,6 +288,7 @@ fun main() i32 {
 fun main() i32 {
   bool x = 5 < 5;
   printf("%d\\n", x);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -279,6 +302,7 @@ fun main() i32 {
   i32 b = 20;
   bool x = a < b;
   printf("%d\\n", x);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -290,6 +314,7 @@ fun main() i32 {
 fun main() i32 {
   bool x = 3.0 < 5.0;
   printf("%d\\n", x);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -301,6 +326,7 @@ fun main() i32 {
 fun main() i32 {
   bool x = -10 < -5;
   printf("%d\\n", x);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -314,6 +340,7 @@ fun main() i32 {
 fun main() i32 {
   bool x = 5 <= 10;
   printf("%d\\n", x);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -325,6 +352,7 @@ fun main() i32 {
 fun main() i32 {
   bool x = 5 <= 5;
   printf("%d\\n", x);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -336,6 +364,7 @@ fun main() i32 {
 fun main() i32 {
   bool x = 10 <= 5;
   printf("%d\\n", x);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -349,6 +378,7 @@ fun main() i32 {
   i32 b = 15;
   bool x = a <= b;
   printf("%d\\n", x);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -360,6 +390,7 @@ fun main() i32 {
 fun main() i32 {
   bool x = 5.0 <= 5.0;
   printf("%d\\n", x);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -377,6 +408,7 @@ fun main() i32 {
   printf("%d\\n", x);
   printf("%d\\n", y);
   printf("%d\\n", z);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -392,6 +424,7 @@ fun main() i32 {
   bool y = -5 < -10;
   printf("%d\\n", x);
   printf("%d\\n", y);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -406,6 +439,7 @@ fun main() i32 {
   bool y = -5 > 5;
   printf("%d\\n", x);
   printf("%d\\n", y);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -420,6 +454,7 @@ fun main() i32 {
   bool y = 1000 < 2000;
   printf("%d\\n", x);
   printf("%d\\n", y);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -434,6 +469,7 @@ fun main() i32 {
 fun main() i32 {
   bool x = 5 + 3 > 2 * 3;
   printf("%d\\n", x);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -446,6 +482,7 @@ fun main() i32 {
 fun main() i32 {
   bool x = (5 > 3) == 1;
   printf("%d\\n", x);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -460,6 +497,7 @@ fun main() i32 {
   bool y = 10 < 20;
   printf("%d\\n", x);
   printf("%d\\n", y);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -477,6 +515,7 @@ fun main() i32 {
   bool y = b < c;
   printf("%d\\n", x);
   printf("%d\\n", y);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -493,6 +532,7 @@ fun main() i32 {
   float b = 5.0;
   bool x = a == b;
   printf("%d\\n", x);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -506,6 +546,7 @@ fun main() i32 {
   i32 b = 5;
   bool x = a == b;
   printf("%d\\n", x);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -521,6 +562,7 @@ fun main() i32 {
   x = 20;
   bool y = x > 15;
   printf("%d\\n", y);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -535,6 +577,7 @@ fun main() i32 {
   a = a + 5;
   bool x = a == b;
   printf("%d\\n", x);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -548,6 +591,7 @@ fun main() i32 {
 fun main() i32 {
   bool x = (10 + 5) > (3 * 4);
   printf("%d\\n", x);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -563,6 +607,7 @@ fun main() i32 {
   i32 c = 15;
   bool x = (a < b) == (b < c);
   printf("%d\\n", x);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -575,6 +620,7 @@ fun main() i32 {
 fun main() i32 {
   bool x = (10 % 3) > 1;
   printf("%d\\n", x);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -587,6 +633,7 @@ fun main() i32 {
 fun main() i32 {
   bool x = (1 << 3) > 5;
   printf("%d\\n", x);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -599,6 +646,7 @@ fun main() i32 {
 fun main() i32 {
   bool x = ((5 + 3) * 2) > ((10 - 2) / 2);
   printf("%d\\n", x);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -613,6 +661,7 @@ fun main() i32 {
 fun main() i32 {
   bool x = 3.0 == 3.0;
   printf("%d\\n", x);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -624,6 +673,7 @@ fun main() i32 {
 fun main() i32 {
   bool x = 3.0 != 2.0;
   printf("%d\\n", x);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -637,6 +687,7 @@ fun main() i32 {
   bool y = 2.0 < 4.0;
   printf("%d\\n", x);
   printf("%d\\n", y);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -651,6 +702,7 @@ fun main() i32 {
   bool y = 0.0 > 0.0;
   printf("%d\\n", x);
   printf("%d\\n", y);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -665,6 +717,7 @@ fun main() i32 {
   bool y = -5.0 < -3.0;
   printf("%d\\n", x);
   printf("%d\\n", y);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -681,6 +734,7 @@ fun main() i32 {
   i8 b = 5;
   bool x = a == b;
   printf("%d\\n", x);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -694,6 +748,7 @@ fun main() i32 {
   i8 b = 5;
   bool x = a > b;
   printf("%d\\n", x);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -707,6 +762,7 @@ fun main() i32 {
   i8 b = -10;
   bool x = a > b;
   printf("%d\\n", x);
+  return 0;
 }
 `;
       const output = compileAndRun(source);

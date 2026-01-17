@@ -9,6 +9,7 @@ fun main() i32 {
   if (true) {
     printf("true\\n");
   }
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -22,6 +23,7 @@ fun main() i32 {
     printf("true\\n");
   }
   printf("false\\n");
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -35,6 +37,7 @@ fun main() i32 {
   if (5 > 3) {
     printf("greater\\n");
   }
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -47,6 +50,7 @@ fun main() i32 {
   if (10 == 10) {
     printf("equal\\n");
   }
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -63,6 +67,7 @@ fun main() i32 {
   } else {
     printf("else\\n");
   }
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -78,6 +83,7 @@ fun main() i32 {
   } else {
     printf("else\\n");
   }
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -93,6 +99,7 @@ fun main() i32 {
   } else {
     printf("not less\\n");
   }
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -108,6 +115,7 @@ fun main() i32 {
   if (x > 5) {
     printf("x is greater\\n");
   }
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -121,6 +129,7 @@ fun main() i32 {
   if (flag) {
     printf("flag is true\\n");
   }
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -135,6 +144,7 @@ fun main() i32 {
   if (x > 5) {
     printf("x > 5\\n");
   }
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -151,6 +161,7 @@ fun main() i32 {
       printf("nested\\n");
     }
   }
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -167,6 +178,7 @@ fun main() i32 {
       printf("inner else\\n");
     }
   }
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -184,6 +196,7 @@ fun main() i32 {
       }
     }
   }
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -205,6 +218,7 @@ fun main() i32 {
       printf("small\\n");
     }
   }
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -226,6 +240,7 @@ fun main() i32 {
       printf("small\\n");
     }
   }
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -242,6 +257,7 @@ fun main() i32 {
   if (5 + 3 > 6) {
     printf("sum greater\\n");
   }
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -257,6 +273,7 @@ fun main() i32 {
       printf("in range\\n");
     }
   }
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -269,6 +286,7 @@ fun main() i32 {
   if ((5 + 3) * 2 > 10) {
     printf("calculated\\n");
   }
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -285,6 +303,7 @@ fun main() i32 {
     x = 10;
     printf("%d\\n", x);
   }
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -301,6 +320,7 @@ fun main() i32 {
     x = 30;
   }
   printf("%d\\n", x);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -319,6 +339,7 @@ fun main() i32 {
   }
   printf("%d\\n", a);
   printf("%d\\n", b);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -336,6 +357,7 @@ fun main() i32 {
   } else {
     printf("zero false\\n");
   }
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -349,6 +371,7 @@ fun main() i32 {
   if (true) {
     printf("negative true\\n");
   }
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -361,6 +384,7 @@ fun main() i32 {
   if (3.5 > 2.5) {
     printf("float greater\\n");
   }
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -376,6 +400,7 @@ fun main() i32 {
   if (5 != 5) {
     printf("not equal\\n");
   }
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -391,6 +416,7 @@ fun main() i32 {
   if (true) {
   }
   printf("after if\\n");
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -405,6 +431,7 @@ fun main() i32 {
   } else {
   }
   printf("after\\n");
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -423,6 +450,7 @@ fun main() i32 {
   if (true) {
     printf("second\\n");
   }
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -441,6 +469,7 @@ fun main() i32 {
   } else {
     printf("else2\\n");
   }
+  return 0;
 }
 `;
       const output = compileAndRun(source);

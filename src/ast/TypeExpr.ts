@@ -1,4 +1,5 @@
 import { Token } from "@/ast/Token";
+import { TokenType } from "./TokenType";
 
 
 export abstract class TypeExpr {
@@ -13,11 +14,11 @@ export interface TypesVisitor<R> {
 }
 
 export class PrimitiveType extends TypeExpr {
-    name: string;
-    constructor(name: string) {
+    name: Token;
+    constructor(name: Token) {
         super();
-        if (name === 'bool') {
-            name = 'i1';
+        if (name.lexeme === 'bool') {
+            name = new Token(TokenType.Symbol, 'i1', null, 0, 0);
         }
         this.name = name;
     }
@@ -25,7 +26,7 @@ export class PrimitiveType extends TypeExpr {
         return visitor.visitPrimitiveType(this);
     }
     toString(): string {
-        return this.name;
+        return this.name.lexeme;
     }
 }
 
@@ -70,4 +71,22 @@ export class TempOmittedType extends TypeExpr {
     toString(): string {
         return "temp omitted";
     }
+}
+
+
+
+export function sameType(type1: TypeExpr, type2: TypeExpr): boolean {
+    if (type1 instanceof PrimitiveType && type2 instanceof PrimitiveType) {
+        return type1.name.lexeme === type2.name.lexeme;
+    }
+    if (type1 instanceof FunctionType && type2 instanceof FunctionType) {
+        return sameType(type1.returnType, type2.returnType) && type1.parameters.every((param, index) => sameType(param, type2.parameters[index]));
+    }
+    if (type1 instanceof VoidType && type2 instanceof VoidType) {
+        return true;
+    }
+    if (type1 instanceof TempOmittedType && type2 instanceof TempOmittedType) {
+        return true;
+    }
+    return false;
 }

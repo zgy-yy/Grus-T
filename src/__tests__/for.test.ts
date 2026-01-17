@@ -9,6 +9,7 @@ fun main() i32 {
   for (i32 i = 0; i < 5; i = i + 1) {
     printf("%d\\n", i);
   }
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -25,6 +26,7 @@ fun main() i32 {
   for (i32 i = 0; i < 3; i = i + 1) {
     printf("%d\\n", i);
   }
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -39,6 +41,7 @@ fun main() i32 {
   for (i32 i = 0; i < 1; i = i + 1) {
     printf("%d\\n", i);
   }
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -52,6 +55,7 @@ fun main() i32 {
     printf("%d\\n", i);
   }
   printf("after\\n");
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -67,6 +71,7 @@ fun main() i32 {
   for (i32 i = 5; i < 8; i = i + 1) {
     printf("%d\\n", i);
   }
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -82,6 +87,7 @@ fun main() i32 {
   for (i32 i = -2; i < 2; i = i + 1) {
     printf("%d\\n", i);
   }
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -99,6 +105,7 @@ fun main() i32 {
   for (i32 i = 0; i < 10; i = i + 2) {
     printf("%d\\n", i);
   }
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -115,6 +122,7 @@ fun main() i32 {
   for (i32 i = 5; i > 0; i = i - 1) {
     printf("%d\\n", i);
   }
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -132,6 +140,7 @@ fun main() i32 {
     printf("%d\\n", i);
     i = i + 1;
   }
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -147,6 +156,7 @@ fun main() i32 {
   for (i32 i = 0; i <= 3; i = i + 1) {
     printf("%d\\n", i);
   }
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -162,6 +172,7 @@ fun main() i32 {
   for (i32 i = 5; i > 2; i = i - 1) {
     printf("%d\\n", i);
   }
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -176,6 +187,7 @@ fun main() i32 {
   for (i32 i = 3; i >= 1; i = i - 1) {
     printf("%d\\n", i);
   }
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -190,6 +202,7 @@ fun main() i32 {
   for (i32 i = 0; i == 0; i = i + 1) {
     printf("%d\\n", i);
   }
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -204,6 +217,7 @@ fun main() i32 {
   for (let i = 0; i < 3; i = i + 1) {
     printf("%d\\n", i);
   }
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -219,6 +233,7 @@ fun main() i32 {
   for (i = 5; i < 8; i = i + 1) {
     printf("%d\\n", i);
   }
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -234,6 +249,7 @@ fun main() i32 {
   for (; i < 3; i = i + 1) {
     printf("%d\\n", i);
   }
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -249,6 +265,7 @@ fun main() i32 {
 fun main() i32 {
   for (i32 i = 0; i < 3; i = i + 1)
     printf("%d\\n", i);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -263,6 +280,7 @@ fun main() i32 {
   for (i32 i = 0; i < 3; i = i + 1) {
     printf("i=%d\\n", i);
   }
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -279,6 +297,7 @@ fun main() i32 {
     sum = sum + i;
   }
   printf("%d\\n", sum);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -295,6 +314,7 @@ fun main() i32 {
       printf("%d,%d\\n", i, j);
     }
   }
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -314,6 +334,7 @@ fun main() i32 {
       }
     }
   }
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -334,6 +355,7 @@ fun main() i32 {
     sum = sum + i;
   }
   printf("%d\\n", sum);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -347,6 +369,7 @@ fun main() i32 {
     printf("%d\\n", i);
     i = i + 1;
   }
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -364,6 +387,7 @@ fun main() i32 {
     product = product * i;
   }
   printf("%d\\n", product);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -380,6 +404,7 @@ fun main() i32 {
       printf("%d\\n", i);
     }
   }
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -395,6 +420,7 @@ fun main() i32 {
   for (i32 i = 0; i + 1 < 5; i = i + 1) {
     printf("%d\\n", i);
   }
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -411,6 +437,7 @@ fun main() i32 {
   for (i32 i = 0; i < limit; i = i + 1) {
     printf("%d\\n", i);
   }
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -430,6 +457,7 @@ fun main() i32 {
     count = count + 1;
   }
   printf("%d\\n", count);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -442,6 +470,7 @@ fun main() i32 {
   for (float i = 0.0; i < 3.0; i = i + 1.0) {
     printf("%.0f\\n", i);
   }
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -457,6 +486,7 @@ fun main() i32 {
   for (; i < 3; i = i + 1) {
     printf("%d\\n", i);
   }
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -474,6 +504,7 @@ fun main() i32 {
     printf("%d\\n", i);
   }
   printf("done\\n");
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -490,6 +521,7 @@ fun main() i32 {
   for (i32 i = 0; i < 2; i = i + 1) {
     printf("%d\\n", i);
   }
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -507,6 +539,7 @@ fun main() i32 {
   for (i32 j = 0; j < 2; j = j + 1) {
     printf("B%d\\n", j);
   }
+  return 0;
 }
 `;
       const output = compileAndRun(source);

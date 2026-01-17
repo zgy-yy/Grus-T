@@ -11,6 +11,7 @@ fun main() i32 {
     printf("%d\\n", i);
     i = i + 1;
   } while (i < 5);
+  return 0;
 }
 `;
             const output = compileAndRun(source);
@@ -29,6 +30,7 @@ fun main() i32 {
     printf("%d\\n", i);
     i = i + 1;
   } while (i < 5);
+  return 0;
 }
 `;
             const output = compileAndRun(source);
@@ -45,6 +47,7 @@ fun main() i32 {
     printf("%d\\n", i);
     i = i + 1;
   } while (i < 1);
+  return 0;
 }
 `;
             const output = compileAndRun(source);
@@ -60,6 +63,7 @@ fun main() i32 {
     printf("%d\\n", i);
     i = i + 1;
   } while (i < 3);
+  return 0;
 }
 `;
             const output = compileAndRun(source);
@@ -78,6 +82,7 @@ fun main() i32 {
     printf("%d\\n", i);
     i = i + 1;
   } while (i <= 3);
+  return 0;
 }
 `;
             const output = compileAndRun(source);
@@ -95,6 +100,7 @@ fun main() i32 {
     printf("%d\\n", i);
     i = i - 1;
   } while (i > 2);
+  return 0;
 }
 `;
             const output = compileAndRun(source);
@@ -111,6 +117,7 @@ fun main() i32 {
     printf("%d\\n", i);
     i = i - 1;
   } while (i >= 1);
+  return 0;
 }
 `;
             const output = compileAndRun(source);
@@ -127,6 +134,7 @@ fun main() i32 {
     printf("%d\\n", i);
     i = i + 1;
   } while (i == 0);
+  return 0;
 }
 `;
             const output = compileAndRun(source);
@@ -142,6 +150,7 @@ fun main() i32 {
     printf("%d\\n", i);
     i = i + 1;
   } while (i != 3);
+  return 0;
 }
 `;
             const output = compileAndRun(source);
@@ -160,6 +169,7 @@ fun main() i32 {
     printf("%d\\n", i);
     i = i + 1;
   } while (0==1);
+  return 0;
 }
 `;
             const output = compileAndRun(source);
@@ -176,6 +186,7 @@ fun main() i32 {
     printf("%d\\n", i);
     i = i + 1;
   } while (i < 0);
+  return 0;
 }
 `;
             const output = compileAndRun(source);
@@ -192,6 +203,7 @@ fun main() i32 {
     printf("%d\\n", i);
     i = i + 1;
   } while (i < 10);
+  return 0;
 }
 `;
             const output = compileAndRun(source);
@@ -208,6 +220,7 @@ fun main() i32 {
     printf("%.0f\\n", f);
     f = f + 1.0;
   } while (f < 3.0);
+  return 0;
 }
 `;
             const output = compileAndRun(source);
@@ -228,6 +241,7 @@ fun main() i32 {
       flag = false;
     }
   } while (flag);
+  return 0;
 }
 `;
             const output = compileAndRun(source);
@@ -250,6 +264,7 @@ fun main() i32 {
     } while (j < 2);
     i = i + 1;
   } while (i < 2);
+  return 0;
 }
 `;
             const output = compileAndRun(source);
@@ -275,6 +290,7 @@ fun main() i32 {
     } while (j < 2);
     i = i + 1;
   } while (i < 2);
+  return 0;
 }
 `;
             const output = compileAndRun(source);
@@ -297,6 +313,7 @@ fun main() i32 {
     }
     i = i + 1;
   } while (i < 2);
+  return 0;
 }
 `;
             const output = compileAndRun(source);
@@ -318,6 +335,7 @@ fun main() i32 {
     }
     i = i + 1;
   } while (i < 2);
+  return 0;
 }
 `;
             const output = compileAndRun(source);
@@ -341,6 +359,7 @@ fun main() i32 {
     }
     i = i + 1;
   } while (i < 5);
+  return 0;
 }
 `;
             const output = compileAndRun(source);
@@ -365,6 +384,7 @@ fun main() i32 {
     }
     i = i + 1;
   } while (i < 6);
+  return 0;
 }
 `;
             const output = compileAndRun(source);
@@ -387,6 +407,7 @@ fun main() i32 {
     printf("%d\\n", i);
     i = i + 2;
   } while (i < 6);
+  return 0;
 }
 `;
             const output = compileAndRun(source);
@@ -405,6 +426,7 @@ fun main() i32 {
     a = a + 1;
     b = b - 1;
   } while (a < 3);
+  return 0;
 }
 `;
             const output = compileAndRun(source);
@@ -421,6 +443,7 @@ fun main() i32 {
     printf("%d\\n", i);
     i++;
   } while (i < 3);
+  return 0;
 }
 `;
             const output = compileAndRun(source);
@@ -437,6 +460,7 @@ fun main() i32 {
     printf("%d\\n", i);
     i--;
   } while (i > 2);
+  return 0;
 }
 `;
             const output = compileAndRun(source);
@@ -459,6 +483,7 @@ fun main() i32 {
       running = false;
     }
   } while (running);
+  return 0;
 }
 `;
             const output = compileAndRun(source);
@@ -478,6 +503,7 @@ fun main() i32 {
     printf("%d\\n", temp);
     i = i + 1;
   } while (i < 3);
+  return 0;
 }
 `;
             const output = compileAndRun(source);
@@ -496,6 +522,7 @@ fun main() i32 {
     i = i + 1;
   } while (i < 2);
   printf("end\\n");
+  return 0;
 }
 `;
             const output = compileAndRun(source);
@@ -521,6 +548,7 @@ fun main() i32 {
     printf("B%d\\n", j);
     j = j + 1;
   } while (j < 2);
+  return 0;
 }
 `;
             const output = compileAndRun(source);

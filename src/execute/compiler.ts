@@ -67,7 +67,7 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
 
     compileProgram(stmts: Stmt[]): string {
         this.beginScope();
-        this.scopes[this.scopes.length - 1].set("printf", new IrVar("@printf", new FunctionType(new PrimitiveType("i32"), [new PrimitiveType("i8*"), new PrimitiveType("...")])));
+        this.scopes[this.scopes.length - 1].set("printf", new IrVar("@printf", new FunctionType(new PrimitiveType(new Token(TokenType.Symbol, "i32", null, 0, 0)), [new PrimitiveType(new Token(TokenType.Symbol, "i8*", null, 0, 0)), new PrimitiveType(new Token(TokenType.Symbol, "...", null, 0, 0))])));
 
         this.code = stmts.map(stmt => stmt.accept(this)).join("\n");
         const globalCode = this.globals.join("\n");
@@ -129,10 +129,10 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
             `define ${fn_type} @${fn_name}() {
     entry:
     ${fn_body}
-    ret ${fn_type} 0
 }`;
         this.endScope();
-        return code;
+        this.globals.push(code);
+        return "";
     }
     visitExpressionStmt(stmt: ExpressionStmt): IrFragment {
         const comp = stmt.expression.accept(this);
@@ -285,7 +285,15 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
         return `br label %${stmt.label.lexeme}`;
     }
     visitReturnStmt(stmt: ReturnStmt): IrFragment {
-        throw new Error("Method not implemented.");
+        if (stmt.value) {
+            const ir_code: IrFragment[] = [];
+            const comp = stmt.value.accept(this);
+            ir_code.push(comp.ir);
+            ir_code.push(`ret ${comp.irtype} ${comp.reg}`);
+            return ir_code.join("\n");
+        } else {
+            return `ret void`;
+        }
     }
     visitClassStmt(stmt: ClassStmt): IrFragment {
         throw new Error("Method not implemented.");
@@ -506,7 +514,7 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
             if (irVar.type instanceof FunctionType) {
                 // 检查参数列表中是否包含"..."（可变参数）
                 isVariadic = irVar.type.parameters.some(param =>
-                    param instanceof PrimitiveType && param.name === "..."
+                    param instanceof PrimitiveType && param.name.lexeme === "..."
                 );
             }
         }
@@ -580,10 +588,10 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
     //编译类型表达式
 
     visitPrimitiveType(expr: PrimitiveType): string {
-        if (expr.name === "string") {
+        if (expr.name.lexeme === "string") {
             return "i8*";
         }
-        return expr.name;
+        return expr.name.lexeme;
     }
     visitFunctionType(expr: FunctionType): string {
         return expr.returnType.accept(this) + "(" + expr.parameters.map(parameter => parameter.accept(this)).join(", ") + ")";

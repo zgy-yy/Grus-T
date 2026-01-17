@@ -8,6 +8,7 @@ describe('位移运算测试', () => {
 fun main() i32 {
   i32 x = 1 << 2;
   printf("%d\\n", x);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -19,6 +20,7 @@ fun main() i32 {
 fun main() i32 {
   i32 x = 1 << 10;
   printf("%d\\n", x);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -30,6 +32,7 @@ fun main() i32 {
 fun main() i32 {
   i32 x = 5 << 0;
   printf("%d\\n", x);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -41,6 +44,7 @@ fun main() i32 {
 fun main() i32 {
   i32 x = 3 << 1;
   printf("%d\\n", x);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -54,6 +58,7 @@ fun main() i32 {
   i32 b = 3;
   i32 x = a << b;
   printf("%d\\n", x);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -65,6 +70,7 @@ fun main() i32 {
 fun main() i32 {
   i32 x = 100 << 2;
   printf("%d\\n", x);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -76,6 +82,7 @@ fun main() i32 {
 fun main() i32 {
   i32 x = -5 << 2;
   printf("%d\\n", x);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -89,6 +96,7 @@ fun main() i32 {
 fun main() i32 {
   i32 x = 8 >> 2;
   printf("%d\\n", x);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -100,6 +108,7 @@ fun main() i32 {
 fun main() i32 {
   i32 x = 10 >> 1;
   printf("%d\\n", x);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -111,6 +120,7 @@ fun main() i32 {
 fun main() i32 {
   i32 x = 7 >> 0;
   printf("%d\\n", x);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -124,6 +134,7 @@ fun main() i32 {
   i32 b = 2;
   i32 x = a >> b;
   printf("%d\\n", x);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -135,6 +146,7 @@ fun main() i32 {
 fun main() i32 {
   i32 x = 1024 >> 3;
   printf("%d\\n", x);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -146,6 +158,7 @@ fun main() i32 {
 fun main() i32 {
   i32 x = -8 >> 2;
   printf("%d\\n", x);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -157,6 +170,7 @@ fun main() i32 {
 fun main() i32 {
   i32 x = 3 >> 5;
   printf("%d\\n", x);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -171,6 +185,7 @@ fun main() i32 {
   i8 x = 1;
   i8 a = x << 2;
   printf("%d\\n", a);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -183,6 +198,7 @@ fun main() i32 {
   i8 x = 8;
   i8 a = x >> 2;
   printf("%d\\n", a);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -195,6 +211,7 @@ fun main() i32 {
   i8 x = 1;
   i8 a = x << 10;
   printf("%d\\n", a);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -209,6 +226,7 @@ fun main() i32 {
 fun main() i32 {
   i32 x = 2 << 1 + 1;
   printf("%d\\n", x);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -221,6 +239,7 @@ fun main() i32 {
 fun main() i32 {
   i32 x = (2 << 1) + 1;
   printf("%d\\n", x);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -233,6 +252,7 @@ fun main() i32 {
 fun main() i32 {
   i32 x = 2 << 2 * 2;
   printf("%d\\n", x);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -245,6 +265,7 @@ fun main() i32 {
 fun main() i32 {
   i32 x = 1 << 2 << 1;
   printf("%d\\n", x);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -257,6 +278,7 @@ fun main() i32 {
 fun main() i32 {
   i32 x = 32 >> 2 >> 1;
   printf("%d\\n", x);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -269,6 +291,7 @@ fun main() i32 {
 fun main() i32 {
   i32 x = 4 << 2 + 8 >> 2;
   printf("%d\\n", x);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -285,6 +308,7 @@ fun main() i32 {
   i32 b = 2;
   i32 x = a << b;
   printf("%d\\n", x);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -297,6 +321,7 @@ fun main() i32 {
   i32 x = 2;
   x = x << 3;
   printf("%d\\n", x);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -311,6 +336,7 @@ fun main() i32 {
   i32 c = 4;
   i32 result = a << b >> c;
   printf("%d\\n", result);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -325,6 +351,7 @@ fun main() i32 {
 fun main() i32 {
   i32 x = 0 << 5;
   printf("%d\\n", x);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -336,6 +363,7 @@ fun main() i32 {
 fun main() i32 {
   i32 x = 0 >> 5;
   printf("%d\\n", x);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -347,6 +375,7 @@ fun main() i32 {
 fun main() i32 {
   i32 x = 1 << 20;
   printf("%d\\n", x);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -360,6 +389,7 @@ fun main() i32 {
 fun main() i32 {
   i32 x = (1 << 2) << 3;
   printf("%d\\n", x);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -372,6 +402,7 @@ fun main() i32 {
 fun main() i32 {
   i32 x = 8 << 2 / 2;
   printf("%d\\n", x);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -384,6 +415,7 @@ fun main() i32 {
 fun main() i32 {
   i32 x = 16 >> 2 % 3;
   printf("%d\\n", x);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -396,6 +428,7 @@ fun main() i32 {
 fun main() i32 {
   i32 x = (2 << 3) + (8 >> 2) - (1 << 1);
   printf("%d\\n", x);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -408,6 +441,7 @@ fun main() i32 {
 fun main() i32 {
   i32 x = ((1 << 2) << 1) >> 1;
   printf("%d\\n", x);
+  return 0;
 }
 `;
       const output = compileAndRun(source);

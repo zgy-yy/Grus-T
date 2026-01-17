@@ -14,6 +14,7 @@ fun main() i32 {
       break;
     }
   }
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -32,6 +33,7 @@ fun main() i32 {
     printf("%d\\n", i);
     break;
   }
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -49,6 +51,7 @@ fun main() i32 {
       break;
     }
   }
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -70,6 +73,7 @@ fun main() i32 {
       break;
     }
   }
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -87,6 +91,7 @@ fun main() i32 {
       break;
     }
   }
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -108,6 +113,7 @@ fun main() i32 {
     }
   }
   printf("%d\\n", sum);
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -135,6 +141,7 @@ fun main() i32 {
       break;
     }
   }
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -169,6 +176,7 @@ fun main() i32 {
       break;
     }
   }
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -193,6 +201,7 @@ fun main() i32 {
       break;
     }
   }
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -217,6 +226,7 @@ fun main() i32 {
       break;
     }
   }
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -243,6 +253,7 @@ fun main() i32 {
       break;
     }
   }
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -267,6 +278,7 @@ fun main() i32 {
       break;
     }
   }
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -288,6 +300,7 @@ fun main() i32 {
       break;
     }
   }
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -315,6 +328,7 @@ fun main() i32 {
       break;
     }
   }
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -343,6 +357,7 @@ fun main() i32 {
     }
   }
   printf("after\\n");
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -364,6 +379,7 @@ fun main() i32 {
     printf("%d\\n", i);
     i = i + 1;
   }
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -388,6 +404,7 @@ fun main() i32 {
       break;
     }
   }
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -419,6 +436,7 @@ fun main() i32 {
       break;
     }
   }
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -443,6 +461,7 @@ fun main() i32 {
       break;
     }
   }
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -467,6 +486,7 @@ fun main() i32 {
     }
     printf("%d\\n", i);
   }
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -498,6 +518,7 @@ fun main() i32 {
       break;
     }
   }
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -518,6 +539,7 @@ fun main() i32 {
     printf("never\\n");
   }
   printf("after\\n");
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -540,6 +562,7 @@ fun main() i32 {
       break;
     }
   }
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -560,6 +583,7 @@ fun main() i32 {
       break;
     }
   }
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -581,6 +605,7 @@ fun main() i32 {
     }
   }
   printf("end\\n");
+  return 0;
 }
 `;
       const output = compileAndRun(source);
@@ -612,6 +637,7 @@ fun main() i32 {
       break;
     }
   }
+  return 0;
 }
 `;
       const output = compileAndRun(source);
