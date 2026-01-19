@@ -196,12 +196,14 @@ export class FunctionStmt extends Stmt {
     parameters: Parameter[];
     body: Stmt[];
     returnType: TypeExpr;
-    constructor(name: Token, parameters: Parameter[], returnType: TypeExpr | null, body: Stmt[]) {
+    brace: Token;
+    constructor(name: Token, parameters: Parameter[], returnType: TypeExpr | null, body: Stmt[], brace: Token) {
         super();
         this.name = name;
         this.parameters = parameters;
         this.body = body;
         this.returnType = returnType as TypeExpr;
+        this.brace = brace;
     }
     accept<R>(visitor: StmtVisitor<R>): R {
         return visitor.visitFunctionStmt(this);

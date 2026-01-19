@@ -67,7 +67,7 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
 
     compileProgram(stmts: Stmt[]): string {
         this.beginScope();
-        this.scopes[this.scopes.length - 1].set("printf", new IrVar("@printf", new FunctionType(new PrimitiveType(new Token(TokenType.Symbol, "i32", null, 0, 0)), [new PrimitiveType(new Token(TokenType.Symbol, "i8*", null, 0, 0)), new PrimitiveType(new Token(TokenType.Symbol, "...", null, 0, 0))])));
+        this.scopes[this.scopes.length - 1].set("printf", new IrVar("@printf", new FunctionType(new Token(TokenType.Symbol, "printf", null, 0, 0), new PrimitiveType(new Token(TokenType.Symbol, "i32", null, 0, 0)), [new PrimitiveType(new Token(TokenType.Symbol, "i8*", null, 0, 0)), new PrimitiveType(new Token(TokenType.Symbol, "...", null, 0, 0))])));
 
         this.code = stmts.map(stmt => stmt.accept(this)).join("\n");
         const globalCode = this.globals.join("\n");
@@ -129,6 +129,7 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
             `define ${fn_type} @${fn_name}() {
     entry:
     ${fn_body}
+    ret ${fn_type} zeroinitializer
 }`;
         this.endScope();
         this.globals.push(code);

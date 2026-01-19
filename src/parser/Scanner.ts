@@ -3,7 +3,7 @@ import { TokenType } from '@/ast/TokenType.ts';
 import { ScannerErrorHandler } from './ErrorHandler';
 import { GrusValue } from '@/ast/GrusValue';
 
-const PrimitiveTypes = ['bool', "i8", "i16", "i32", "i64", "float", "double"];
+const PrimitiveTypes = ['void', 'bool', "i8", "i16", "i32", "i64", "float", "double"];
 
 // 关键字映射
 const keywords = new Map<string, TokenType>([

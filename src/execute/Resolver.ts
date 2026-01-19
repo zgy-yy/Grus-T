@@ -6,6 +6,39 @@ import { ParserErrorHandler } from "@/parser/ErrorHandler";
 import { TokenType } from "@/ast/TokenType";
 
 
+class FunEnv {
+    returnType: TypeExpr;
+    rightReturned: boolean;
+    labels: string[]
+    gotoLabels: Token[];
+    loopDepth: number;
+    ifStack: ('if' | 'else')[];
+    private shallowIfReturned: boolean;
+    constructor(returnType: TypeExpr) {
+        this.returnType = returnType;
+        this.rightReturned = false;
+        this.labels = []; //函数内的标签
+        this.gotoLabels = []; //函数内的goto标签
+        this.loopDepth = 0; //函数内的循环深度
+        this.ifStack = []; //函数内的if栈
+        this.shallowIfReturned = false;
+    }
+    funReturn() {
+        if (this.loopDepth === 0) {
+            if (this.ifStack.length === 0) {
+                this.rightReturned = true;
+            } else {
+                if (this.ifStack.length == 1 && this.ifStack[0] === 'if') {
+                    this.shallowIfReturned = true;
+                }
+                if (this.shallowIfReturned && this.ifStack.length == 2 && this.ifStack[this.ifStack.length - 1] === 'else') {
+                    this.rightReturned = true;
+                }
+            }
+        }
+    }
+}
+
 class ResolverError extends Error {
     public token: Token | Expr;
     constructor(token: Token | Expr, message: string) {
@@ -23,16 +56,8 @@ export class Resolver implements ExprVisitor<TypeExpr>, StmtVisitor<void> {
         type: TypeExpr | null;
         defined: boolean;
     }>[] = [];
-    private functionEnv: {
-        returnType: TypeExpr;
-        rightReturned: boolean;
-        labels: string[]
-        gotoLabels: Token[];
-        loopDepth: number; //函数内的循环深度 用于闭包break和continue的合法性判断
-        ifDepth: number; //函数内的if深度 用于闭包if的合法性判断
-        elseDepth: number; //函数内的else深度 用于闭包else的合法性判断
-        shallowIfReturned: boolean; //函数内的shallow if是否返回了值 用于闭包shallow if的合法性判断
-    }[] = [];
+    private funEnvs: FunEnv[] = [];
+    private currentFun: FunEnv = this.funEnvs[this.funEnvs.length - 1];
 
     private errorHandler: ParserErrorHandler;
     private currentClass: ClassType = "NONE";
@@ -44,7 +69,7 @@ export class Resolver implements ExprVisitor<TypeExpr>, StmtVisitor<void> {
         try {
             this.beginScope();
             const globalScope = this.scopes[this.scopes.length - 1];
-            globalScope.set("printf", { type: new FunctionType(new PrimitiveType(new Token(TokenType.Symbol, "i32", null, 0, 0)), [new PrimitiveType(new Token(TokenType.Symbol, "i8*", null, 0, 0)), new TempOmittedType()]), defined: true });
+            globalScope.set("printf", { type: new FunctionType(new Token(TokenType.Symbol, "printf", null, 0, 0), new PrimitiveType(new Token(TokenType.Symbol, "i32", null, 0, 0)), [new PrimitiveType(new Token(TokenType.Symbol, "i8*", null, 0, 0)), new TempOmittedType()]), defined: true });
             for (const stmt of nodes) {
                 this.resolveStmt(stmt);
             }
@@ -95,9 +120,9 @@ export class Resolver implements ExprVisitor<TypeExpr>, StmtVisitor<void> {
         }
         this.beginFunction(stmt.returnType);
         this.declare(stmt.name);
-        this.define(stmt.name, new FunctionType(stmt.returnType, stmt.parameters.map(param => param.type)));
+        this.define(stmt.name, new FunctionType(stmt.name, stmt.returnType, stmt.parameters.map(param => param.type)));
         this.resolveFunction(stmt);
-        this.endFunction();
+        this.endFunction(stmt.brace);
     }
 
 
@@ -119,33 +144,32 @@ export class Resolver implements ExprVisitor<TypeExpr>, StmtVisitor<void> {
         this.resolveExpr(stmt.expression);
     }
     visitIfStmt(stmt: IfStmt): void {
-        const functionEnv = this.functionEnv[this.functionEnv.length - 1];
-        functionEnv.ifDepth++;
+        this.currentFun.ifStack.push('if');
         const conditionType = this.resolveExpr(stmt.condition);
         if (!checkBooleanType(conditionType)) {
             throw this.error(stmt.condition, "Type mismatch: boolean type expected");
         }
         this.resolveStmt(stmt.thenBranch);
         if (stmt.elseBranch) {
+            this.currentFun.ifStack.push('else');
             this.resolveStmt(stmt.elseBranch);
+            this.currentFun.ifStack.pop();
         }
-        functionEnv.ifDepth--;
+        this.currentFun.ifStack.pop();
     }
     visitWhileStmt(stmt: WhileStmt): void {
         const conditionType = this.resolveExpr(stmt.condition);
         if (!checkBooleanType(conditionType)) {
             throw this.error(stmt.condition, "Type mismatch: boolean type expected");
         }
-        const functionEnv = this.functionEnv[this.functionEnv.length - 1];
-        functionEnv.loopDepth++;
+        this.currentFun.loopDepth++;
         this.resolveStmt(stmt.body);
-        functionEnv.loopDepth--;
+        this.currentFun.loopDepth--;
     }
     visitDoWhileStmt(stmt: DoWhileStmt): void {
-        const functionEnv = this.functionEnv[this.functionEnv.length - 1];
-        functionEnv.loopDepth++;
+        this.currentFun.loopDepth++;
         this.resolveStmt(stmt.body);
-        functionEnv.loopDepth--;
+        this.currentFun.loopDepth--;
         const conditionType = this.resolveExpr(stmt.condition);
         if (!checkBooleanType(conditionType)) {
             throw this.error(stmt.condition, "Type mismatch: boolean type expected");
@@ -162,34 +186,30 @@ export class Resolver implements ExprVisitor<TypeExpr>, StmtVisitor<void> {
         if (stmt.increment) {
             this.resolveExpr(stmt.increment);
         }
-        const functionEnv = this.functionEnv[this.functionEnv.length - 1];
-        functionEnv.loopDepth++;
+        this.currentFun.loopDepth++;
         this.resolveStmt(stmt.body);
-        functionEnv.loopDepth--;
+        this.currentFun.loopDepth--;
     }
 
     visitLoopStmt(stmt: LoopStmt): void {
-        const functionEnv = this.functionEnv[this.functionEnv.length - 1];
-        functionEnv.loopDepth++;
+        this.currentFun.loopDepth++;
         this.resolveStmt(stmt.body);
-        functionEnv.loopDepth--;
+        this.currentFun.loopDepth--;
     }
 
     visitBreakStmt(stmt: BreakStmt): void {
-        const functionEnv = this.functionEnv[this.functionEnv.length - 1];
-        if (functionEnv.loopDepth == 0) {
+        if (this.currentFun.loopDepth == 0) {
             throw this.error(stmt.keyword, `Unexpected 'break'`);
         }
     }
     visitContinueStmt(stmt: ContinueStmt): void {
-        const functionEnv = this.functionEnv[this.functionEnv.length - 1];
-        if (functionEnv.loopDepth == 0) {
+        if (this.currentFun.loopDepth == 0) {
             throw this.error(stmt.keyword, `Unexpected continue statement`);
         }
     }
     visitLabelStmt(stmt: LabelStmt): void {
         const label = stmt.label.lexeme;
-        const currentLabels = this.functionEnv[this.functionEnv.length - 1].labels;
+        const currentLabels = this.currentFun.labels;
         if (currentLabels.includes(label)) {
             throw this.error(stmt.label, `Label ${label} already defined`);
         }
@@ -201,12 +221,11 @@ export class Resolver implements ExprVisitor<TypeExpr>, StmtVisitor<void> {
 
     visitGotoStmt(stmt: GotoStmt): void {
         const label = stmt.label;
-        const currentGotoLabels = this.functionEnv[this.functionEnv.length - 1].gotoLabels;
+        const currentGotoLabels = this.currentFun.gotoLabels;
         currentGotoLabels.push(label);
     }
     visitReturnStmt(stmt: ReturnStmt): void {
-        const functionEnv = this.functionEnv[this.functionEnv.length - 1];
-        if (functionEnv.returnType instanceof VoidType) {
+        if (this.currentFun.returnType instanceof VoidType) {
             if (stmt.value) {
                 throw this.error(stmt.keyword, `Cannot return a value from a function with no return type.`);
             }
@@ -215,24 +234,11 @@ export class Resolver implements ExprVisitor<TypeExpr>, StmtVisitor<void> {
                 throw this.error(stmt.keyword, `Function with return type must return a value.`);
             }
             const returnType = this.resolveExpr(stmt.value);
-            if (!sameType(returnType, functionEnv.returnType)) {
-                throw this.error(stmt.keyword, `Type mismatch: ${returnType} != ${functionEnv.returnType}`);
+            if (!sameType(returnType, this.currentFun.returnType)) {
+                throw this.error(stmt.keyword, `Type mismatch: ${returnType} != ${this.currentFun.returnType}`);
             }
         }
-        if (functionEnv.shallowIfReturned) {
-            if (functionEnv.elseDepth == 1) {
-                functionEnv.rightReturned = true;
-            }
-        }
-        if (functionEnv.ifDepth == 1) {
-            functionEnv.shallowIfReturned = true;
-        }
-        if (functionEnv.elseDepth == 0 && functionEnv.ifDepth == 0) {
-            if (functionEnv.loopDepth == 0) {
-                functionEnv.rightReturned = true;
-            }
-        }
-
+        this.currentFun.funReturn();
     }
 
 
@@ -325,7 +331,7 @@ export class Resolver implements ExprVisitor<TypeExpr>, StmtVisitor<void> {
         } else if (typeof expr.value === "boolean") {
             literalType = new PrimitiveType(new Token(TokenType.Symbol, "i1", null, 0, 0));
         } else {
-            literalType = new VoidType();
+            literalType = new VoidType(new Token(TokenType.Symbol, "void", null, 0, 0));
         }
         return literalType;
     }
@@ -379,8 +385,8 @@ export class Resolver implements ExprVisitor<TypeExpr>, StmtVisitor<void> {
     resolveFunction(stmt: FunctionStmt): void {
         this.beginScope();
         for (const param of stmt.parameters) {
-            // this.declare(param);
-            // this.define(param);
+            this.declare(param.name);
+            this.define(param.name, param.type);
         }
         for (const bodyStmt of stmt.body) {
             this.resolveStmt(bodyStmt);
@@ -400,19 +406,19 @@ export class Resolver implements ExprVisitor<TypeExpr>, StmtVisitor<void> {
     }
 
     beginFunction(returnType: TypeExpr): void {
-        const env = { returnType: returnType, rightReturned: false, labels: [], gotoLabels: [], loopDepth: 0, ifDepth: 0, elseDepth: 0, shallowIfReturned: false }
+        const env = new FunEnv(returnType);
         if (returnType instanceof VoidType) {
             env.rightReturned = true;
         }
-        this.functionEnv.push(env);
+        this.funEnvs.push(env);
+        this.currentFun = env;
     }
-    endFunction(): void {
-        const functionEnv = this.functionEnv[this.functionEnv.length - 1];
-        if (!functionEnv.rightReturned) {
-            console.error(functionEnv.returnType);
-            // throw this.error(functionEnv.returnType, `Function with return type must return a value.`);
+    endFunction(brace: Token): void {
+        if (!this.currentFun.rightReturned) {
+            throw this.error(brace, `Function with return type must return a value.`);
         }
-        this.functionEnv.pop();
+        this.funEnvs.pop();
+        this.currentFun = this.funEnvs[this.funEnvs.length - 1];
     }
 
     declare(name: Token): void {

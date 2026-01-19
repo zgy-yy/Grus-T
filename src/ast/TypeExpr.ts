@@ -31,10 +31,12 @@ export class PrimitiveType extends TypeExpr {
 }
 
 export class FunctionType extends TypeExpr {
+    paren: Token;
     returnType: TypeExpr;
     parameters: TypeExpr[];
-    constructor(returnType: TypeExpr, parameters: TypeExpr[]) {
+    constructor(paren: Token, returnType: TypeExpr, parameters: TypeExpr[]) {
         super();
+        this.paren = paren;
         this.returnType = returnType;
         this.parameters = parameters;
     }
@@ -50,20 +52,24 @@ export class FunctionType extends TypeExpr {
 
 
 export class VoidType extends TypeExpr {
-    constructor() {
+    name: Token;
+    constructor(name: Token) {
         super();
+        this.name = name;
     }
     accept<R>(visitor: TypesVisitor<R>): R {
         return visitor.visitVoidType(this);
     }
     toString(): string {
-        return "void";
+        return this.name.lexeme;
     }
 }
 
 export class TempOmittedType extends TypeExpr {
+    name: Token;
     constructor() {
         super();
+        this.name = new Token(TokenType.Symbol, "void", null, 0, 0);
     }
     accept<R>(visitor: TypesVisitor<R>): R {
         return visitor.visitTempOmittedType(this);

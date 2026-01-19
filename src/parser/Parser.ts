@@ -234,14 +234,14 @@ export class Parser {
         }
         this.consume(TokenType.RightParen, "Expect ')' after parameters.");
         let returnType: TypeExpr | null = null;
-        if(this.peek().type === TokenType.LeftBrace){
-            returnType = new VoidType();
+        if (this.check(TokenType.LeftBrace)) {
+            returnType = new VoidType(this.previous());
         } else {
             returnType = this.type();
         }
         this.consume(TokenType.LeftBrace, "Expect '{' after parameters.");
         const body = this.block();
-        return new FunctionStmt(name, parameters, returnType, body);
+        return new FunctionStmt(name, parameters, returnType, body, this.previous());
     }
 
     /**
@@ -304,7 +304,7 @@ export class Parser {
             return new BreakStmt(keyword);
         } if (this.match(TokenType.Return)) {
             const keyword = this.previous();
-            const value = this.match(TokenType.Semicolon) ? null : this.expression();
+            const value = this.check(TokenType.Semicolon) ? null : this.expression();
             this.consume(TokenType.Semicolon, "Expect ';' after return.");
             return new ReturnStmt(keyword, value);
         } if (this.match(TokenType.Identifier)) {
@@ -500,7 +500,11 @@ export class Parser {
 
     private type(): TypeExpr {
         if (this.match(TokenType.Symbol)) {
-            return new PrimitiveType(this.previous());
+            const name = this.previous();
+            if (name.lexeme === 'void') {
+                return new VoidType(name);
+            }
+            return new PrimitiveType(name);
         }
         throw new Error("Expect type.");
     }
