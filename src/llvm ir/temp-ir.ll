@@ -1,41 +1,33 @@
 declare i32 @printf(i8*, ...)
-define i32 @foo() {
-    entry:
-    
-        
-        br i1 1, label %if1.then, label %if1.else
-        if1.then:
-            
-ret i32 2
+@.constant_0 = private unnamed_addr constant [6 x i8] c"a,%d\0A\00", align 1
 
-        
-        br i1 0, label %if0.then, label %if0.else
-        if0.then:
-            
+define i32 @foo(i32 %a) {
+    entry:
+    %a.addr = alloca i32
+store i32 %a, i32* %a.addr
+    
+%r1 = load i32 , i32* %a.addr
+
+%r0 = call i32(i8*, ...) @printf(i8* @.constant_0, i32 %r1)
+
 ret i32 23
-            br label %if0.end
-        if0.else:
-            
-ret i32 23
-            br label %if0.end
-        if0.end:
-        
-            br label %if1.end
-        if1.else:
-            
-ret i32 1
-            br label %if1.end
-        if1.end:
-        
     ret i32 zeroinitializer
 }
-@.constant_6 = private unnamed_addr constant [4 x i8] c"%d\0A\00", align 1
+@.constant_3 = private unnamed_addr constant [4 x i8] c"%d\0A\00", align 1
 
 define i32 @main() {
     entry:
     
+    
+%a = alloca i32
 
-%r0 = call i32(i8*, ...) @printf(i8* @.constant_6, i32 1)
+%r2 = call i32(i32) @foo(i32 2)
+
+store i32 %r2, i32* %a
+
+%r5 = load i32 , i32* %a
+
+%r4 = call i32(i8*, ...) @printf(i8* @.constant_3, i32 %r5)
 
 ret i32 0
     ret i32 zeroinitializer

@@ -67,7 +67,7 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
 
     compileProgram(stmts: Stmt[]): string {
         this.beginScope();
-        this.scopes[this.scopes.length - 1].set("printf", new IrVar("@printf", new FunctionType(new Token(TokenType.Symbol, "printf", null, 0, 0), new PrimitiveType(new Token(TokenType.Symbol, "i32", null, 0, 0)), [new PrimitiveType(new Token(TokenType.Symbol, "i8*", null, 0, 0)), new PrimitiveType(new Token(TokenType.Symbol, "...", null, 0, 0))])));
+        this.scopes[0].set("printf", new IrVar("@printf", new FunctionType(new Token(TokenType.Symbol, "printf", null, 0, 0), new PrimitiveType(new Token(TokenType.Symbol, "i32", null, 0, 0)), [new PrimitiveType(new Token(TokenType.Symbol, "i8*", null, 0, 0)), new PrimitiveType(new Token(TokenType.Symbol, "...", null, 0, 0))])));
 
         this.code = stmts.map(stmt => stmt.accept(this)).join("\n");
         const globalCode = this.globals.join("\n");
@@ -119,15 +119,35 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
         }
     }
     visitFunctionStmt(stmt: FunctionStmt): IrFragment {
+        console.log("zzz", stmt);
         this.beginScope();
         Compiler.regI = 0;
         Compiler.ifI = 0;
         const fn_name = stmt.name.lexeme;
         const fn_type = stmt.returnType.accept(this);
+        const globalScope = this.scopes[0]
+        globalScope.set(fn_name, new IrVar(`@${fn_name}`, new FunctionType(stmt.name, stmt.returnType, stmt.parameters.map(param => param.type))));
+        const currentScope = this.scopes[this.scopes.length - 1];
+        const param_code_ir: IrFragment[] = [];
+        const parameters = stmt.parameters.map(param => {
+            const ir_param_var = `%${param.name.lexeme}.addr`;
+            const ir_param_reg = `%${param.name.lexeme}`;
+            const ir_param_type = param.type.accept(this);
+            currentScope.set(param.name.lexeme, new IrVar(ir_param_var, param.type));
+            param_code_ir.push(`${ir_param_var} = alloca ${ir_param_type}`);
+            param_code_ir.push(`store ${ir_param_type} ${ir_param_reg}, ${ir_param_type}* ${ir_param_var}`);
+            return {
+                irtype: ir_param_type,
+                reg: `%${param.name.lexeme}`,
+            }
+        });
+
         const fn_body = stmt.body.map(stmt => stmt.accept(this)).join("\n");
+        // console.log("zzz",globalScope,this.scopes);
         const code =
-            `define ${fn_type} @${fn_name}() {
+            `define ${fn_type} @${fn_name}(${parameters.map(param => `${param.irtype} ${param.reg}`).join(", ")}) {
     entry:
+    ${param_code_ir.join("\n")}
     ${fn_body}
     ret ${fn_type} zeroinitializer
 }`;
@@ -508,6 +528,10 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
         const args = expr.arguments.map(argument => argument.accept(this));
         const ir_code: IrFragment[] = [];
 
+        let ir_type = "void";
+        if (expr.callee instanceof FunctionType) {
+            ir_type = expr.callee.returnType.accept(this);
+        }
         // 检查是否是可变参数函数（如printf）
         let isVariadic = false;
         if (expr.callee instanceof VariableExpr) {
@@ -543,7 +567,7 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
         });
 
         ir_code.push(`${reg} = call ${callee.irtype} ${callee.reg}(${arg_comps.map(arg => `${arg.irtype} ${arg.reg}`).join(", ")})`);
-        return new ExprCompose(callee.irtype, reg, ir_code.join("\n"));
+        return new ExprCompose(ir_type, reg, ir_code.join("\n"));
     }
     visitSetExpr(expr: SetExpr): ExprCompose {
         throw new Error("Method not implemented.");
@@ -618,6 +642,7 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
         this.scopes[this.scopes.length - 1].set(name, new IrVar(name, type));
     }
     findIrVar(sourceName: Token): IrVar {
+        // console.log(sourceName,this.scopes);
         for (let i = this.scopes.length - 1; i >= 0; i--) {
             const scope = this.scopes[i];
             const ir_var = scope.get(sourceName.lexeme);

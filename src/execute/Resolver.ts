@@ -320,7 +320,7 @@ export class Resolver implements ExprVisitor<TypeExpr>, StmtVisitor<void> {
     visitLiteralExpr(expr: LiteralExpr): TypeExpr {
         let literalType: TypeExpr;
         if (typeof expr.value === "string") {
-            literalType = new PrimitiveType(new Token(TokenType.Symbol, "string", null, 0, 0));
+            literalType = new PrimitiveType(new Token(TokenType.Symbol, "i8*", null, 0, 0));
         } else if (typeof expr.value === "number") {
             if (!Number.isInteger(expr.value)) {
                 literalType = new PrimitiveType(new Token(TokenType.Symbol, "float", null, 0, 0));
@@ -355,11 +355,23 @@ export class Resolver implements ExprVisitor<TypeExpr>, StmtVisitor<void> {
     }
     visitCallExpr(expr: CallExpr): TypeExpr {
         const calleeType = this.resolveExpr(expr.callee);
-        if (calleeType instanceof PrimitiveType && calleeType.name.lexeme === "printf") {
-            return new PrimitiveType(new Token(TokenType.Symbol, "void", null, 0, 0));
-        }
-        for (const argument of expr.arguments) {
-            this.resolveExpr(argument);
+        if (calleeType instanceof FunctionType) {
+            for (const i in calleeType.parameters) {
+                const paramType = calleeType.parameters[i]; //形参类型
+                const arg = expr.arguments[i];
+                if (arg) {
+                    const argType = this.resolveExpr(arg);
+                    if (paramType instanceof TempOmittedType) {
+                        break;
+                    }
+                    if (!sameType(paramType, argType)) {
+                        throw this.error(expr.paren, `Type mismatch: ${paramType} != ${argType}`);
+                    }
+                }else {
+                    throw this.error(expr.paren, `Too few arguments for function call`);
+                }
+            }
+            return calleeType.returnType;
         }
         return calleeType;
     }
