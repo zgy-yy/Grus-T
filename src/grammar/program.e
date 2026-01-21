@@ -1,12 +1,10 @@
 
-fun main() i32 {
-  fun foo(i32 a)  i32 {
-  printf("a,%d",a);
-  return 23;
-}
 
- i32 a = foo(2);
-  printf("%d",a);
+fun main() i32 {
+  for(i32 i=0;i<12;i++){
+    printf("%d",i);
+  }
+
   return 0;
 }
 

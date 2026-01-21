@@ -115,6 +115,7 @@ export class Resolver implements ExprVisitor<TypeExpr>, StmtVisitor<void> {
     }
 
     visitFunctionStmt(stmt: FunctionStmt): void {
+        this.beginScope();
         if (stmt.returnType instanceof VoidType) {
             stmt.body.push(new ReturnStmt(new Token(TokenType.Return, "return", null, 0, 0), null));
         }
@@ -123,6 +124,7 @@ export class Resolver implements ExprVisitor<TypeExpr>, StmtVisitor<void> {
         this.define(stmt.name, new FunctionType(stmt.name, stmt.returnType, stmt.parameters.map(param => param.type)));
         this.resolveFunction(stmt);
         this.endFunction(stmt.brace);
+        this.endScope();
     }
 
 
@@ -144,11 +146,14 @@ export class Resolver implements ExprVisitor<TypeExpr>, StmtVisitor<void> {
         this.resolveExpr(stmt.expression);
     }
     visitIfStmt(stmt: IfStmt): void {
+        this.beginScope();
         this.currentFun.ifStack.push('if');
         const conditionType = this.resolveExpr(stmt.condition);
         if (!checkBooleanType(conditionType)) {
             throw this.error(stmt.condition, "Type mismatch: boolean type expected");
         }
+        this.endScope();
+        this.beginScope();
         this.resolveStmt(stmt.thenBranch);
         if (stmt.elseBranch) {
             this.currentFun.ifStack.push('else');
@@ -156,8 +161,10 @@ export class Resolver implements ExprVisitor<TypeExpr>, StmtVisitor<void> {
             this.currentFun.ifStack.pop();
         }
         this.currentFun.ifStack.pop();
+        this.endScope();
     }
     visitWhileStmt(stmt: WhileStmt): void {
+        this.beginScope();
         const conditionType = this.resolveExpr(stmt.condition);
         if (!checkBooleanType(conditionType)) {
             throw this.error(stmt.condition, "Type mismatch: boolean type expected");
@@ -165,8 +172,10 @@ export class Resolver implements ExprVisitor<TypeExpr>, StmtVisitor<void> {
         this.currentFun.loopDepth++;
         this.resolveStmt(stmt.body);
         this.currentFun.loopDepth--;
+        this.endScope();
     }
     visitDoWhileStmt(stmt: DoWhileStmt): void {
+        this.beginScope();
         this.currentFun.loopDepth++;
         this.resolveStmt(stmt.body);
         this.currentFun.loopDepth--;
@@ -174,8 +183,10 @@ export class Resolver implements ExprVisitor<TypeExpr>, StmtVisitor<void> {
         if (!checkBooleanType(conditionType)) {
             throw this.error(stmt.condition, "Type mismatch: boolean type expected");
         }
+        this.endScope();
     }
     visitForStmt(stmt: ForStmt): void {
+        this.beginScope();
         if (stmt.initializer) {
             this.resolveStmt(stmt.initializer);
         }
@@ -189,12 +200,15 @@ export class Resolver implements ExprVisitor<TypeExpr>, StmtVisitor<void> {
         this.currentFun.loopDepth++;
         this.resolveStmt(stmt.body);
         this.currentFun.loopDepth--;
+        this.endScope();
     }
 
     visitLoopStmt(stmt: LoopStmt): void {
+        this.beginScope();
         this.currentFun.loopDepth++;
         this.resolveStmt(stmt.body);
         this.currentFun.loopDepth--;
+        this.endScope();
     }
 
     visitBreakStmt(stmt: BreakStmt): void {

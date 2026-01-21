@@ -119,7 +119,6 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
         }
     }
     visitFunctionStmt(stmt: FunctionStmt): IrFragment {
-        console.log("zzz", stmt);
         this.beginScope();
         Compiler.regI = 0;
         Compiler.ifI = 0;
