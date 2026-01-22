@@ -223,14 +223,12 @@ export class Parser {
         const name = this.consume(TokenType.Identifier, "Expect function name.");
         this.consume(TokenType.LeftParen, "Expect '(' after function name.");
         const parameters: Parameter[] = [];
-        if (!this.check(TokenType.RightParen)) {
-            do {
-                if (parameters.length >= 255) {
-                    throw this.error(this.previous(), "Can't have more than 255 parameters.");
-                }
-                const parameter = this.parameter();
-                parameters.push(...parameter);
-            } while (this.match(TokenType.Comma));
+        while (!this.check(TokenType.RightParen)) {
+            if (parameters.length >= 255) {
+                throw this.error(this.previous(), "Can't have more than 255 parameters.");
+            }
+            const parameter = this.parameter();
+            parameters.push(...parameter);
         }
         this.consume(TokenType.RightParen, "Expect ')' after parameters.");
         let returnType: TypeExpr | null = null;
@@ -252,12 +250,10 @@ export class Parser {
         const type = this.type();
         const parameters: Parameter[] = [];
         do {
-            const saved = this.current;
-            const name = this.consume(TokenType.Identifier, "Expect parameter name.");
-            if (!(this.check(TokenType.Comma) || this.check(TokenType.Equal) || this.check(TokenType.RightParen))) {
-                this.current = saved - 1;
-                return parameters
+            if (this.typeCheck()) {
+                break;
             }
+            const name = this.consume(TokenType.Identifier, "Expect parameter name.");
             const defaultValue = this.match(TokenType.Equal) ? this.expression(Precedence.ASSIGNMENT) : null;
             parameters.push({
                 name,
@@ -506,7 +502,7 @@ export class Parser {
             }
             return new PrimitiveType(name);
         }
-        throw new Error("Expect type.");
+        throw this.error(this.peek(), "Expect type.");
     }
 
     private typeCheck(): boolean {

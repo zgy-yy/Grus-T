@@ -1,10 +1,14 @@
-
-
-fun main() i32 {
-  for(i32 i=0;i<12;i++){
-    printf("%d",i);
-  }
-
-  return 0;
+fun isTrue() bool {
+  return true;
 }
 
+fun isFalse() bool {
+  return false;
+}
+
+fun main() i32 {
+  if (isTrue() && !isFalse()) {
+    printf("ok");
+  }
+  return 0;
+}

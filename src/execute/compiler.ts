@@ -66,9 +66,8 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
     }
 
     compileProgram(stmts: Stmt[]): string {
-        this.beginScope();
-        this.scopes[0].set("printf", new IrVar("@printf", new FunctionType(new Token(TokenType.Symbol, "printf", null, 0, 0), new PrimitiveType(new Token(TokenType.Symbol, "i32", null, 0, 0)), [new PrimitiveType(new Token(TokenType.Symbol, "i8*", null, 0, 0)), new PrimitiveType(new Token(TokenType.Symbol, "...", null, 0, 0))])));
-
+        this.beginScope(stmts);
+        this.define("printf", new FunctionType(new Token(TokenType.Symbol, "printf", null, 0, 0), new PrimitiveType(new Token(TokenType.Symbol, "i32", null, 0, 0)), [new PrimitiveType(new Token(TokenType.Symbol, "i8*", null, 0, 0)), new PrimitiveType(new Token(TokenType.Symbol, "...", null, 0, 0))]));
         this.code = stmts.map(stmt => stmt.accept(this)).join("\n");
         const globalCode = this.globals.join("\n");
         this.code = globalCode + this.code;
@@ -80,14 +79,14 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
         return stmt.accept(this);
     }
     visitBlockStmt(stmt: BlockStmt): IrFragment {
-        this.beginScope();
+        this.beginScope(stmt.statements);
         const code = stmt.statements.map(stmt => stmt.accept(this)).join("\n");
         this.endScope();
         return code;
     }
     visitVarStmt(stmt: VarStmt): IrFragment {
 
-        if (this.scopes.length > 1) {
+        if (this.scopes.length > 1) { //函数内部变量
             return stmt.vars.map(var_ => {
                 const code: IrFragment[] = [];
 
@@ -95,60 +94,51 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
                 const var_ir_type = var_.type.accept(this);
                 const init_comp = var_.initializer?.accept(this) ?? new ExprCompose("void", "zeroinitializer", "");
                 const d = this.findVarDistance(varName);
-                let ir_name = `%${varName}${d > 0 ? d : ''}`;
+                let ir_name = this.define(varName, var_.type);
                 code.push(`${ir_name} = alloca ${var_ir_type}`);
                 code.push(init_comp.ir);
-                const scope = this.scopes[this.scopes.length - 1];
-                scope.set(varName, new IrVar(ir_name, var_.type));
                 const comp = this.matchingTargetType(var_ir_type, init_comp.irtype, init_comp.reg);
                 code.push(comp.ir);
                 code.push(`store ${var_ir_type} ${comp.reg}, ${var_ir_type}* ${ir_name}`);
                 return code.join("\n");
             }).join("\n");
-        } else {
+        } else { //全局变量
             return stmt.vars.map(var_ => {
                 const varName = var_.name.lexeme;
                 const var_ir_type = var_.type.accept(this);
                 const init_comp = var_.initializer?.accept(this) ?? new ExprCompose("void", "zeroinitializer", "");
                 const init_reg = init_comp.reg;
-                let ir_name = `@${varName}`;
-                const scope = this.scopes[this.scopes.length - 1];
-                scope.set(varName, new IrVar(ir_name, var_.type));
+                let ir_name = this.define(varName, var_.type);
                 return `${ir_name} = global ${var_ir_type} ${init_reg}`
             }).join("\n");
         }
     }
     visitFunctionStmt(stmt: FunctionStmt): IrFragment {
-        this.beginScope();
+        this.beginScope(stmt.body);
         Compiler.regI = 0;
         Compiler.ifI = 0;
         const fn_name = stmt.name.lexeme;
         const fn_type = stmt.returnType.accept(this);
-        const globalScope = this.scopes[0]
-        globalScope.set(fn_name, new IrVar(`@${fn_name}`, new FunctionType(stmt.name, stmt.returnType, stmt.parameters.map(param => param.type))));
-        const currentScope = this.scopes[this.scopes.length - 1];
         const param_code_ir: IrFragment[] = [];
         const parameters = stmt.parameters.map(param => {
-            const ir_param_var = `%${param.name.lexeme}.addr`;
-            const ir_param_reg = `%${param.name.lexeme}`;
+            const ir_param_reg = `%${param.name.lexeme}.p`;
             const ir_param_type = param.type.accept(this);
-            currentScope.set(param.name.lexeme, new IrVar(ir_param_var, param.type));
-            param_code_ir.push(`${ir_param_var} = alloca ${ir_param_type}`);
-            param_code_ir.push(`store ${ir_param_type} ${ir_param_reg}, ${ir_param_type}* ${ir_param_var}`);
+            const ir_param_name = this.define(param.name.lexeme, param.type);
+            param_code_ir.push(`${ir_param_name} = alloca ${ir_param_type}`);
+            param_code_ir.push(`store ${ir_param_type} ${ir_param_reg}, ${ir_param_type}* ${ir_param_name}`);
             return {
                 irtype: ir_param_type,
-                reg: `%${param.name.lexeme}`,
+                reg: ir_param_reg,
             }
         });
 
         const fn_body = stmt.body.map(stmt => stmt.accept(this)).join("\n");
-        // console.log("zzz",globalScope,this.scopes);
         const code =
             `define ${fn_type} @${fn_name}(${parameters.map(param => `${param.irtype} ${param.reg}`).join(", ")}) {
     entry:
     ${param_code_ir.join("\n")}
     ${fn_body}
-    ret ${fn_type} zeroinitializer
+    ret ${fn_type} ${fn_type === "void" ? "" : "zeroinitializer"}
 }`;
         this.endScope();
         this.globals.push(code);
@@ -160,9 +150,16 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
         return ir_code;
     }
     visitIfStmt(stmt: IfStmt): IrFragment {
+        this.beginScope(stmt.thenBranch instanceof BlockStmt ? stmt.thenBranch.statements : [stmt.thenBranch]);
         const condition = stmt.condition.accept(this);
         const thenBranch = stmt.thenBranch.accept(this);
-        const elseBranch = stmt.elseBranch?.accept(this) ?? "";
+        this.endScope();
+        let elseBranch = "";
+        if (stmt.elseBranch) {
+            this.beginScope(stmt.elseBranch instanceof BlockStmt ? stmt.elseBranch.statements : [stmt.elseBranch]);
+            elseBranch = stmt.elseBranch.accept(this);
+            this.endScope();
+        }
         const ifI = Compiler.ifI++;
         const thenLabel = `if${ifI}.then`;
         const elseLabel = `if${ifI}.else`;
@@ -181,6 +178,7 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
         return code;
     }
     visitWhileStmt(stmt: WhileStmt): IrFragment {
+        this.beginScope(stmt.body instanceof BlockStmt ? stmt.body.statements : [stmt.body]);
         const whileI = Compiler.whileI++;
         const conditionLabel = `while${whileI}.condition`;
         const bodyLabel = `while${whileI}.body`;
@@ -202,9 +200,11 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
         ${endLabel}:
         `;
         this.LoopStack.pop();
+        this.endScope();
         return code;
     }
     visitDoWhileStmt(stmt: DoWhileStmt): IrFragment {
+        this.beginScope(stmt.body instanceof BlockStmt ? stmt.body.statements : [stmt.body]);
         const doWhileI = Compiler.doWhileI++;
         const conditionLabel = `doWhile${doWhileI}.condition`;
         const bodyLabel = `doWhile${doWhileI}.body`;
@@ -226,9 +226,11 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
         ${endLabel}:
         `;
         this.LoopStack.pop();
+        this.endScope();
         return code;
     }
     visitForStmt(stmt: ForStmt): IrFragment {
+        this.beginScope(stmt.body instanceof BlockStmt ? stmt.body.statements : [stmt.body]);
         const forI = Compiler.forI++;
         const conditionLabel = `for${forI}.condition`;
         const bodyLabel = `for${forI}.body`;
@@ -261,11 +263,13 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
         ${endLabel}:
         `;
         this.LoopStack.pop();
+        this.endScope();
         return code;
 
     }
 
     visitLoopStmt(stmt: LoopStmt): IrFragment {
+        this.beginScope(stmt.body instanceof BlockStmt ? stmt.body.statements : [stmt.body]);
         const loopI = Compiler.loopI++;
         const bodyLabel = `loop${loopI}.body`;
         const endLabel = `loop${loopI}.end`;
@@ -282,6 +286,7 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
         ${endLabel}:
         `;
         this.LoopStack.pop();
+        this.endScope();
         return code;
     }
     visitBreakStmt(stmt: BreakStmt): IrFragment {
@@ -356,7 +361,6 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
                 const checkLabel = `and${andI}.check`;
                 const exitLabel = `and${andI}.exit`;
                 const result_reg = this.reg();
-                console.log("a", right_comp.ir);
                 // 逻辑 AND: 如果 left 为 false，直接返回 false；否则计算 right 并返回其结果
                 const ir_code =
                     `
@@ -478,6 +482,9 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
             case TokenType.Tilde:
                 ir_code.push(`${resultReg} = xor ${ir_type} ${comp.reg}, -1`);
                 break;
+            case TokenType.Bang:
+                ir_code.push(`${resultReg} = xor ${ir_type} ${comp.reg}, 1`);
+                break;
             default:
                 throw this.error(expr.operator, `Unsupported unary operator: ${expr.operator.type}`);
         }
@@ -528,9 +535,7 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
         const ir_code: IrFragment[] = [];
 
         let ir_type = "void";
-        if (expr.callee instanceof FunctionType) {
-            ir_type = expr.callee.returnType.accept(this);
-        }
+  
         // 检查是否是可变参数函数（如printf）
         let isVariadic = false;
         if (expr.callee instanceof VariableExpr) {
@@ -540,6 +545,7 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
                 isVariadic = irVar.type.parameters.some(param =>
                     param instanceof PrimitiveType && param.name.lexeme === "..."
                 );
+                ir_type = irVar.type.returnType.accept(this);
             }
         }
 
@@ -565,7 +571,13 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
             };
         });
 
-        ir_code.push(`${reg} = call ${callee.irtype} ${callee.reg}(${arg_comps.map(arg => `${arg.irtype} ${arg.reg}`).join(", ")})`);
+        const call_ir = `call ${callee.irtype} ${callee.reg}(${arg_comps.map(arg => `${arg.irtype} ${arg.reg}`).join(", ")})`;
+        if (ir_type === "void") {
+            ir_code.push(call_ir);
+            return new ExprCompose(ir_type, reg, ir_code.join("\n"));
+        }
+
+        ir_code.push(`${reg} = ${call_ir}`);
         return new ExprCompose(ir_type, reg, ir_code.join("\n"));
     }
     visitSetExpr(expr: SetExpr): ExprCompose {
@@ -599,7 +611,7 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
             return new ExprCompose("i8*", globalReg, "");
         } else if (typeof expr.value === "number") {
             if (!Number.isInteger(expr.value)) {
-                return new ExprCompose("float", expr.value?.toString() ?? "", "");
+                return new ExprCompose("float", `${expr.value.toString()}`, "");
             } else {
                 return new ExprCompose("i32", expr.value?.toString() ?? "", "");
             }
@@ -630,18 +642,27 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
     }
 
     //作用域
-    beginScope(): void {
+    beginScope(stmts: Stmt[]): void {
         this.scopes.push(new Map<string, IrVar>());
+        for (const stmt of stmts) {
+            if (stmt instanceof FunctionStmt) {
+                this.define(stmt.name.lexeme, new FunctionType(stmt.name, stmt.returnType, stmt.parameters.map(param => param.type)));
+            }
+        }
     }
     endScope(): void {
         this.scopes.pop();
     }
 
-    define(name: string, type: TypeExpr): void {
-        this.scopes[this.scopes.length - 1].set(name, new IrVar(name, type));
+    define(name: string, type: TypeExpr): Reg {
+        const currentScope = this.scopes[this.scopes.length - 1];
+        const distance = this.findVarDistance(name);
+        const prefix = this.scopes.length == 1 || type instanceof FunctionType ? "@" : "%";
+        const ir_name = `${prefix}${name}${distance > 0 ? distance : ''}`;
+        currentScope.set(name, new IrVar(ir_name, type));
+        return ir_name;
     }
     findIrVar(sourceName: Token): IrVar {
-        // console.log(sourceName,this.scopes);
         for (let i = this.scopes.length - 1; i >= 0; i--) {
             const scope = this.scopes[i];
             const ir_var = scope.get(sourceName.lexeme);

@@ -65,12 +65,12 @@ export class Resolver implements ExprVisitor<TypeExpr>, StmtVisitor<void> {
         this.errorHandler = errorHandler;
     }
 
-    resolveProgram(nodes: Stmt[]): void {
+    resolveProgram(stmts: Stmt[]): void {
         try {
-            this.beginScope();
+            this.beginScope(stmts);
             const globalScope = this.scopes[this.scopes.length - 1];
             globalScope.set("printf", { type: new FunctionType(new Token(TokenType.Symbol, "printf", null, 0, 0), new PrimitiveType(new Token(TokenType.Symbol, "i32", null, 0, 0)), [new PrimitiveType(new Token(TokenType.Symbol, "i8*", null, 0, 0)), new TempOmittedType()]), defined: true });
-            for (const stmt of nodes) {
+            for (const stmt of stmts) {
                 this.resolveStmt(stmt);
             }
             this.endScope();
@@ -107,7 +107,7 @@ export class Resolver implements ExprVisitor<TypeExpr>, StmtVisitor<void> {
     }
 
     visitBlockStmt(stmt: BlockStmt): void {
-        this.beginScope();
+        this.beginScope(stmt.statements);
         for (const statement of stmt.statements) {
             this.resolveStmt(statement);
         }
@@ -115,16 +115,8 @@ export class Resolver implements ExprVisitor<TypeExpr>, StmtVisitor<void> {
     }
 
     visitFunctionStmt(stmt: FunctionStmt): void {
-        this.beginScope();
-        if (stmt.returnType instanceof VoidType) {
-            stmt.body.push(new ReturnStmt(new Token(TokenType.Return, "return", null, 0, 0), null));
-        }
-        this.beginFunction(stmt.returnType);
-        this.declare(stmt.name);
-        this.define(stmt.name, new FunctionType(stmt.name, stmt.returnType, stmt.parameters.map(param => param.type)));
+
         this.resolveFunction(stmt);
-        this.endFunction(stmt.brace);
-        this.endScope();
     }
 
 
@@ -146,25 +138,26 @@ export class Resolver implements ExprVisitor<TypeExpr>, StmtVisitor<void> {
         this.resolveExpr(stmt.expression);
     }
     visitIfStmt(stmt: IfStmt): void {
-        this.beginScope();
+        this.beginScope(stmt.thenBranch instanceof BlockStmt ? stmt.thenBranch.statements : [stmt.thenBranch]);
         this.currentFun.ifStack.push('if');
         const conditionType = this.resolveExpr(stmt.condition);
         if (!checkBooleanType(conditionType)) {
             throw this.error(stmt.condition, "Type mismatch: boolean type expected");
         }
-        this.endScope();
-        this.beginScope();
+
         this.resolveStmt(stmt.thenBranch);
         if (stmt.elseBranch) {
+            this.beginScope(stmt.elseBranch instanceof BlockStmt ? stmt.elseBranch.statements : [stmt.elseBranch]);
             this.currentFun.ifStack.push('else');
             this.resolveStmt(stmt.elseBranch);
             this.currentFun.ifStack.pop();
+            this.endScope();
         }
         this.currentFun.ifStack.pop();
         this.endScope();
     }
     visitWhileStmt(stmt: WhileStmt): void {
-        this.beginScope();
+        this.beginScope(stmt.body instanceof BlockStmt ? stmt.body.statements : [stmt.body]);
         const conditionType = this.resolveExpr(stmt.condition);
         if (!checkBooleanType(conditionType)) {
             throw this.error(stmt.condition, "Type mismatch: boolean type expected");
@@ -175,7 +168,7 @@ export class Resolver implements ExprVisitor<TypeExpr>, StmtVisitor<void> {
         this.endScope();
     }
     visitDoWhileStmt(stmt: DoWhileStmt): void {
-        this.beginScope();
+        this.beginScope(stmt.body instanceof BlockStmt ? stmt.body.statements : [stmt.body]);
         this.currentFun.loopDepth++;
         this.resolveStmt(stmt.body);
         this.currentFun.loopDepth--;
@@ -186,7 +179,7 @@ export class Resolver implements ExprVisitor<TypeExpr>, StmtVisitor<void> {
         this.endScope();
     }
     visitForStmt(stmt: ForStmt): void {
-        this.beginScope();
+        this.beginScope(stmt.body instanceof BlockStmt ? stmt.body.statements : [stmt.body]);
         if (stmt.initializer) {
             this.resolveStmt(stmt.initializer);
         }
@@ -204,7 +197,7 @@ export class Resolver implements ExprVisitor<TypeExpr>, StmtVisitor<void> {
     }
 
     visitLoopStmt(stmt: LoopStmt): void {
-        this.beginScope();
+        this.beginScope(stmt.body instanceof BlockStmt ? stmt.body.statements : [stmt.body]);
         this.currentFun.loopDepth++;
         this.resolveStmt(stmt.body);
         this.currentFun.loopDepth--;
@@ -259,8 +252,15 @@ export class Resolver implements ExprVisitor<TypeExpr>, StmtVisitor<void> {
     visitVariableExpr(expr: VariableExpr): TypeExpr {
         if (this.scopes.length > 0) {
             const scope = this.scopes[this.scopes.length - 1];
-            if (scope.get(expr.name.lexeme)?.defined === false) {
-                throw this.error(expr.name, `cannot read local variable in its own initializer.`);
+            const var_ = scope.get(expr.name.lexeme);
+            if (var_) {
+                if (var_.type instanceof FunctionType) {
+
+                } else {
+                    if (!var_.defined) {
+                        throw this.error(expr.name, `cannot read local variable in its own initializer.`);
+                    }
+                }
             }
         }
         const type = this.resolveLocal(expr.name);
@@ -373,15 +373,16 @@ export class Resolver implements ExprVisitor<TypeExpr>, StmtVisitor<void> {
             for (const i in calleeType.parameters) {
                 const paramType = calleeType.parameters[i]; //形参类型
                 const arg = expr.arguments[i];
+                if (paramType instanceof TempOmittedType) {
+                    break;
+                }
                 if (arg) {
                     const argType = this.resolveExpr(arg);
-                    if (paramType instanceof TempOmittedType) {
-                        break;
-                    }
+
                     if (!sameType(paramType, argType)) {
                         throw this.error(expr.paren, `Type mismatch: ${paramType} != ${argType}`);
                     }
-                }else {
+                } else {
                     throw this.error(expr.paren, `Too few arguments for function call`);
                 }
             }
@@ -409,7 +410,8 @@ export class Resolver implements ExprVisitor<TypeExpr>, StmtVisitor<void> {
 
 
     resolveFunction(stmt: FunctionStmt): void {
-        this.beginScope();
+        this.beginScope(stmt.body);
+        this.beginFunction(stmt.returnType);
         for (const param of stmt.parameters) {
             this.declare(param.name);
             this.define(param.name, param.type);
@@ -417,15 +419,25 @@ export class Resolver implements ExprVisitor<TypeExpr>, StmtVisitor<void> {
         for (const bodyStmt of stmt.body) {
             this.resolveStmt(bodyStmt);
         }
+
+        this.endFunction(stmt.brace);
         this.endScope();
     }
 
 
-    beginScope(): void {
-        this.scopes.push(new Map<string, {
+    beginScope(stmts: Stmt[]): void {
+        const scope = new Map<string, {
             type: TypeExpr;
             defined: boolean;
-        }>());
+        }>()
+        this.scopes.push(scope);
+        for (const stmt of stmts) {
+            if (stmt instanceof FunctionStmt) {
+                this.declare(stmt.name);
+                this.define(stmt.name, new FunctionType(stmt.name, stmt.returnType, stmt.parameters.map(param => param.type)));
+            }
+        }
+
     }
     endScope(): void {
         this.scopes.pop();
@@ -459,7 +471,14 @@ export class Resolver implements ExprVisitor<TypeExpr>, StmtVisitor<void> {
     define(name: Token, type: TypeExpr): void {
         if (this.scopes.length > 0) {
             const scope = this.scopes[this.scopes.length - 1];
-            scope.set(name.lexeme, { type: type, defined: true });
+            const declared = scope.get(name.lexeme);
+            if (declared) {
+                declared.defined = true;
+                declared.type = type;
+            } else {
+                throw this.error(name, `Variable with this name ${name.lexeme} not declared in this scope.`);
+            }
+
         }
     }
 
@@ -471,13 +490,12 @@ export class Resolver implements ExprVisitor<TypeExpr>, StmtVisitor<void> {
             if (scope.has(name)) {
                 const type = scope.get(name)?.type;
                 if (!type) {
-                    throw new Error(`Variable ${name} type not defined`);
+                    throw this.error(vname, `Variable ${name} type not defined`);
                 }
-                // distance is the number of scopes from the current scope to the global scope
                 return type;
             }
         }
-        throw this.error(vname, `Variable ${name} not found`);
+        throw this.error(vname, `Variable ${name} not found in any scope`);
     }
 
 
