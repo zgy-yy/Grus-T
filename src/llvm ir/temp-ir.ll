@@ -6,14 +6,7 @@ define i1 @isTrue() {
 ret i1 1
     ret i1 zeroinitializer
 }
-define i1 @isFalse() {
-    entry:
-    
-    
-ret i1 0
-    ret i1 zeroinitializer
-}
-@.constant_2 = private unnamed_addr constant [4 x i8] c"ok\0A\00", align 1
+@.constant_1 = private unnamed_addr constant [4 x i8] c"ok\0A\00", align 1
 
 define i32 @main() {
     entry:
@@ -34,7 +27,7 @@ define i32 @main() {
         br i1 %r4, label %if0.then, label %if0.else
         if0.then:
             
-%r5 = call i32(i8*, ...) @printf(i8* @.constant_2)
+%r5 = call i32(i8*, ...) @printf(i8* @.constant_1)
             br label %if0.end
         if0.else:
             
@@ -44,5 +37,12 @@ define i32 @main() {
 
 ret i32 0
     ret i32 zeroinitializer
+}
+define i1 @isFalse() {
+    entry:
+    
+    
+ret i1 0
+    ret i1 zeroinitializer
 }
 

@@ -1,14 +1,6 @@
-fun isTrue() bool {
-  return true;
-}
-
-fun isFalse() bool {
-  return false;
-}
-
 fun main() i32 {
-  if (isTrue() && !isFalse()) {
-    printf("ok");
+  for (let i = 0; i < 3; i = i + 1) {
+    printf("%d", i);
   }
   return 0;
 }

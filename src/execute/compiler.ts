@@ -1,5 +1,5 @@
 import { AssignExpr, BinaryExpr, CallExpr, ConditionalExpr, Expr, ExprVisitor, GetExpr, LiteralExpr, LogicalExpr, PostfixExpr, PrefixExpr, SetExpr, ThisExpr, UnaryExpr, VariableExpr } from "@/ast/Expr";
-import { FunctionType, PrimitiveType, TempOmittedType, TypeExpr, TypesVisitor, VoidType } from "@/ast/TypeExpr";
+import { FunctionTypeExpr, PrimitiveTypeExpr, TempOmittedTypeExpr, TypeExpr, TypesExprVisitor,  } from "@/ast/TypeExpr";
 import { BlockStmt, BreakStmt, ClassStmt, ContinueStmt, DoWhileStmt, ExpressionStmt, ForStmt, FunctionStmt, GotoStmt, IfStmt, LabelStmt, LoopStmt, ReturnStmt, StmtVisitor, VarStmt, WhileStmt } from "@/ast/Stmt";
 import { Stmt } from "@/ast/Stmt";
 import { CompilerErrorHandler } from "@/parser/ErrorHandler";
@@ -45,7 +45,7 @@ class IrVar {
     }
 }
 
-export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragment>, TypesVisitor<IrFragment> {
+export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragment>, TypesExprVisitor<IrFragment> {
     static constStrI: number = 0;
     static regI: number = 0;
     static ifI: number = 0;
@@ -62,12 +62,13 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
     scopes: Map<string, IrVar>[] = []; // sourceName -> compiledName
     globals: string[] = ["declare i32 @printf(i8*, ...)"];
     code: string = "";
+    captured: VarStmt[] = [];
     constructor(private readonly errorHandler: CompilerErrorHandler) {
     }
 
     compileProgram(stmts: Stmt[]): string {
         this.beginScope(stmts);
-        this.define("printf", new FunctionType(new Token(TokenType.Symbol, "printf", null, 0, 0), new PrimitiveType(new Token(TokenType.Symbol, "i32", null, 0, 0)), [new PrimitiveType(new Token(TokenType.Symbol, "i8*", null, 0, 0)), new PrimitiveType(new Token(TokenType.Symbol, "...", null, 0, 0))]));
+        this.define("printf", new FunctionTypeExpr(new Token(TokenType.Identifier, "printf", null, 0, 0), new PrimitiveTypeExpr(new Token(TokenType.Identifier, "i32", null, 0, 0)), [new PrimitiveTypeExpr(new Token(TokenType.Identifier, "i8*", null, 0, 0)), new PrimitiveTypeExpr(new Token(TokenType.Identifier, "...", null, 0, 0))]));
         this.code = stmts.map(stmt => stmt.accept(this)).join("\n");
         const globalCode = this.globals.join("\n");
         this.code = globalCode + this.code;
@@ -117,10 +118,10 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
         this.beginScope(stmt.body);
         Compiler.regI = 0;
         Compiler.ifI = 0;
-        const fn_name = stmt.name.lexeme;
-        const fn_type = stmt.returnType.accept(this);
+        const fn_name = stmt.fun.name.lexeme;
+        const returnType = stmt.fun.returnType.accept(this);
         const param_code_ir: IrFragment[] = [];
-        const parameters = stmt.parameters.map(param => {
+        const parameters = stmt.fun.parameters.map(param => {
             const ir_param_reg = `%${param.name.lexeme}.p`;
             const ir_param_type = param.type.accept(this);
             const ir_param_name = this.define(param.name.lexeme, param.type);
@@ -134,11 +135,11 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
 
         const fn_body = stmt.body.map(stmt => stmt.accept(this)).join("\n");
         const code =
-            `define ${fn_type} @${fn_name}(${parameters.map(param => `${param.irtype} ${param.reg}`).join(", ")}) {
+            `define ${returnType} @${fn_name}(${parameters.map(param => `${param.irtype} ${param.reg}`).join(", ")}) {
     entry:
     ${param_code_ir.join("\n")}
     ${fn_body}
-    ret ${fn_type} ${fn_type === "void" ? "" : "zeroinitializer"}
+    ret ${returnType} ${returnType === "void" ? "" : "zeroinitializer"}
 }`;
         this.endScope();
         this.globals.push(code);
@@ -535,15 +536,15 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
         const ir_code: IrFragment[] = [];
 
         let ir_type = "void";
-  
+
         // 检查是否是可变参数函数（如printf）
         let isVariadic = false;
         if (expr.callee instanceof VariableExpr) {
             const irVar = this.findIrVar(expr.callee.name);
-            if (irVar.type instanceof FunctionType) {
+            if (irVar.type instanceof FunctionTypeExpr) {
                 // 检查参数列表中是否包含"..."（可变参数）
                 isVariadic = irVar.type.parameters.some(param =>
-                    param instanceof PrimitiveType && param.name.lexeme === "..."
+                    param instanceof PrimitiveTypeExpr && param.name.lexeme === "..."
                 );
                 ir_type = irVar.type.returnType.accept(this);
             }
@@ -591,7 +592,7 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
     }
     visitVariableExpr(expr: VariableExpr): ExprCompose {
         const irVar = this.findIrVar(expr.name);
-        if (irVar.type instanceof FunctionType) {
+        if (irVar.type instanceof FunctionTypeExpr) {
             const ir_type = irVar.type.accept(this);
             // 对于函数类型，直接返回函数名（如 @printf），不需要创建寄存器
             return new ExprCompose(ir_type, irVar.name, "", irVar.name);
@@ -623,21 +624,20 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
 
     //编译类型表达式
 
-    visitPrimitiveType(expr: PrimitiveType): string {
+    visitPrimitiveTypeExpr(expr: PrimitiveTypeExpr): string {
         if (expr.name.lexeme === "string") {
             return "i8*";
         }
+        if (expr.name.lexeme === "bool") {
+            return "i1";
+        }
         return expr.name.lexeme;
     }
-    visitFunctionType(expr: FunctionType): string {
+    visitFunctionTypeExpr(expr: FunctionTypeExpr): string {
         return expr.returnType.accept(this) + "(" + expr.parameters.map(parameter => parameter.accept(this)).join(", ") + ")";
     }
 
-    visitVoidType(expr: VoidType): string {
-        return "void";
-    }
-
-    visitTempOmittedType(expr: TempOmittedType): string {
+    visitTempOmittedTypeExpr(expr: TempOmittedTypeExpr): string {
         return "...";
     }
 
@@ -646,7 +646,7 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
         this.scopes.push(new Map<string, IrVar>());
         for (const stmt of stmts) {
             if (stmt instanceof FunctionStmt) {
-                this.define(stmt.name.lexeme, new FunctionType(stmt.name, stmt.returnType, stmt.parameters.map(param => param.type)));
+                this.define(stmt.fun.name.lexeme, stmt.fun.type);
             }
         }
     }
@@ -657,7 +657,7 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
     define(name: string, type: TypeExpr): Reg {
         const currentScope = this.scopes[this.scopes.length - 1];
         const distance = this.findVarDistance(name);
-        const prefix = this.scopes.length == 1 || type instanceof FunctionType ? "@" : "%";
+        const prefix = this.scopes.length == 1 || type instanceof FunctionTypeExpr ? "@" : "%";
         const ir_name = `${prefix}${name}${distance > 0 ? distance : ''}`;
         currentScope.set(name, new IrVar(ir_name, type));
         return ir_name;

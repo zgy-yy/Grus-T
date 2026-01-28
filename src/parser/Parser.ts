@@ -3,7 +3,7 @@ import { ParserErrorHandler } from "./ErrorHandler";
 import { TokenType } from "@/ast/TokenType";
 import { AssignExpr, BinaryExpr, CallExpr, Expr, LiteralExpr, PostfixExpr, PrefixExpr, ThisExpr, UnaryExpr, VariableExpr } from "@/ast/Expr";
 import { BlockStmt, BreakStmt, ContinueStmt, DoWhileStmt, ExpressionStmt, ForStmt, FunctionStmt, GotoStmt, IfStmt, LabelStmt, LoopStmt, Parameter, ReturnStmt, Stmt, Variable, VarStmt, WhileStmt } from "@/ast/Stmt";
-import { PrimitiveType, TypeExpr, VoidType } from "@/ast/TypeExpr";
+import { PrimitiveTypeExpr, TypeExpr } from "@/ast/TypeExpr";
 
 class SyntaxError extends Error {
     public token: Token;
@@ -50,7 +50,6 @@ type ParseRule = [
 ]
 
 export class Parser {
-    private GRUS_TYPES = ['bool', "i8", "i16", "i32", "i64", "float", "double"];
     private current: number = 0;
     private readonly tokens: Token[];
     public errorHandler: ParserErrorHandler;
@@ -134,7 +133,6 @@ export class Parser {
         [TokenType.Fun]: [null, null, Precedence.NONE],// fun
         [TokenType.EOF]: [null, null, Precedence.NONE],// eof
         [TokenType.If]: [null, null, Precedence.NONE],// if
-        [TokenType.Symbol]: [null, null, Precedence.NONE],// symbol
         [TokenType.Return]: [null, null, Precedence.NONE],// return
         [TokenType.Goto]: [null, null, Precedence.NONE],// goto
     };
@@ -174,7 +172,7 @@ export class Parser {
             if (this.match(TokenType.Let)) {
                 return this.varDeclaration(null);
             }
-            if (this.typeCheck()) {
+            if (this.typeDeclarCheck()) {
                 const type = this.type();
                 return this.varDeclaration(type);
             }
@@ -212,7 +210,7 @@ export class Parser {
             const name = this.consume(TokenType.Identifier, "Expect variable name.");
             const initializer = this.match(TokenType.Equal) ? this.expression(Precedence.ASSIGNMENT) : null;
             const type = t as unknown as TypeExpr;
-            vars.push({ name, type, initializer });
+            vars.push(new Variable(name, type, initializer));
         } while (this.match(TokenType.Comma));
         this.consume(TokenType.Semicolon, "Expect ';' after variable declaration.");
         return new VarStmt(vars);
@@ -233,7 +231,8 @@ export class Parser {
         this.consume(TokenType.RightParen, "Expect ')' after parameters.");
         let returnType: TypeExpr | null = null;
         if (this.check(TokenType.LeftBrace)) {
-            returnType = new VoidType(this.previous());
+            const token = this.previous();
+            returnType = new PrimitiveTypeExpr(new Token(TokenType.Identifier, "void", null, token.line, token.column));
         } else {
             returnType = this.type();
         }
@@ -250,16 +249,12 @@ export class Parser {
         const type = this.type();
         const parameters: Parameter[] = [];
         do {
-            if (this.typeCheck()) {
+            if (this.typeDeclarCheck()) {
                 break;
             }
             const name = this.consume(TokenType.Identifier, "Expect parameter name.");
             const defaultValue = this.match(TokenType.Equal) ? this.expression(Precedence.ASSIGNMENT) : null;
-            parameters.push({
-                name,
-                type,
-                defaultValue
-            });
+            parameters.push(new Parameter(name, type, defaultValue));
         } while (this.match(TokenType.Comma));
         return parameters;
     }
@@ -369,7 +364,7 @@ export class Parser {
             initializer = null;
         } else if (this.match(TokenType.Let)) {
             initializer = this.varDeclaration(null);
-        } else if (this.typeCheck()) {
+        } else if (this.typeDeclarCheck()) {
             const type = this.type();
             initializer = this.varDeclaration(type);
         } else {
@@ -495,19 +490,22 @@ export class Parser {
 
 
     private type(): TypeExpr {
-        if (this.match(TokenType.Symbol)) {
+        if (this.match(TokenType.Identifier)) {
             const name = this.previous();
-            if (name.lexeme === 'void') {
-                return new VoidType(name);
-            }
-            return new PrimitiveType(name);
+            return new PrimitiveTypeExpr(name);
         }
         throw this.error(this.peek(), "Expect type.");
     }
 
-    private typeCheck(): boolean {
-        if (this.check(TokenType.Symbol)) {
-            return true;
+    // 检查是否是类型声明
+    private typeDeclarCheck(): boolean {
+        // 如果连续两个token都是标识符，则认为第一个是类型声明
+        if (this.match(TokenType.Identifier)) {
+            if (this.check(TokenType.Identifier)) {
+                this.back();
+                return true;
+            }
+            this.back();
         }
         return false;
     }

@@ -75,7 +75,6 @@ export enum TokenType {
     Continue = 'CONTINUE',// continue
     // 标识符
     Identifier = 'IDENTIFIER',// identifier
-    Symbol = 'SYMBOL',// symbol 用于表示自定义类型
     // 字面量
     String = 'STRING',// string
     Number = 'NUMBER',// number

@@ -2,9 +2,6 @@ import { Token } from '@/ast/Token.ts';
 import { TokenType } from '@/ast/TokenType.ts';
 import { ScannerErrorHandler } from './ErrorHandler';
 import { GrusValue } from '@/ast/GrusValue';
-
-const PrimitiveTypes = ['void', 'bool', "i8", "i16", "i32", "i64", "float", "double"];
-
 // 关键字映射
 const keywords = new Map<string, TokenType>([
   ['new', TokenType.New],
@@ -267,13 +264,6 @@ export class Scanner {
 
     const text = this.source.substring(this.start, this.current);
     let type = keywords.get(text) || TokenType.Identifier;
-    if (PrimitiveTypes.includes(text)) {
-      type = TokenType.Symbol;
-    }
-    const lastToken = this.tokens[this.tokens.length - 1];
-    if (lastToken && lastToken.type === TokenType.Class) {
-      type = TokenType.Symbol;
-    }
     this.addToken(type);
   }
 
