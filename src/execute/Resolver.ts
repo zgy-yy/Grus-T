@@ -4,7 +4,7 @@ import { BlockStmt, BreakStmt, ClassStmt, ContinueStmt, DoWhileStmt, ExpressionS
 import { Token } from "@/ast/Token";
 import { ParserErrorHandler } from "@/parser/ErrorHandler";
 import { TokenType } from "@/ast/TokenType";
-import { GType, Primitive, SimpleGType, FunctionGType, TempOmittedGType } from "./GType";
+import { GType, Primitive, SimpleType, FunctionType, TempOmittedType } from "./GTypes";
 
 
 class FunEnv {
@@ -79,7 +79,7 @@ export class Resolver implements ExprVisitor<GType>, StmtVisitor<void>, TypesExp
             this.beginScope(stmts);
             const globalScope = this.scopes[this.scopes.length - 1];
             globalScope.set("printf", new Member(new Variable(new Token(TokenType.Identifier, "printf", null, 0, 0),
-                new FunctionTypeExpr(new Token(TokenType.Identifier, "printf", null, 0, 0), new PrimitiveTypeExpr(new Token(TokenType.Identifier, "i32", null, 0, 0)), []), null), new FunctionGType(new SimpleGType("i32"), []), true));
+                new FunctionTypeExpr(new Token(TokenType.Identifier, "printf", null, 0, 0), new PrimitiveTypeExpr(new Token(TokenType.Identifier, "i32", null, 0, 0)), []), null), new FunctionType(new SimpleType("i32"), []), true));
             for (const stmt of stmts) {
                 this.resolveStmt(stmt);
             }
@@ -102,7 +102,7 @@ export class Resolver implements ExprVisitor<GType>, StmtVisitor<void>, TypesExp
             if (_var.initializer) {
                 const initType = this.resolveExpr(_var.initializer);
                 if (_var.type === null) {
-                    if (initType instanceof SimpleGType) {
+                    if (initType instanceof SimpleType) {
                         _var.type = new PrimitiveTypeExpr(new Token(TokenType.Identifier, initType.name, null, _var.name.line, _var.name.column));
                     }
                 }
@@ -247,7 +247,7 @@ export class Resolver implements ExprVisitor<GType>, StmtVisitor<void>, TypesExp
         currentGotoLabels.push(label);
     }
     visitReturnStmt(stmt: ReturnStmt): void {
-        if (this.currentFun.returnType instanceof SimpleGType && this.currentFun.returnType.name === "void") {
+        if (this.currentFun.returnType instanceof SimpleType && this.currentFun.returnType.name === "void") {
             if (stmt.value) {
                 throw this.error(stmt.keyword, `Cannot return a value from a function with no return type.`);
             }
@@ -270,7 +270,7 @@ export class Resolver implements ExprVisitor<GType>, StmtVisitor<void>, TypesExp
             const scope = this.scopes[this.scopes.length - 1];
             const var_ = scope.get(expr.name.lexeme);
             if (var_) {
-                if (var_.type instanceof FunctionGType) {
+                if (var_.type instanceof FunctionType) {
 
                 } else {
                     if (!var_.defined) {
@@ -310,7 +310,7 @@ export class Resolver implements ExprVisitor<GType>, StmtVisitor<void>, TypesExp
                 throw this.error(expr.operator, `Type mismatch: ${leftType} != ${rightType}`);
             }
         } else if (['!=', '==', '>', '>=', '<', '<='].includes(expr.operator.lexeme)) {
-            leftType = new SimpleGType("bool");
+            leftType = new SimpleType("bool");
         } else if (['&&', '||'].includes(expr.operator.lexeme)) {
             if (!checkBooleanType(leftType) || !checkBooleanType(rightType)) {
                 throw this.error(expr.operator, "Type mismatch: boolean type expected");
@@ -350,18 +350,18 @@ export class Resolver implements ExprVisitor<GType>, StmtVisitor<void>, TypesExp
     visitLiteralExpr(expr: LiteralExpr): GType {
         let literalType: GType;
         if (typeof expr.value === "string") {
-            literalType = new SimpleGType("string");
+            literalType = new SimpleType("string");
         } else if (typeof expr.value === "number") {
             if (!Number.isInteger(expr.value)) {
-                literalType = new SimpleGType("float");
+                literalType = new SimpleType("float");
 
             } else {
-                literalType = new SimpleGType("i32");
+                literalType = new SimpleType("i32");
             }
         } else if (typeof expr.value === "boolean") {
-            literalType = new SimpleGType("bool");
+            literalType = new SimpleType("bool");
         } else {
-            literalType = new SimpleGType("void");
+            literalType = new SimpleType("void");
         }
         return literalType;
     }
@@ -385,11 +385,11 @@ export class Resolver implements ExprVisitor<GType>, StmtVisitor<void>, TypesExp
     }
     visitCallExpr(expr: CallExpr): GType {
         const calleeType = this.resolveExpr(expr.callee);
-        if (calleeType instanceof FunctionGType) {
+        if (calleeType instanceof FunctionType) {
             for (const i in calleeType.parameters) {
                 const paramType = calleeType.parameters[i]; //形参类型
                 const arg = expr.arguments[i];
-                if (paramType instanceof TempOmittedGType) {
+                if (paramType instanceof TempOmittedType) {
                     break;
                 }
                 if (arg) {
@@ -425,13 +425,13 @@ export class Resolver implements ExprVisitor<GType>, StmtVisitor<void>, TypesExp
     }
 
     visitPrimitiveTypeExpr(expr: PrimitiveTypeExpr): GType {
-        return new SimpleGType(expr.name.lexeme as Primitive);
+        return new SimpleType(expr.name.lexeme as Primitive);
     }
     visitFunctionTypeExpr(expr: FunctionTypeExpr): GType {
-        return new FunctionGType(expr.returnType.accept(this), expr.parameters.map(param => param.accept(this)));
+        return new FunctionType(expr.returnType.accept(this), expr.parameters.map(param => param.accept(this)));
     }
     visitTempOmittedTypeExpr(expr: TempOmittedTypeExpr): GType {
-        return new TempOmittedGType();
+        return new TempOmittedType();
     }
 
 
@@ -468,7 +468,7 @@ export class Resolver implements ExprVisitor<GType>, StmtVisitor<void>, TypesExp
 
     beginFunction(returnType: GType): void {
         const env = new FunEnv(returnType);
-        if (returnType instanceof SimpleGType && returnType.name === "void") {
+        if (returnType instanceof SimpleType && returnType.name === "void") {
             env.rightReturned = true;
         }
         this.funEnvs.push(env);
@@ -542,7 +542,7 @@ export class Resolver implements ExprVisitor<GType>, StmtVisitor<void>, TypesExp
 
 function checkSameType(left: GType, right: GType): boolean {
     const numberTypes = ["i8", "i16", "i32", "i64", "float", "double"];
-    if (left instanceof SimpleGType && right instanceof SimpleGType) {
+    if (left instanceof SimpleType && right instanceof SimpleType) {
         if (left.name === "bool" && right.name === "bool") {
             return true;
         }
@@ -555,7 +555,7 @@ function checkSameType(left: GType, right: GType): boolean {
 }
 
 function checkBooleanType(type: GType): boolean {
-    return type instanceof SimpleGType && type.name === "bool";
+    return type instanceof SimpleType && type.name === "bool";
 }
 
 function checkNumberType(type: GType): boolean {
@@ -564,14 +564,14 @@ function checkNumberType(type: GType): boolean {
 
 function checkIntegerType(type: GType): boolean {
     const integerTypes = ["i8", "i16", "i32", "i64"];
-    if (type instanceof SimpleGType) {
+    if (type instanceof SimpleType) {
         return integerTypes.includes(type.name);
     }
     return false;
 }
 
 function checkFloatType(type: GType): boolean {
-    if (type instanceof SimpleGType) {
+    if (type instanceof SimpleType) {
         return ["float", "double"].includes(type.name);
     }
     return false;

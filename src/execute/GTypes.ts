@@ -7,7 +7,7 @@ export interface GType {
 
 export type Primitive = 'void'| 'bool'| 'i8'| 'i16'| 'i32'| 'i64'| 'float'| 'double'| 'string';
 
-export class SimpleGType implements GType {
+export class SimpleType implements GType {
     a=1;
     name: Primitive;
     constructor(name: Primitive) {
@@ -15,7 +15,7 @@ export class SimpleGType implements GType {
     }
 }
 
-export class FunctionGType implements GType {
+export class FunctionType implements GType {
     a=2;
     returnType: GType;
     parameters: GType[];
@@ -26,7 +26,7 @@ export class FunctionGType implements GType {
 }
 
 
-export class TempOmittedGType implements GType {
+export class TempOmittedType implements GType {
     a=3;
     name: string;
     constructor() {
