@@ -3,7 +3,7 @@ declaration    → classDecl
                | funDecl
                | varDecl;
 
-varDecl        → ("let"|typeExpr) IDENTIFIER  ( "=" expression )? ";" ;
+varDecl        → ("let" | "const") (typeExpr)? IDENTIFIER  ( "=" expression )? ";" ;
 funDecl        → "fun" function ;
 
 

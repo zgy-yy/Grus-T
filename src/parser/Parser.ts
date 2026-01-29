@@ -109,6 +109,7 @@ export class Parser {
         [TokenType.String]: [this.primary.bind(this), null, Precedence.NONE],// string 
         [TokenType.Null]: [this.primary.bind(this), null, Precedence.NONE],// null
         [TokenType.Identifier]: [this.primary.bind(this), null, Precedence.NONE],// identifier
+        [TokenType.Arrow]: [null, null, Precedence.NONE],// ->
 
         [TokenType.RightParen]: [null, null, Precedence.NONE],//)
         [TokenType.LeftBrace]: [null, null, Precedence.NONE],//{
@@ -170,20 +171,15 @@ export class Parser {
     private declaration(program: boolean = false): Stmt | null {
         try {
             if (this.match(TokenType.Let)) {
-                return this.varDeclaration(null);
-            }
-            if (this.typeDeclarCheck()) {
-                const type = this.type();
-                return this.varDeclaration(type);
-            }
-            if (this.match(TokenType.Fun)) {
-                return this.funDeclaration();
+                return this.varDeclaration();
             }
             if (this.match(TokenType.Class)) {
                 // return this.classDeclaration();
             }
-
             if (program) {
+                if (this.match(TokenType.Fun)) {
+                    return this.funDeclaration();
+                }
                 throw this.error(this.peek(), "Expect declaration.");
             }
             return this.statement();
@@ -204,13 +200,23 @@ export class Parser {
      * 解析 let 变量声明
      * let IDENTIFIER ( "=" expression )? ";" 
      */
-    private varDeclaration(t: TypeExpr | null): VarStmt {
+    private varDeclaration(): VarStmt {
         const vars: Variable[] = [];
+        let decType: TypeExpr = null as unknown as TypeExpr;
+        if (this.match(TokenType.Identifier)) {
+            if (this.check(TokenType.Identifier)) {
+                const prev = this.previous();
+                decType = new PrimitiveTypeExpr(prev);
+            } else {
+                this.back();
+            }
+        } else {
+            decType = this.type();
+        }
         do {
             const name = this.consume(TokenType.Identifier, "Expect variable name.");
             const initializer = this.match(TokenType.Equal) ? this.expression(Precedence.ASSIGNMENT) : null;
-            const type = t as unknown as TypeExpr;
-            vars.push(new Variable(name, type, initializer));
+            vars.push(new Variable(name, decType, initializer));
         } while (this.match(TokenType.Comma));
         this.consume(TokenType.Semicolon, "Expect ';' after variable declaration.");
         return new VarStmt(vars);
@@ -249,10 +255,11 @@ export class Parser {
         const type = this.type();
         const parameters: Parameter[] = [];
         do {
-            if (this.typeDeclarCheck()) {
+            const name = this.consume(TokenType.Identifier, "Expect parameter name.");
+            if (this.check(TokenType.Identifier)) {
+                this.back();
                 break;
             }
-            const name = this.consume(TokenType.Identifier, "Expect parameter name.");
             const defaultValue = this.match(TokenType.Equal) ? this.expression(Precedence.ASSIGNMENT) : null;
             parameters.push(new Parameter(name, type, defaultValue));
         } while (this.match(TokenType.Comma));
@@ -363,10 +370,7 @@ export class Parser {
         if (this.match(TokenType.Semicolon)) {
             initializer = null;
         } else if (this.match(TokenType.Let)) {
-            initializer = this.varDeclaration(null);
-        } else if (this.typeDeclarCheck()) {
-            const type = this.type();
-            initializer = this.varDeclaration(type);
+            initializer = this.varDeclaration();
         } else {
             initializer = this.expressionStatement();
         }
@@ -495,19 +499,6 @@ export class Parser {
             return new PrimitiveTypeExpr(name);
         }
         throw this.error(this.peek(), "Expect type.");
-    }
-
-    // 检查是否是类型声明
-    private typeDeclarCheck(): boolean {
-        // 如果连续两个token都是标识符，则认为第一个是类型声明
-        if (this.match(TokenType.Identifier)) {
-            if (this.check(TokenType.Identifier)) {
-                this.back();
-                return true;
-            }
-            this.back();
-        }
-        return false;
     }
 
 

@@ -256,7 +256,6 @@ export class Resolver implements ExprVisitor<GType>, StmtVisitor<void>, TypesExp
                 throw this.error(stmt.keyword, `Function with return type must return a value.`);
             }
             const returnType = this.resolveExpr(stmt.value);
-            console.log("returnType", returnType, "this.currentFun.returnType", this.currentFun.returnType);
             if (!checkSameType(returnType, this.currentFun.returnType)) {
                 throw this.error(stmt.keyword, `Type mismatch: ${returnType} != ${this.currentFun.returnType}`);
             }
@@ -512,7 +511,7 @@ export class Resolver implements ExprVisitor<GType>, StmtVisitor<void>, TypesExp
             const scope = this.scopes[i];
             const _var = scope.get(name);
             if (_var) {
-                if (this.scopes.length > 1) {
+                if (this.funEnvs.length > 1) {
                     _var.identifier.capture = true;
                 }
                 const type = _var.type;

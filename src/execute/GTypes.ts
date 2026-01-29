@@ -2,13 +2,11 @@
 
 
 export interface GType {
-    a:number
 }
 
 export type Primitive = 'void'| 'bool'| 'i8'| 'i16'| 'i32'| 'i64'| 'float'| 'double'| 'string';
 
 export class SimpleType implements GType {
-    a=1;
     name: Primitive;
     constructor(name: Primitive) {
         this.name = name;
@@ -16,7 +14,7 @@ export class SimpleType implements GType {
 }
 
 export class FunctionType implements GType {
-    a=2;
+
     returnType: GType;
     parameters: GType[];
     constructor(returnType: GType, parameters: GType[]) {
@@ -27,7 +25,6 @@ export class FunctionType implements GType {
 
 
 export class TempOmittedType implements GType {
-    a=3;
     name: string;
     constructor() {
         this.name = "...";

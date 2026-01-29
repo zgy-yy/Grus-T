@@ -1,48 +1,31 @@
 declare i32 @printf(i8*, ...)
-define i1 @isTrue() {
+declare noalias i8* @malloc(i64)
+declare void @free(i8*)
+define void @foo(i32 %b.p) {
     entry:
+    %b1 = alloca i32
+store i32 %b.p, i32* %b1
     
-    
-ret i1 1
-    ret i1 zeroinitializer
+store i32 23, i32* %a
+    ret void 
 }
-@.constant_1 = private unnamed_addr constant [4 x i8] c"ok\0A\00", align 1
-
 define i32 @main() {
     entry:
     
-    
-        %r0 = call i1() @isTrue()
+    %r0 = getelementptr {i32,i32},{i32,i32}* null, i64 1)
+%r1 = ptrtoint {i32,i32}* %r0 to i64
+%r2 = malloc i64 %r1
+%a = bitcast %r2 to i32
 
-                br label %and0.start
-                and0.start:
-                br i1 %r0, label %and0.check, label %and0.exit
-                and0.check:
-                    %r1 = call i1() @isFalse()
-%r2 = xor i1 %r1, 1
-                    br label %and0.exit
-                and0.exit:
-                    %r4 = phi i1 [false, %and0.start], [%r2, %and0.check]
-                
-        br i1 %r4, label %if0.then, label %if0.else
-        if0.then:
-            
-%r5 = call i32(i8*, ...) @printf(i8* @.constant_1)
-            br label %if0.end
-        if0.else:
-            
-            br label %if0.end
-        if0.end:
-        
+store i32 1, i32* %a
+%b = alloca i32
+
+
+store i32 23, i32* %b
+
+
+call void(i32) @foo(i32 2)
 
 ret i32 0
     ret i32 zeroinitializer
 }
-define i1 @isFalse() {
-    entry:
-    
-    
-ret i1 0
-    ret i1 zeroinitializer
-}
-

@@ -25,7 +25,7 @@ fun getValue() i32 {
 }
 
 fun main() i32 {
-  i32 x = getValue();
+  let i32 x = getValue();
   printf("%d\\n", x);
   return 0;
 }
@@ -41,7 +41,7 @@ fun add(i32 a, i32 b) i32 {
 }
 
 fun main() i32 {
-  i32 result = add(10, 20);
+  let i32 result = add(10, 20);
   printf("%d\\n", result);
   return 0;
 }
@@ -57,7 +57,7 @@ fun multiply(i32 a, i32 b, i32 c) i32 {
 }
 
 fun main() i32 {
-  i32 result = multiply(2, 3, 4);
+  let i32 result = multiply(2, 3, 4);
   printf("%d\\n", result);
   return 0;
 }
@@ -75,7 +75,7 @@ fun getInt() i32 {
 }
 
 fun main() i32 {
-  i32 x = getInt();
+  let i32 x = getInt();
   printf("%d\\n", x);
   return 0;
 }
@@ -91,7 +91,7 @@ fun isEven(i32 n) bool {
 }
 
 fun main() i32 {
-  bool result = isEven(4);
+  let bool result = isEven(4);
   printf("%d\\n", result);
   return 0;
 }
@@ -107,7 +107,7 @@ fun getFloat() float {
 }
 
 fun main() i32 {
-  float x = getFloat();
+  let float x = getFloat();
   printf("%.2f\\n", x);
   return 0;
 }
@@ -140,7 +140,7 @@ fun square(i32 x) i32 {
 }
 
 fun main() i32 {
-  i32 result = square(5);
+  let i32 result = square(5);
   printf("%d\\n", result);
   return 0;
 }
@@ -160,7 +160,7 @@ fun max(i32 a, i32 b) i32 {
 }
 
 fun main() i32 {
-  i32 result = max(10, 20);
+  let i32 result = max(10, 20);
   printf("%d\\n", result);
   return 0;
 }
@@ -197,7 +197,7 @@ fun doubleFloat(float x) float {
 }
 
 fun main() i32 {
-  float result = doubleFloat(1.5);
+  let float result = doubleFloat(1.5);
   printf("%.1f\\n", result);
   return 0;
 }
@@ -219,7 +219,7 @@ fun addTwo(i32 x) i32 {
 }
 
 fun main() i32 {
-  i32 result = addTwo(5);
+  let i32 result = addTwo(5);
   printf("%d\\n", result);
   return 0;
 }
@@ -243,7 +243,7 @@ fun c() i32 {
 }
 
 fun main() i32 {
-  i32 result = c();
+  let i32 result = c();
   printf("%d\\n", result);
   return 0;
 }
@@ -263,7 +263,7 @@ fun add(i32 a, i32 b) i32 {
 }
 
 fun main() i32 {
-  i32 result = add(getValue(), 5);
+  let i32 result = add(getValue(), 5);
   printf("%d\\n", result);
   return 0;
 }
@@ -285,7 +285,7 @@ fun factorial(i32 n) i32 {
 }
 
 fun main() i32 {
-  i32 result = factorial(5);
+  let i32 result = factorial(5);
   printf("%d\\n", result);
   return 0;
 }
@@ -305,7 +305,7 @@ fun fibonacci(i32 n) i32 {
 }
 
 fun main() i32 {
-  i32 result = fibonacci(6);
+  let i32 result = fibonacci(6);
   printf("%d\\n", result);
   return 0;
 }
@@ -323,7 +323,7 @@ fun getNumber() i32 {
 }
 
 fun main() i32 {
-  i32 x = getNumber();
+  let i32 x = getNumber();
   printf("%d\\n", x);
   return 0;
 }
@@ -339,7 +339,7 @@ fun getValue() i32 {
 }
 
 fun main() i32 {
-  i32 result = getValue() * 2 + 5;
+  let i32 result = getValue() * 2 + 5;
   printf("%d\\n", result);
   return 0;
 }
@@ -376,7 +376,7 @@ fun printNumber(i32 n) void {
 }
 
 fun main() i32 {
-  for (i32 i = 0; i < 3; i = i + 1) {
+  for (let i32 i = 0; i < 3; i = i + 1) {
     printNumber(i);
   }
   return 0;
@@ -478,7 +478,7 @@ fun step3(i32 x) i32 {
 }
 
 fun main() i32 {
-  i32 result = step3(step2(step1()));
+  let i32 result = step3(step2(step1()));
   printf("%d\\n", result);
   return 0;
 }
@@ -496,7 +496,7 @@ fun zero() i32 {
 }
 
 fun main() i32 {
-  i32 result = zero();
+  let i32 result = zero();
   printf("%d\\n", result);
   return 0;
 }
@@ -512,7 +512,7 @@ fun returnZero() i32 {
 }
 
 fun main() i32 {
-  i32 x = returnZero();
+  let i32 x = returnZero();
   if (x == 0) {
     printf("zero\\n");
   }
@@ -530,7 +530,7 @@ fun negate(i32 x) i32 {
 }
 
 fun main() i32 {
-  i32 result = negate(5);
+  let i32 result = negate(5);
   printf("%d\\n", result);
   return 0;
 }
@@ -546,7 +546,7 @@ fun getLarge() i32 {
 }
 
 fun main() i32 {
-  i32 result = getLarge();
+  let i32 result = getLarge();
   printf("%d\\n", result);
   return 0;
 }
@@ -564,7 +564,7 @@ fun getValue() i32 {
 }
 
 fun main() i32 {
-  i32 result = getValue() + getValue() * 2;
+  let i32 result = getValue() + getValue() * 2;
   printf("%d\\n", result);
   return 0;
 }

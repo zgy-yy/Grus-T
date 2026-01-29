@@ -189,8 +189,10 @@ export class Parameter implements Symbol_ {
 
 export class Function_ implements Symbol_ {
     capture: boolean;
+    upValues: Variable[];
     constructor(public name: Token, public type: FunctionTypeExpr, public parameters: Parameter[], public returnType: TypeExpr) {
         this.capture = false;
+        this.upValues = [];
     }
 }
 export class VarStmt extends Stmt {

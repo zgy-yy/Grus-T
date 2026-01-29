@@ -111,7 +111,7 @@ fun main() i32 {
     it('应该正确处理变量作为条件', () => {
       const source = `
 fun main() i32 {
-  i32 x = 10;
+  let i32 x = 10;
   if (x > 5) {
     printf("x is greater\\n");
   }
@@ -125,7 +125,7 @@ fun main() i32 {
     it('应该正确处理布尔变量作为条件', () => {
       const source = `
 fun main() i32 {
-  bool flag = 5 == 5;
+  let bool flag = 5 == 5;
   if (flag) {
     printf("flag is true\\n");
   }
@@ -139,7 +139,7 @@ fun main() i32 {
     it('应该正确处理变量赋值后的条件', () => {
       const source = `
 fun main() i32 {
-  i32 x = 3;
+  let i32 x = 3;
   x = 10;
   if (x > 5) {
     printf("x > 5\\n");
@@ -208,7 +208,7 @@ fun main() i32 {
     it('应该正确处理 if-else if-else 链（第一个条件）', () => {
       const source = `
 fun main() i32 {
-  i32 x = 10;
+  let i32 x = 10;
   if (x > 20) {
     printf("large\\n");
   } else {
@@ -230,7 +230,7 @@ fun main() i32 {
     it('应该正确处理 if-else if-else 链（最后一个条件）', () => {
       const source = `
 fun main() i32 {
-  i32 x = 3;
+  let i32 x = 3;
   if (x > 20) {
     printf("large\\n");
   } else {
@@ -267,7 +267,7 @@ fun main() i32 {
     it('应该正确处理复合比较条件', () => {
       const source = `
 fun main() i32 {
-  i32 x = 10;
+  let i32 x = 10;
   if (x > 5) {
     if (x < 15) {
       printf("in range\\n");
@@ -298,7 +298,7 @@ fun main() i32 {
     it('应该在 if 语句中修改变量', () => {
       const source = `
 fun main() i32 {
-  i32 x = 5;
+  let i32 x = 5;
   if (x > 0) {
     x = 10;
     printf("%d\\n", x);
@@ -313,7 +313,7 @@ fun main() i32 {
     it('应该在 if-else 语句中修改变量', () => {
       const source = `
 fun main() i32 {
-  i32 x = 5;
+  let i32 x = 5;
   if (x > 10) {
     x = 20;
   } else {
@@ -330,10 +330,10 @@ fun main() i32 {
     it('应该正确处理 if 语句中的多个变量', () => {
       const source = `
 fun main() i32 {
-  i32 a = 5;
-  i32 b = 10;
+  let i32 a = 5;
+  let  b = 10;
   if (a < b) {
-    i32 temp = a;
+    let i32 temp = a;
     a = b;
     b = temp;
   }

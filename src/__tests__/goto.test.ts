@@ -65,7 +65,7 @@ fun main() i32 {
     it('应该在 if 语句中使用 goto', () => {
       const source = `
 fun main() i32 {
-  i32 x = 5;
+  let i32 x = 5;
   if (x > 3) {
     goto large;
   }
@@ -87,7 +87,7 @@ fun main() i32 {
     it('应该在 if-else 语句中使用 goto', () => {
       const source = `
 fun main() i32 {
-  i32 x = 2;
+  let i32 x = 2;
   if (x > 3) {
     goto large;
   } else {
@@ -112,8 +112,8 @@ fun main() i32 {
     it('应该正确处理嵌套 if 中的 goto', () => {
       const source = `
 fun main() i32 {
-  i32 x = 5;
-  i32 y = 10;
+  let i32 x = 5;
+  let i32 y = 10;
   if (x > 3) {
     if (y > 5) {
       goto both;
@@ -142,7 +142,7 @@ fun main() i32 {
     it('应该在 while 循环中使用 goto 跳出', () => {
       const source = `
 fun main() i32 {
-  i32 i = 0;
+  let i32 i = 0;
   while (i < 10) {
     printf("%d\\n", i);
     i = i + 1;
@@ -166,7 +166,7 @@ fun main() i32 {
     it('应该在 for 循环中使用 goto 跳出', () => {
       const source = `
 fun main() i32 {
-  for (i32 i = 0; i < 10; i = i + 1) {
+  for (let i32 i = 0; i < 10; i = i + 1) {
     printf("%d\\n", i);
     if (i >= 2) {
       goto exit;
@@ -187,7 +187,7 @@ fun main() i32 {
     it('应该在 loop 循环中使用 goto 跳出', () => {
       const source = `
 fun main() i32 {
-  i32 i = 0;
+  let i32 i = 0;
   loop {
     printf("%d\\n", i);
     i = i + 1;
@@ -212,7 +212,7 @@ fun main() i32 {
     it('应该在 goto 跳转前后修改变量', () => {
       const source = `
 fun main() i32 {
-  i32 x = 0;
+  let i32 x = 0;
   printf("%d\\n", x);
   x = 10;
   goto skip;
@@ -230,7 +230,7 @@ fun main() i32 {
     it('应该在标签处修改变量', () => {
       const source = `
 fun main() i32 {
-  i32 x = 5;
+  let i32 x = 5;
   goto modify;
   modify:
   x = 10;
@@ -245,11 +245,11 @@ fun main() i32 {
     it('应该正确处理多个变量和 goto', () => {
       const source = `
 fun main() i32 {
-  i32 a = 1;
-  i32 b = 2;
+  let i32 a = 1;
+  let  b = 2;
   goto swap;
   swap:
-  i32 temp = a;
+  let i32 temp = a;
   a = b;
   b = temp;
   printf("%d,%d\\n", a, b);
@@ -381,7 +381,7 @@ fun main() i32 {
     it('应该使用 goto 实现 switch-case 效果', () => {
       const source = `
 fun main() i32 {
-  i32 x = 2;
+  let i32 x = 2;
   if (x == 1) {
     goto case1;
   }
@@ -412,7 +412,7 @@ fun main() i32 {
     it('应该使用 goto 实现错误处理', () => {
       const source = `
 fun main() i32 {
-  i32 x = 5;
+  let i32 x = 5;
   if (x < 0) {
     goto error;
   }
@@ -434,7 +434,7 @@ fun main() i32 {
     it('应该使用 goto 实现循环', () => {
       const source = `
 fun main() i32 {
-  i32 i = 0;
+  let i32 i = 0;
   loop_start:
   if (i >= 3) {
     goto loop_end;
@@ -503,7 +503,7 @@ fun main() i32 {
     it('应该正确处理 goto 在条件表达式中', () => {
       const source = `
 fun main() i32 {
-  i32 x = 5;
+  let i32 x = 5;
   if (x > 3) {
     goto positive;
   }
@@ -529,8 +529,8 @@ fun main() i32 {
     it('应该在复杂条件中使用 goto', () => {
       const source = `
 fun main() i32 {
-  i32 x = 10;
-  i32 y = 5;
+  let i32 x = 10;
+  let i32 y = 5;
   if (x > 5 && y < 10) {
     goto success;
   }
@@ -554,8 +554,8 @@ fun main() i32 {
     it('应该在算术表达式后使用 goto', () => {
       const source = `
 fun main() i32 {
-  i32 x = 5;
-  i32 y = x + 3;
+  let i32 x = 5;
+  let i32 y = x + 3;
   if (y > 7) {
     goto large;
   }

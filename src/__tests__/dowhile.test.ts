@@ -6,7 +6,7 @@ describe('do-while 循环测试', () => {
         it('应该正确执行基本的 do-while 循环', () => {
             const source = `
 fun main() i32 {
-  i32 i = 0;
+  let i32 i = 0;
   do {
     printf("%d\\n", i);
     i = i + 1;
@@ -25,7 +25,7 @@ fun main() i32 {
         it('应该至少执行一次循环体（即使条件为假）', () => {
             const source = `
 fun main() i32 {
-  i32 i = 10;
+  let i32 i = 10;
   do {
     printf("%d\\n", i);
     i = i + 1;
@@ -42,7 +42,7 @@ fun main() i32 {
         it('应该正确处理单次循环', () => {
             const source = `
 fun main() i32 {
-  i32 i = 0;
+  let i32 i = 0;
   do {
     printf("%d\\n", i);
     i = i + 1;
@@ -58,7 +58,7 @@ fun main() i32 {
         it('应该正确处理多次循环', () => {
             const source = `
 fun main() i32 {
-  i32 i = 0;
+  let i32 i = 0;
   do {
     printf("%d\\n", i);
     i = i + 1;
@@ -77,7 +77,7 @@ fun main() i32 {
         it('应该正确处理 <= 条件', () => {
             const source = `
 fun main() i32 {
-  i32 i = 0;
+  let i32 i = 0;
   do {
     printf("%d\\n", i);
     i = i + 1;
@@ -95,7 +95,7 @@ fun main() i32 {
         it('应该正确处理 > 条件', () => {
             const source = `
 fun main() i32 {
-  i32 i = 5;
+  let i32 i = 5;
   do {
     printf("%d\\n", i);
     i = i - 1;
@@ -112,7 +112,7 @@ fun main() i32 {
         it('应该正确处理 >= 条件', () => {
             const source = `
 fun main() i32 {
-  i32 i = 3;
+  let i32 i = 3;
   do {
     printf("%d\\n", i);
     i = i - 1;
@@ -129,7 +129,7 @@ fun main() i32 {
         it('应该正确处理 == 条件（单次循环）', () => {
             const source = `
 fun main() i32 {
-  i32 i = 0;
+  let i32 i = 0;
   do {
     printf("%d\\n", i);
     i = i + 1;
@@ -145,7 +145,7 @@ fun main() i32 {
         it('应该正确处理 != 条件', () => {
             const source = `
 fun main() i32 {
-  i32 i = 0;
+  let i32 i = 0;
   do {
     printf("%d\\n", i);
     i = i + 1;
@@ -164,7 +164,7 @@ fun main() i32 {
         it('应该正确处理零值条件（至少执行一次）', () => {
             const source = `
 fun main() i32 {
-  i32 i = 0;
+  let i32 i = 0;
   do {
     printf("%d\\n", i);
     i = i + 1;
@@ -181,7 +181,7 @@ fun main() i32 {
         it('应该正确处理负数条件', () => {
             const source = `
 fun main() i32 {
-  i32 i = -3;
+  let i32 i = -3;
   do {
     printf("%d\\n", i);
     i = i + 1;
@@ -198,7 +198,7 @@ fun main() i32 {
         it('应该正确处理大数条件', () => {
             const source = `
 fun main() i32 {
-  i32 i = 0;
+  let i32 i = 0;
   do {
     printf("%d\\n", i);
     i = i + 1;
@@ -215,7 +215,7 @@ fun main() i32 {
         it('应该正确处理浮点数条件', () => {
             const source = `
 fun main() i32 {
-  float f = 0.0;
+  let float f = 0.0;
   do {
     printf("%.0f\\n", f);
     f = f + 1.0;
@@ -232,8 +232,8 @@ fun main() i32 {
         it('应该正确处理布尔变量作为条件', () => {
             const source = `
 fun main() i32 {
-  bool flag = true;
-  i32 count = 0;
+  let bool flag = true;
+  let i32 count = 0;
   do {
     printf("%d\\n", count);
     count = count + 1;
@@ -255,9 +255,9 @@ fun main() i32 {
         it('应该正确处理两层嵌套 do-while 循环', () => {
             const source = `
 fun main() i32 {
-  i32 i = 0;
+  let i32 i = 0;
   do {
-    i32 j = 0;
+    let i32 j = 0;
     do {
       printf("%d,%d\\n", i, j);
       j = j + 1;
@@ -277,11 +277,11 @@ fun main() i32 {
         it('应该正确处理三层嵌套 do-while 循环', () => {
             const source = `
 fun main() i32 {
-  i32 i = 0;
+  let i32 i = 0;
   do {
-    i32 j = 0;
+    let i32 j = 0;
     do {
-      i32 k = 0;
+      let i32 k = 0;
       do {
         printf("%d\\n", i + j + k);
         k = k + 1;
@@ -306,9 +306,9 @@ fun main() i32 {
         it('应该正确处理 do-while 和 for 循环组合', () => {
             const source = `
 fun main() i32 {
-  i32 i = 0;
+  let i32 i = 0;
   do {
-    for (i32 j = 0; j < 2; j = j + 1) {
+    for (let i32 j = 0; j < 2; j = j + 1) {
       printf("%d,%d\\n", i, j);
     }
     i = i + 1;
@@ -326,9 +326,9 @@ fun main() i32 {
         it('应该正确处理 do-while 和 while 循环组合', () => {
             const source = `
 fun main() i32 {
-  i32 i = 0;
+  let i32 i = 0;
   do {
-    i32 j = 0;
+    let i32 j = 0;
     while (j < 2) {
       printf("%d,%d\\n", i, j);
       j = j + 1;
@@ -350,7 +350,7 @@ fun main() i32 {
         it('应该在 do-while 循环中使用 if 语句', () => {
             const source = `
 fun main() i32 {
-  i32 i = 0;
+  let i32 i = 0;
   do {
     if (i % 2 == 0) {
       printf("even:%d\\n", i);
@@ -373,7 +373,7 @@ fun main() i32 {
         it('应该在 do-while 循环中使用 if-else 链', () => {
             const source = `
 fun main() i32 {
-  i32 i = 0;
+  let i32 i = 0;
   do {
     if (i < 2) {
       printf("small:%d\\n", i);
@@ -402,7 +402,7 @@ fun main() i32 {
         it('应该在循环中修改条件变量', () => {
             const source = `
 fun main() i32 {
-  i32 i = 0;
+  let i32 i = 0;
   do {
     printf("%d\\n", i);
     i = i + 2;
@@ -419,8 +419,8 @@ fun main() i32 {
         it('应该在循环中修改多个变量', () => {
             const source = `
 fun main() i32 {
-  i32 a = 0;
-  i32 b = 10;
+  let i32 a = 0;
+  let i32 b = 10;
   do {
     printf("%d,%d\\n", a, b);
     a = a + 1;
@@ -438,7 +438,7 @@ fun main() i32 {
         it('应该正确处理后缀递增操作符', () => {
             const source = `
 fun main() i32 {
-  i32 i = 0;
+  let i32 i = 0;
   do {
     printf("%d\\n", i);
     i++;
@@ -455,7 +455,7 @@ fun main() i32 {
         it('应该正确处理后缀递减操作符', () => {
             const source = `
 fun main() i32 {
-  i32 i = 5;
+  let i32 i = 5;
   do {
     printf("%d\\n", i);
     i--;
@@ -474,8 +474,8 @@ fun main() i32 {
         it('应该正确处理条件始终为真的情况（使用变量控制）', () => {
             const source = `
 fun main() i32 {
-  i32 i = 0;
-  bool running = true;
+  let i32 i = 0;
+  let bool running = true;
   do {
     printf("%d\\n", i);
     i = i + 1;
@@ -497,9 +497,9 @@ fun main() i32 {
         it('应该正确处理循环体中的变量声明', () => {
             const source = `
 fun main() i32 {
-  i32 i = 0;
+  let i32 i = 0;
   do {
-    i32 temp = i * 2;
+    let i32 temp = i * 2;
     printf("%d\\n", temp);
     i = i + 1;
   } while (i < 3);
@@ -516,7 +516,7 @@ fun main() i32 {
             const source = `
 fun main() i32 {
   printf("start\\n");
-  i32 i = 0;
+  let i32 i = 0;
   do {
     printf("%d\\n", i);
     i = i + 1;
@@ -537,13 +537,13 @@ fun main() i32 {
         it('应该正确处理多个连续的 do-while 循环', () => {
             const source = `
 fun main() i32 {
-  i32 i = 0;
+  let i32 i = 0;
   do {
     printf("A%d\\n", i);
     i = i + 1;
   } while (i < 2);
   
-  i32 j = 0;
+  let i32 j = 0;
   do {
     printf("B%d\\n", j);
     j = j + 1;

@@ -6,7 +6,7 @@ describe('loop 循环测试', () => {
     it('应该正确执行基本的 loop 循环（使用 break）', () => {
       const source = `
 fun main() i32 {
-  i32 i = 0;
+  let i32 i = 0;
   loop {
     printf("%d\\n", i);
     i = i + 1;
@@ -28,7 +28,7 @@ fun main() i32 {
     it('应该正确处理单次循环', () => {
       const source = `
 fun main() i32 {
-  i32 i = 0;
+  let i32 i = 0;
   loop {
     printf("%d\\n", i);
     break;
@@ -43,7 +43,7 @@ fun main() i32 {
     it('应该正确处理多次循环', () => {
       const source = `
 fun main() i32 {
-  i32 i = 0;
+  let i32 i = 0;
   loop {
     printf("%d\\n", i);
     i = i + 1;
@@ -65,7 +65,7 @@ fun main() i32 {
     it('应该正确处理单语句循环体', () => {
       const source = `
 fun main() i32 {
-  i32 i = 0;
+  let i32 i = 0;
   loop {
     printf("%d\\n", i);
     i = i + 1;
@@ -83,7 +83,7 @@ fun main() i32 {
     it('应该正确处理多语句循环体', () => {
       const source = `
 fun main() i32 {
-  i32 i = 0;
+  let i32 i = 0;
   loop {
     printf("i=%d\\n", i);
     i = i + 1;
@@ -103,8 +103,8 @@ fun main() i32 {
     it('应该在循环体中修改变量', () => {
       const source = `
 fun main() i32 {
-  i32 sum = 0;
-  i32 i = 0;
+  let i32 sum = 0;
+  let i32 i = 0;
   loop {
     sum = sum + i;
     i = i + 1;
@@ -126,9 +126,9 @@ fun main() i32 {
     it('应该正确处理两层嵌套 loop 循环', () => {
       const source = `
 fun main() i32 {
-  i32 i = 0;
+  let i32 i = 0;
   loop {
-    i32 j = 0;
+    let i32 j = 0;
     loop {
       printf("%d,%d\\n", i, j);
       j = j + 1;
@@ -154,11 +154,11 @@ fun main() i32 {
     it('应该正确处理三层嵌套 loop 循环', () => {
       const source = `
 fun main() i32 {
-  i32 i = 0;
+  let i32 i = 0;
   loop {
-    i32 j = 0;
+    let i32 j = 0;
     loop {
-      i32 k = 0;
+      let i32 k = 0;
       loop {
         printf("%d\\n", i + j + k);
         k = k + 1;
@@ -191,9 +191,9 @@ fun main() i32 {
     it('应该正确处理 loop 和 for 循环组合', () => {
       const source = `
 fun main() i32 {
-  i32 i = 0;
+  let i32 i = 0;
   loop {
-    for (i32 j = 0; j < 2; j = j + 1) {
+    for (let i32 j = 0; j < 2; j = j + 1) {
       printf("%d,%d\\n", i, j);
     }
     i = i + 1;
@@ -214,9 +214,9 @@ fun main() i32 {
     it('应该正确处理 loop 和 while 循环组合', () => {
       const source = `
 fun main() i32 {
-  i32 i = 0;
+  let i32 i = 0;
   loop {
-    i32 j = 0;
+    let i32 j = 0;
     while (j < 2) {
       printf("%d,%d\\n", i, j);
       j = j + 1;
@@ -241,7 +241,7 @@ fun main() i32 {
     it('应该在 loop 循环中使用 if 语句控制 break', () => {
       const source = `
 fun main() i32 {
-  i32 i = 0;
+  let i32 i = 0;
   loop {
     if (i % 2 == 0) {
       printf("even:%d\\n", i);
@@ -267,7 +267,7 @@ fun main() i32 {
     it('应该正确处理多个条件控制 break', () => {
       const source = `
 fun main() i32 {
-  i32 i = 0;
+  let i32 i = 0;
   loop {
     printf("%d\\n", i);
     i = i + 1;
@@ -292,7 +292,7 @@ fun main() i32 {
     it('应该正确使用 break 跳出 loop 循环', () => {
       const source = `
 fun main() i32 {
-  i32 i = 0;
+  let i32 i = 0;
   loop {
     printf("%d\\n", i);
     i = i + 1;
@@ -313,9 +313,9 @@ fun main() i32 {
     it('应该正确处理嵌套 loop 中的 break（内层）', () => {
       const source = `
 fun main() i32 {
-  i32 i = 0;
+  let i32 i = 0;
   loop {
-    i32 j = 0;
+    let i32 j = 0;
     loop {
       printf("%d,%d\\n", i, j);
       j = j + 1;
@@ -341,9 +341,9 @@ fun main() i32 {
     it('应该正确处理嵌套 loop 中的 break（外层）', () => {
       const source = `
 fun main() i32 {
-  i32 i = 0;
+  let i32 i = 0;
   loop {
-    i32 j = 0;
+    let i32 j = 0;
     loop {
       printf("%d,%d\\n", i, j);
       j = j + 1;
@@ -371,7 +371,7 @@ fun main() i32 {
     it('应该正确处理 break 在循环开始处', () => {
       const source = `
 fun main() i32 {
-  i32 i = 0;
+  let i32 i = 0;
   loop {
     if (i >= 3) {
       break;
@@ -393,7 +393,7 @@ fun main() i32 {
     it('应该正确使用 continue 跳过当前迭代', () => {
       const source = `
 fun main() i32 {
-  i32 i = 0;
+  let i32 i = 0;
   loop {
     i = i + 1;
     if (i % 2 == 0) {
@@ -418,10 +418,10 @@ fun main() i32 {
     it('应该正确处理嵌套 loop 中的 continue', () => {
       const source = `
 fun main() i32 {
-  i32 i = 0;
+  let i32 i = 0;
   loop {
     i = i + 1;
-    i32 j = 0;
+    let i32 j = 0;
     loop {
       j = j + 1;
       if (j == 2) {
@@ -450,7 +450,7 @@ fun main() i32 {
     it('应该正确处理 continue 在循环开始处', () => {
       const source = `
 fun main() i32 {
-  i32 i = 0;
+  let i32 i = 0;
   loop {
     i = i + 1;
     if (i % 2 == 0) {
@@ -475,7 +475,7 @@ fun main() i32 {
     it('应该正确处理 break 和 continue 的组合使用', () => {
       const source = `
 fun main() i32 {
-  i32 i = 0;
+  let i32 i = 0;
   loop {
     i = i + 1;
     if (i > 5) {
@@ -500,10 +500,10 @@ fun main() i32 {
     it('应该正确处理嵌套循环中的 break 和 continue', () => {
       const source = `
 fun main() i32 {
-  i32 i = 0;
+  let i32 i = 0;
   loop {
     i = i + 1;
-    i32 j = 0;
+    let i32 j = 0;
     loop {
       j = j + 1;
       if (j > 3) {
@@ -550,7 +550,7 @@ fun main() i32 {
     it('应该正确处理立即 continue', () => {
       const source = `
 fun main() i32 {
-  i32 i = 0;
+  let i32 i = 0;
   loop {
     if (i == 0) {
       i = i + 1;
@@ -574,9 +574,9 @@ fun main() i32 {
     it('应该正确处理循环体中的变量声明', () => {
       const source = `
 fun main() i32 {
-  i32 i = 0;
+  let i32 i = 0;
   loop {
-    i32 temp = i * 2;
+    let i32 temp = i * 2;
     printf("%d\\n", temp);
     i = i + 1;
     if (i >= 3) {
@@ -596,7 +596,7 @@ fun main() i32 {
       const source = `
 fun main() i32 {
   printf("start\\n");
-  i32 i = 0;
+  let i32 i = 0;
   loop {
     printf("%d\\n", i);
     i = i + 1;
@@ -620,7 +620,7 @@ fun main() i32 {
     it('应该正确处理多个连续的 loop 循环', () => {
       const source = `
 fun main() i32 {
-  i32 i = 0;
+  let i32 i = 0;
   loop {
     printf("A%d\\n", i);
     i = i + 1;
@@ -629,7 +629,7 @@ fun main() i32 {
     }
   }
   
-  i32 j = 0;
+  let i32 j = 0;
   loop {
     printf("B%d\\n", j);
     j = j + 1;

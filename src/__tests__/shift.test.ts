@@ -6,7 +6,7 @@ describe('位移运算测试', () => {
     it('应该正确执行基本左移运算', () => {
       const source = `
 fun main() i32 {
-  i32 x = 1 << 2;
+  let i32 x = 1 << 2;
   printf("%d\\n", x);
   return 0;
 }
@@ -18,7 +18,7 @@ fun main() i32 {
     it('应该正确执行左移10位', () => {
       const source = `
 fun main() i32 {
-  i32 x = 1 << 10;
+  let i32 x = 1 << 10;
   printf("%d\\n", x);
   return 0;
 }
@@ -30,7 +30,7 @@ fun main() i32 {
     it('应该正确执行左移0位', () => {
       const source = `
 fun main() i32 {
-  i32 x = 5 << 0;
+  let i32 x = 5 << 0;
   printf("%d\\n", x);
   return 0;
 }
@@ -42,7 +42,7 @@ fun main() i32 {
     it('应该正确执行左移1位', () => {
       const source = `
 fun main() i32 {
-  i32 x = 3 << 1;
+  let i32 x = 3 << 1;
   printf("%d\\n", x);
   return 0;
 }
@@ -54,9 +54,9 @@ fun main() i32 {
     it('应该正确处理变量左移', () => {
       const source = `
 fun main() i32 {
-  i32 a = 2;
-  i32 b = 3;
-  i32 x = a << b;
+  let i32 a = 2;
+  let i32 b = 3;
+  let i32 x = a << b;
   printf("%d\\n", x);
   return 0;
 }
@@ -68,7 +68,7 @@ fun main() i32 {
     it('应该正确处理大数左移', () => {
       const source = `
 fun main() i32 {
-  i32 x = 100 << 2;
+  let i32 x = 100 << 2;
   printf("%d\\n", x);
   return 0;
 }
@@ -80,7 +80,7 @@ fun main() i32 {
     it('应该正确处理负数左移', () => {
       const source = `
 fun main() i32 {
-  i32 x = -5 << 2;
+  let i32 x = -5 << 2;
   printf("%d\\n", x);
   return 0;
 }
@@ -94,7 +94,7 @@ fun main() i32 {
     it('应该正确执行基本右移运算', () => {
       const source = `
 fun main() i32 {
-  i32 x = 8 >> 2;
+  let i32 x = 8 >> 2;
   printf("%d\\n", x);
   return 0;
 }
@@ -106,7 +106,7 @@ fun main() i32 {
     it('应该正确执行右移1位', () => {
       const source = `
 fun main() i32 {
-  i32 x = 10 >> 1;
+  let i32 x = 10 >> 1;
   printf("%d\\n", x);
   return 0;
 }
@@ -118,7 +118,7 @@ fun main() i32 {
     it('应该正确执行右移0位', () => {
       const source = `
 fun main() i32 {
-  i32 x = 7 >> 0;
+  let i32 x = 7 >> 0;
   printf("%d\\n", x);
   return 0;
 }
@@ -130,9 +130,9 @@ fun main() i32 {
     it('应该正确处理变量右移', () => {
       const source = `
 fun main() i32 {
-  i32 a = 16;
-  i32 b = 2;
-  i32 x = a >> b;
+  let i32 a = 16;
+  let i32 b = 2;
+  let i32 x = a >> b;
   printf("%d\\n", x);
   return 0;
 }
@@ -144,7 +144,7 @@ fun main() i32 {
     it('应该正确处理大数右移', () => {
       const source = `
 fun main() i32 {
-  i32 x = 1024 >> 3;
+  let i32 x = 1024 >> 3;
   printf("%d\\n", x);
   return 0;
 }
@@ -156,7 +156,7 @@ fun main() i32 {
     it('应该正确处理负数右移（算术右移）', () => {
       const source = `
 fun main() i32 {
-  i32 x = -8 >> 2;
+  let i32 x = -8 >> 2;
   printf("%d\\n", x);
   return 0;
 }
@@ -168,7 +168,7 @@ fun main() i32 {
     it('应该正确处理右移导致结果为0', () => {
       const source = `
 fun main() i32 {
-  i32 x = 3 >> 5;
+  let i32 x = 3 >> 5;
   printf("%d\\n", x);
   return 0;
 }
@@ -182,8 +182,8 @@ fun main() i32 {
     it('应该正确处理i8类型的左移', () => {
       const source = `
 fun main() i32 {
-  i8 x = 1;
-  i8 a = x << 2;
+  let i8 x = 1;
+  let i8 a = x << 2;
   printf("%d\\n", a);
   return 0;
 }
@@ -195,8 +195,8 @@ fun main() i32 {
     it('应该正确处理i8类型的右移', () => {
       const source = `
 fun main() i32 {
-  i8 x = 8;
-  i8 a = x >> 2;
+ let  i8 x = 8;
+ let   a = x >> 2;
   printf("%d\\n", a);
   return 0;
 }
@@ -208,8 +208,8 @@ fun main() i32 {
     it('应该正确处理i8类型左移后的截断', () => {
       const source = `
 fun main() i32 {
-  i8 x = 1;
-  i8 a = x << 10;
+  let x = 1;
+  let i8 a = x << 10;
   printf("%d\\n", a);
   return 0;
 }
@@ -224,7 +224,7 @@ fun main() i32 {
     it('应该正确处理位移运算的优先级', () => {
       const source = `
 fun main() i32 {
-  i32 x = 2 << 1 + 1;
+  let i32 x = 2 << 1 + 1;
   printf("%d\\n", x);
   return 0;
 }
@@ -237,7 +237,7 @@ fun main() i32 {
     it('应该正确处理括号中的位移运算', () => {
       const source = `
 fun main() i32 {
-  i32 x = (2 << 1) + 1;
+  let i32 x = (2 << 1) + 1;
   printf("%d\\n", x);
   return 0;
 }
@@ -250,7 +250,7 @@ fun main() i32 {
     it('应该正确处理位移与乘法的组合', () => {
       const source = `
 fun main() i32 {
-  i32 x = 2 << 2 * 2;
+  let i32 x = 2 << 2 * 2;
   printf("%d\\n", x);
   return 0;
 }
@@ -263,7 +263,7 @@ fun main() i32 {
     it('应该正确处理链式左移', () => {
       const source = `
 fun main() i32 {
-  i32 x = 1 << 2 << 1;
+  let i32 x = 1 << 2 << 1;
   printf("%d\\n", x);
   return 0;
 }
@@ -276,7 +276,7 @@ fun main() i32 {
     it('应该正确处理链式右移', () => {
       const source = `
 fun main() i32 {
-  i32 x = 32 >> 2 >> 1;
+  let i32 x = 32 >> 2 >> 1;
   printf("%d\\n", x);
   return 0;
 }
@@ -289,7 +289,7 @@ fun main() i32 {
     it('应该正确处理位移与加减法的组合', () => {
       const source = `
 fun main() i32 {
-  i32 x = 4 << 2 + 8 >> 2;
+  let i32 x = 4 << 2 + 8 >> 2;
   printf("%d\\n", x);
   return 0;
 }
@@ -304,9 +304,9 @@ fun main() i32 {
     it('应该正确处理变量之间的位移运算', () => {
       const source = `
 fun main() i32 {
-  i32 a = 4;
-  i32 b = 2;
-  i32 x = a << b;
+  let i32 a = 4;
+  let i32 b = 2;
+  let i32 x = a << b;
   printf("%d\\n", x);
   return 0;
 }
@@ -318,7 +318,7 @@ fun main() i32 {
     it('应该正确处理变量赋值后的位移运算', () => {
       const source = `
 fun main() i32 {
-  i32 x = 2;
+  let i32 x = 2;
   x = x << 3;
   printf("%d\\n", x);
   return 0;
@@ -331,10 +331,10 @@ fun main() i32 {
     it('应该正确处理多个变量的位移运算', () => {
       const source = `
 fun main() i32 {
-  i32 a = 2;
-  i32 b = 3;
-  i32 c = 4;
-  i32 result = a << b >> c;
+  let i32 a = 2;
+  let i32 b = 3;
+  let i32 c = 4;
+  let i32 result = a << b >> c;
   printf("%d\\n", result);
   return 0;
 }
@@ -349,7 +349,7 @@ fun main() i32 {
     it('应该正确处理零值左移', () => {
       const source = `
 fun main() i32 {
-  i32 x = 0 << 5;
+  let i32 x = 0 << 5;
   printf("%d\\n", x);
   return 0;
 }
@@ -361,7 +361,7 @@ fun main() i32 {
     it('应该正确处理零值右移', () => {
       const source = `
 fun main() i32 {
-  i32 x = 0 >> 5;
+  let i32 x = 0 >> 5;
   printf("%d\\n", x);
   return 0;
 }
@@ -373,7 +373,7 @@ fun main() i32 {
     it('应该正确处理大位移量', () => {
       const source = `
 fun main() i32 {
-  i32 x = 1 << 20;
+  let i32 x = 1 << 20;
   printf("%d\\n", x);
   return 0;
 }
@@ -387,7 +387,7 @@ fun main() i32 {
     it('应该正确处理嵌套的位移运算', () => {
       const source = `
 fun main() i32 {
-  i32 x = (1 << 2) << 3;
+  let i32 x = (1 << 2) << 3;
   printf("%d\\n", x);
   return 0;
 }
@@ -400,7 +400,7 @@ fun main() i32 {
     it('应该正确处理位移与乘除法的组合', () => {
       const source = `
 fun main() i32 {
-  i32 x = 8 << 2 / 2;
+  let i32 x = 8 << 2 / 2;
   printf("%d\\n", x);
   return 0;
 }
@@ -413,7 +413,7 @@ fun main() i32 {
     it('应该正确处理位移与取模的组合', () => {
       const source = `
 fun main() i32 {
-  i32 x = 16 >> 2 % 3;
+  let i32 x = 16 >> 2 % 3;
   printf("%d\\n", x);
   return 0;
 }
@@ -426,7 +426,7 @@ fun main() i32 {
     it('应该正确处理包含位移的复杂表达式', () => {
       const source = `
 fun main() i32 {
-  i32 x = (2 << 3) + (8 >> 2) - (1 << 1);
+  let i32 x = (2 << 3) + (8 >> 2) - (1 << 1);
   printf("%d\\n", x);
   return 0;
 }
@@ -439,7 +439,7 @@ fun main() i32 {
     it('应该正确处理多层嵌套的位移表达式', () => {
       const source = `
 fun main() i32 {
-  i32 x = ((1 << 2) << 1) >> 1;
+  let i32 x = ((1 << 2) << 1) >> 1;
   printf("%d\\n", x);
   return 0;
 }

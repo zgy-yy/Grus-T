@@ -49,7 +49,7 @@ export enum TokenType {
     OrEqual = 'OR_EQUAL',// |=
     GreaterGreaterEqual = 'GREATER_GREATER_EQUAL',// >>=
     LessLessEqual = 'LESS_LESS_EQUAL',// <<=
-    // Arrow = 'ARROW',// =>
+    Arrow = 'ARROW',// ->
 
     // 关键字
     Goto = 'GOTO',// goto
