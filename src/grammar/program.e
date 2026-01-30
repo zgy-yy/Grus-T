@@ -1,13 +1,13 @@
-fun getValue() i32 {
-  return 10;
+fun addOne(i32 x) i32 {
+  return x + 1;
 }
 
-fun add(i32 a, i32 b) i32 {
-  return a + b;
+fun addTwo(i32 x) i32 {
+  return addOne(addOne(x));
 }
 
 fun main() i32 {
-  let i32 result = add(getValue(), 5);
+  let i32 result = addTwo(5);
   printf("%d\\n", result);
   return 0;
 }

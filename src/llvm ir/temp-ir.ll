@@ -1,30 +1,38 @@
 declare i32 @printf(i8*, ...)
 declare noalias i8* @malloc(i64)
 declare void @free(i8*)
-define void @foo(i32 %b.p) {
-    entry:
-    %b1 = alloca i32
-store i32 %b.p, i32* %b1
-    
-store i32 23, i32* %a
-    ret void 
-}
+@.constant_2 = private unnamed_addr constant [6 x i8] c"%.0f\0A\00", align 1
+
 define i32 @main() {
     entry:
     
-    %r0 = getelementptr {i32,i32},{i32,i32}* null, i64 1)
-%r1 = ptrtoint {i32,i32}* %r0 to i64
-%r2 = malloc i64 %r1
-%a = bitcast %r2 to i32
+    %f = alloca float
 
-store i32 1, i32* %a
-%b = alloca i32
+%r0 = sitofp i32 0 to float
+store float %r0, float* %f
 
-
-store i32 23, i32* %b
+        br label %while0.condition
+        while0.condition:
+            %r1 = load float , float* %f
 
 
-call void(i32) @foo(i32 2)
+%r3 = sitofp i32 3 to float
+%r2 = fcmp olt float %r1, %r3
+            br i1 %r2, label %while0.body, label %while0.end
+        while0.body:
+            
+%r5 = load float , float* %f
+
+%r4 = call i32(i8*, ...) @printf(i8* @.constant_2, float %r5)
+%r7 = load float , float* %f
+
+
+%r9 = sitofp i32 1 to float
+%r8 = fadd float %r7, %r9
+store float %r8, float* %f
+            br label %while0.condition
+        while0.end:
+        
 
 ret i32 0
     ret i32 zeroinitializer

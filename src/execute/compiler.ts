@@ -1,11 +1,11 @@
-import { AssignExpr, BinaryExpr, CallExpr, ConditionalExpr, Expr, ExprVisitor, GetExpr, LiteralExpr, LogicalExpr, PostfixExpr, PrefixExpr, SetExpr, ThisExpr, UnaryExpr, VariableExpr } from "@/ast/Expr";
-import { FunctionTypeExpr, PrimitiveTypeExpr, TempOmittedTypeExpr, TypeExpr, TypesExprVisitor, } from "@/ast/TypeExpr";
+import { AssignExpr, BinaryExpr, CallExpr, ConditionalExpr, ExprVisitor, GetExpr, LambdaExpr, LiteralExpr, LogicalExpr, PostfixExpr, PrefixExpr, SetExpr, ThisExpr, UnaryExpr, VariableExpr } from "@/ast/Expr";
 import { BlockStmt, BreakStmt, ClassStmt, ContinueStmt, DoWhileStmt, ExpressionStmt, ForStmt, FunctionStmt, GotoStmt, IfStmt, LabelStmt, LoopStmt, ReturnStmt, StmtVisitor, VarStmt, WhileStmt } from "@/ast/Stmt";
 import { Stmt } from "@/ast/Stmt";
 import { CompilerErrorHandler } from "@/parser/ErrorHandler";
 import { TokenType } from "@/ast/TokenType";
 import { Token } from "@/ast/Token";
 import { binaryOperator } from "./utils";
+import { FunctionType, GrusType, SimpleType, TempOmittedType } from "@/ast/GrusTypes";
 
 
 export class CompilerError extends Error {
@@ -38,16 +38,16 @@ class ExprCompose {
 //Ir 变量
 class IrVar {
     name: string;
-    type: TypeExpr;
     captured: boolean;
-    constructor(name: string, type: TypeExpr, captured: boolean) {
+    type: GrusType;
+    constructor(name: string, type: GrusType, captured: boolean) {
+        this.captured = captured;
         this.name = name;
         this.type = type;
-        this.captured = captured;
     }
 }
 
-export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragment>, TypesExprVisitor<IrFragment> {
+export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragment> {
     static constStrI: number = 0;
     static regI: number = 0;
     static ifI: number = 0;
@@ -75,7 +75,7 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
     compileProgram(stmts: Stmt[]): string {
         this.beginScope(stmts);
         // 定义 printf 函数
-        this.define("printf", new FunctionTypeExpr(new Token(TokenType.Identifier, "printf", null, 0, 0), new PrimitiveTypeExpr(new Token(TokenType.Identifier, "i32", null, 0, 0)), [new PrimitiveTypeExpr(new Token(TokenType.Identifier, "i8*", null, 0, 0)), new PrimitiveTypeExpr(new Token(TokenType.Identifier, "...", null, 0, 0))]), false);
+        this.define("printf", new FunctionType(new SimpleType("i32"), [new SimpleType("i8*"), new TempOmittedType()]), false);
         this.code = stmts.map(stmt => stmt.accept(this)).join("\n");
         const globalCode = this.globals.join("\n");
         this.code = globalCode + this.code;
@@ -99,11 +99,11 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
             return stmt.vars.map(var_ => {
                 const code: IrFragment[] = [];
                 const varName = var_.name.lexeme;
-                const var_ir_type = var_.type.accept(this);
+                const var_ir_type = this.irType(var_.type_);
                 const init_comp = var_.initializer?.accept(this) ?? new ExprCompose("void", "zeroinitializer", "");
-                let ir_name = this.define(varName, var_.type, var_.capture);
+                let ir_name = this.define(varName, var_.type_, var_.capture);
                 if (var_.capture) {
-                    const mem = this.memSizeOf(var_.type);
+                    const mem = this.memSizeOf(var_.type_);
                     code.push(mem.ir);
                     const raw_mem_reg = this.reg();
                     code.push(`${raw_mem_reg} = call noalias i8* @malloc(i64 ${mem.reg})`);
@@ -130,10 +130,10 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
         } else { //全局变量
             return stmt.vars.map(var_ => {
                 const varName = var_.name.lexeme;
-                const var_ir_type = var_.type.accept(this);
+                const var_ir_type = this.irType(var_.type_);
                 const init_comp = var_.initializer?.accept(this) ?? new ExprCompose("void", "zeroinitializer", "");
                 const init_reg = init_comp.reg;
-                let ir_name = this.define(varName, var_.type, false);
+                let ir_name = this.define(varName, var_.type_, false);
                 return `${ir_name} = global ${var_ir_type} ${init_reg}`
             }).join("\n");
         }
@@ -143,12 +143,12 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
         Compiler.regI = 0;
         Compiler.ifI = 0;
         const fn_name = stmt.fun.name.lexeme;
-        const returnType = stmt.fun.returnType.accept(this);
+        const returnType = this.irType(stmt.fun.returnType);
         const param_code_ir: IrFragment[] = [];
         const parameters = stmt.fun.parameters.map(param => {
             const ir_param_reg = `%${param.name.lexeme}.p`;
-            const ir_param_type = param.type.accept(this);
-            const ir_param_name = this.define(param.name.lexeme, param.type, false);
+            const ir_param_type = this.irType(param.type_);
+            const ir_param_name = this.define(param.name.lexeme, param.type_, false);
             param_code_ir.push(`${ir_param_name} = alloca ${ir_param_type}`);
             param_code_ir.push(`store ${ir_param_type} ${ir_param_reg}, ${ir_param_type}* ${ir_param_name}`);
             return {
@@ -565,12 +565,12 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
         let isVariadic = false;
         if (expr.callee instanceof VariableExpr) {
             const irVar = this.findIrVar(expr.callee.name);
-            if (irVar.type instanceof FunctionTypeExpr) {
+            if (irVar.type instanceof FunctionType) {
                 // 检查参数列表中是否包含"..."（可变参数）
-                isVariadic = irVar.type.parameters.some(param =>
-                    param instanceof PrimitiveTypeExpr && param.name.lexeme === "..."
+                isVariadic = irVar.type.paramTypes.some(param =>
+                    param instanceof TempOmittedType
                 );
-                ir_type = irVar.type.returnType.accept(this);
+                ir_type = this.irType(irVar.type.returnType);
             }
         }
 
@@ -616,16 +616,16 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
     }
     visitVariableExpr(expr: VariableExpr): ExprCompose {
         const irVar = this.findIrVar(expr.name);
-        if (irVar.type instanceof FunctionTypeExpr) {
-            const ir_type = irVar.type.accept(this);
+        if (irVar.type instanceof FunctionType) {
+            const ir_type = this.irType(irVar.type);
             // 对于函数类型，直接返回函数名（如 @printf），不需要创建寄存器
             return new ExprCompose(ir_type, irVar.name, "", irVar.name);
         }
         if (irVar.captured) {
-          
+
         }
         const reg = this.reg();
-        const ir_type = irVar.type.accept(this);
+        const ir_type = this.irType(irVar.type);
         const ir_code = `${reg} = load ${ir_type} , ${ir_type}* ${irVar.name}\n`;
         return new ExprCompose(ir_type, reg, ir_code, irVar.name);
     }
@@ -649,31 +649,38 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
         return new ExprCompose("void64", "", "");
     }
 
+    visitLambdaExpr(expr: LambdaExpr): ExprCompose {
+        throw new Error("Method not implemented.");
+    }
+
     //编译类型表达式
 
-    visitPrimitiveTypeExpr(expr: PrimitiveTypeExpr): string {
-        if (expr.name.lexeme === "string") {
-            return "i8*";
+    irType(type: GrusType): string {
+        if (type instanceof SimpleType) {
+            if (type.name === "string") {
+                return "i8*";
+            }
+            if (type.name === "bool") {
+                return "i1";
+            }
+            return type.name;
         }
-        if (expr.name.lexeme === "bool") {
-            return "i1";
+        if (type instanceof FunctionType) {
+            return this.irType(type.returnType) + "(" + type.paramTypes.map(param => this.irType(param)).join(", ") + ")";
         }
-        return expr.name.lexeme;
-    }
-    visitFunctionTypeExpr(expr: FunctionTypeExpr): string {
-        return expr.returnType.accept(this) + "(" + expr.parameters.map(parameter => parameter.accept(this)).join(", ") + ")";
+        if (type instanceof TempOmittedType) {
+            return "...";
+        }
+        throw new Error("Unsupported type: " + type.toString());
     }
 
-    visitTempOmittedTypeExpr(expr: TempOmittedTypeExpr): string {
-        return "...";
-    }
 
     //作用域
     beginScope(stmts: Stmt[]): void {
         this.scopes.push(new Map<string, IrVar>());
         for (const stmt of stmts) {
             if (stmt instanceof FunctionStmt) {
-                this.define(stmt.fun.name.lexeme, stmt.fun.type, false);
+                this.define(stmt.fun.name.lexeme, stmt.fun.type_, false);
             }
         }
     }
@@ -681,10 +688,10 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
         this.scopes.pop();
     }
 
-    define(name: string, type: TypeExpr, captured: boolean): Reg {
+    define(name: string, type: GrusType, captured: boolean): Reg {
         const currentScope = this.scopes[this.scopes.length - 1];
         const distance = this.findVarDistance(name);
-        const prefix = this.scopes.length == 1 || type instanceof FunctionTypeExpr ? "@" : "%";
+        const prefix = this.scopes.length == 1 || type instanceof FunctionType ? "@" : "%";
         const ir_name = `${prefix}${captured ? "ptr_" : ""}${name}${distance > 0 ? distance : ''}`;
         currentScope.set(name, new IrVar(ir_name, type, captured));
         return ir_name;
@@ -771,13 +778,13 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
         return `%r${Compiler.regI++}`;
     }
 
-    memSizeOf(type: TypeExpr): ExprCompose {
+    memSizeOf(type: GrusType): ExprCompose {
         const sizePtrReg = this.reg();
         const sizeIntReg = this.reg();
         const ir_code: IrFragment[] = [];
 
-        if (type instanceof PrimitiveTypeExpr) {
-            const ir_type = type.name.lexeme;
+        if (type instanceof SimpleType) {
+            const ir_type = type.name;
             ir_code.push(`${sizePtrReg} = getelementptr {i32,${ir_type}},{i32,${ir_type}}* null, i64 1)`);
             ir_code.push(`${sizeIntReg} = ptrtoint {i32,${ir_type}}* ${sizePtrReg} to i64`);
             return new ExprCompose("i64", sizeIntReg, ir_code.join("\n"));

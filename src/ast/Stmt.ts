@@ -1,7 +1,6 @@
 import { Expr } from "@/ast/Expr";
 import { Token } from "@/ast/Token";
-import { FunctionTypeExpr, PrimitiveTypeExpr, TypeExpr } from "@/ast/TypeExpr";
-import { TokenType } from "./TokenType";
+import { FunctionType, GrusType } from "./GrusTypes";
 
 export abstract class Stmt {
     abstract accept<R>(visitor: StmtVisitor<R>): R;
@@ -169,29 +168,31 @@ export class ExpressionStmt extends Stmt {
 
 export interface Symbol_ {
     name: Token;
-    type: TypeExpr;
+    type_: GrusType
     capture: boolean;
 }
 
 export class Variable implements Symbol_ {
     capture: boolean;
-    constructor(public name: Token, public type: TypeExpr, public initializer: Expr | null) {
+    constructor(public name: Token, public type_: GrusType, public initializer: Expr | null) {
         this.capture = false;
     }
 }
 
 export class Parameter implements Symbol_ {
     capture: boolean;
-    constructor(public name: Token, public type: TypeExpr, public defaultValue: Expr | null) {
+    constructor(public name: Token, public type_: GrusType, public defaultValue: Expr | null) {
         this.capture = false;
     }
 }
 
 export class Function_ implements Symbol_ {
     capture: boolean;
+    type_: GrusType;
     upValues: Variable[];
-    constructor(public name: Token, public type: FunctionTypeExpr, public parameters: Parameter[], public returnType: TypeExpr) {
+    constructor(public name: Token, public parameters: Parameter[], public returnType: GrusType) {
         this.capture = false;
+        this.type_ = new FunctionType(returnType, parameters.map(param => param.type_));
         this.upValues = [];
     }
 }
@@ -209,14 +210,10 @@ export class VarStmt extends Stmt {
 export class FunctionStmt extends Stmt {
     fun: Function_;
     body: Stmt[];
-    brace: Token;
-    constructor(name: Token, parameters: Parameter[], returnType: TypeExpr | null, body: Stmt[], brace: Token) {
+    constructor(name: Token, parameters: Parameter[], returnType: GrusType, body: Stmt[]) {
         super();
-        const paramTypes = parameters.map(param => param.type);
-        const retunType = returnType ?? new PrimitiveTypeExpr(new Token(TokenType.Identifier, "void", null, name.line, name.column));
-        this.fun = new Function_(name, new FunctionTypeExpr(name, retunType, paramTypes), parameters, retunType);
+        this.fun = new Function_(name, parameters, returnType);
         this.body = body;
-        this.brace = brace;
     }
     accept<R>(visitor: StmtVisitor<R>): R {
         return visitor.visitFunctionStmt(this);

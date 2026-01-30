@@ -1,53 +1,39 @@
 ; ModuleID = '/Users/tal/Desktop/Grus-T/src/llvm ir/temp-ir.ll'
 source_filename = "/Users/tal/Desktop/Grus-T/src/llvm ir/temp-ir.ll"
 
-@.constant_1 = private unnamed_addr constant [4 x i8] c"ok\0A\00", align 1
+@.constant_2 = private unnamed_addr constant [6 x i8] c"%.0f\0A\00", align 1
 
 declare i32 @printf(ptr, ...)
 
-define i1 @isTrue() {
-entry:
-  ret i1 true
+declare noalias ptr @malloc(i64)
 
-0:                                                ; No predecessors!
-  ret i1 false
-}
+declare void @free(ptr)
 
 define i32 @main() {
 entry:
-  %r0 = call i1 @isTrue()
-  br label %and0.start
+  %f = alloca float, align 4
+  %r0 = sitofp i32 0 to float
+  store float %r0, ptr %f, align 4
+  br label %while0.condition
 
-and0.start:                                       ; preds = %entry
-  br i1 %r0, label %and0.check, label %and0.exit
+while0.condition:                                 ; preds = %while0.body, %entry
+  %r1 = load float, ptr %f, align 4
+  %r3 = sitofp i32 3 to float
+  %r2 = fcmp olt float %r1, %r3
+  br i1 %r2, label %while0.body, label %while0.end
 
-and0.check:                                       ; preds = %and0.start
-  %r1 = call i1 @isFalse()
-  %r2 = xor i1 %r1, true
-  br label %and0.exit
+while0.body:                                      ; preds = %while0.condition
+  %r5 = load float, ptr %f, align 4
+  %r4 = call i32 (ptr, ...) @printf(ptr @.constant_2, float %r5)
+  %r7 = load float, ptr %f, align 4
+  %r9 = sitofp i32 1 to float
+  %r8 = fadd float %r7, %r9
+  store float %r8, ptr %f, align 4
+  br label %while0.condition
 
-and0.exit:                                        ; preds = %and0.check, %and0.start
-  %r4 = phi i1 [ false, %and0.start ], [ %r2, %and0.check ]
-  br i1 %r4, label %if0.then, label %if0.else
-
-if0.then:                                         ; preds = %and0.exit
-  %r5 = call i32 (ptr, ...) @printf(ptr @.constant_1)
-  br label %if0.end
-
-if0.else:                                         ; preds = %and0.exit
-  br label %if0.end
-
-if0.end:                                          ; preds = %if0.else, %if0.then
+while0.end:                                       ; preds = %while0.condition
   ret i32 0
 
 0:                                                ; No predecessors!
   ret i32 0
-}
-
-define i1 @isFalse() {
-entry:
-  ret i1 false
-
-0:                                                ; No predecessors!
-  ret i1 false
 }

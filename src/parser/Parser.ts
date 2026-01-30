@@ -1,9 +1,9 @@
 import { Token } from "@/ast/Token";
 import { ParserErrorHandler } from "./ErrorHandler";
 import { TokenType } from "@/ast/TokenType";
-import { AssignExpr, BinaryExpr, CallExpr, Expr, LiteralExpr, PostfixExpr, PrefixExpr, ThisExpr, UnaryExpr, VariableExpr } from "@/ast/Expr";
+import { AssignExpr, BinaryExpr, CallExpr, Expr, LambdaExpr, LiteralExpr, PostfixExpr, PrefixExpr, ThisExpr, UnaryExpr, VariableExpr } from "@/ast/Expr";
 import { BlockStmt, BreakStmt, ContinueStmt, DoWhileStmt, ExpressionStmt, ForStmt, FunctionStmt, GotoStmt, IfStmt, LabelStmt, LoopStmt, Parameter, ReturnStmt, Stmt, Variable, VarStmt, WhileStmt } from "@/ast/Stmt";
-import { PrimitiveTypeExpr, TypeExpr } from "@/ast/TypeExpr";
+import { FunctionType, GrusType, PointerType, SimpleType } from "@/ast/GrusTypes";
 
 class SyntaxError extends Error {
     public token: Token;
@@ -202,11 +202,11 @@ export class Parser {
      */
     private varDeclaration(): VarStmt {
         const vars: Variable[] = [];
-        let decType: TypeExpr = null as unknown as TypeExpr;
+        let decType: GrusType = null as unknown as GrusType;
         if (this.match(TokenType.Identifier)) {
             if (this.check(TokenType.Identifier)) {
                 const prev = this.previous();
-                decType = new PrimitiveTypeExpr(prev);
+                decType = new SimpleType(prev.lexeme);
             } else {
                 this.back();
             }
@@ -227,7 +227,7 @@ export class Parser {
         const name = this.consume(TokenType.Identifier, "Expect function name.");
         this.consume(TokenType.LeftParen, "Expect '(' after function name.");
         const parameters: Parameter[] = [];
-        while (!this.check(TokenType.RightParen)) {
+        if (!this.check(TokenType.RightParen)) {
             if (parameters.length >= 255) {
                 throw this.error(this.previous(), "Can't have more than 255 parameters.");
             }
@@ -235,16 +235,15 @@ export class Parser {
             parameters.push(...parameter);
         }
         this.consume(TokenType.RightParen, "Expect ')' after parameters.");
-        let returnType: TypeExpr | null = null;
+        let returnType: GrusType
         if (this.check(TokenType.LeftBrace)) {
-            const token = this.previous();
-            returnType = new PrimitiveTypeExpr(new Token(TokenType.Identifier, "void", null, token.line, token.column));
+            returnType = new SimpleType("void");
         } else {
             returnType = this.type();
         }
         this.consume(TokenType.LeftBrace, "Expect '{' after parameters.");
         const body = this.block();
-        return new FunctionStmt(name, parameters, returnType, body, this.previous());
+        return new FunctionStmt(name, parameters, returnType, body);
     }
 
     /**
@@ -252,16 +251,27 @@ export class Parser {
      * parameter → typeExpr IDENTIFIER ( "=" expression )?
      */
     private parameter(): Parameter[] {
-        const type = this.type();
         const parameters: Parameter[] = [];
         do {
+            let type = this.type();
             const name = this.consume(TokenType.Identifier, "Expect parameter name.");
-            if (this.check(TokenType.Identifier)) {
-                this.back();
-                break;
-            }
             const defaultValue = this.match(TokenType.Equal) ? this.expression(Precedence.ASSIGNMENT) : null;
             parameters.push(new Parameter(name, type, defaultValue));
+            while (this.match(TokenType.Comma)) {
+                if (this.match(TokenType.Identifier)) {
+                    if (this.check(TokenType.Identifier)) {
+                        const prev = this.previous();
+                        type = new SimpleType(prev.lexeme);
+                    } else {
+                        this.back();
+                    }
+                } else {
+                    type = this.type();
+                }
+                const name = this.consume(TokenType.Identifier, "Expect parameter name.");
+                const defaultValue = this.match(TokenType.Equal) ? this.expression(Precedence.ASSIGNMENT) : null;
+                parameters.push(new Parameter(name, type, defaultValue));
+            }
         } while (this.match(TokenType.Comma));
         return parameters;
     }
@@ -484,6 +494,17 @@ export class Parser {
             case TokenType.Identifier:
                 return new VariableExpr(token);
             case TokenType.LeftParen:
+                if (this.check(TokenType.RightParen)) {
+                    return this.lambda();
+                }
+                if (this.match(TokenType.Identifier)) {
+                    if (this.check(TokenType.Identifier)) {
+                        this.back()
+                        return this.lambda()
+                    } else {
+                        this.back();
+                    }
+                }
                 const expr = this.expression();
                 this.consume(TokenType.RightParen, "Expect ')' after expression.");
                 return expr;
@@ -492,11 +513,46 @@ export class Parser {
         }
     }
 
+    private lambda(): Expr {
+        const params: Parameter[] = [];
+        if (!this.check(TokenType.RightParen)) {
+            do {
+                const param = this.parameter();
+                params.push(...param);
+            } while (this.match(TokenType.Comma))
+        }
+        this.consume(TokenType.RightParen, "Expect ')' after parameters.");
+        this.consume(TokenType.Arrow, "Expect '->' after parameters.");
+        const returnType = this.type();
+        this.consume(TokenType.LeftBrace, "Expect '{' after return type.");
 
-    private type(): TypeExpr {
+        const body = this.block();
+
+        return new LambdaExpr(this.previous(), params, returnType, body);
+
+    }
+
+
+
+    private type(): GrusType {
         if (this.match(TokenType.Identifier)) {
             const name = this.previous();
-            return new PrimitiveTypeExpr(name);
+            return new SimpleType(name.lexeme);
+        } else if (this.match(TokenType.Star)) {
+            return new PointerType(this.type());
+        } else if (this.match(TokenType.LeftParen)) {
+            const declTypes: GrusType[] = [];
+            if (!this.check(TokenType.RightParen)) {
+                do {
+                    const declType = this.type();
+                    declTypes.push(declType);
+                } while (this.match(TokenType.Comma))
+            }
+            this.consume(TokenType.RightParen, "Expect ')' after parameters.");
+            this.consume(TokenType.Arrow, "Expect '->' after parameters.");
+            const returnType = this.type();
+            const paren = this.previous();
+            return new FunctionType(returnType, declTypes);
         }
         throw this.error(this.peek(), "Expect type.");
     }

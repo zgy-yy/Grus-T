@@ -1,4 +1,6 @@
+import { GrusType } from "./GrusTypes";
 import { GrusValue } from "./GrusValue";
+import { Function_, Parameter, Stmt } from "./Stmt";
 import { Token } from "./Token";
 export abstract class Expr {
     abstract accept<R>(visitor: ExprVisitor<R>): R;
@@ -18,6 +20,7 @@ export interface ExprVisitor<R> {
     visitGetExpr(expr: GetExpr): R;
     visitThisExpr(expr: ThisExpr): R;
     visitVariableExpr(expr: VariableExpr): R;
+    visitLambdaExpr(expr: LambdaExpr): R;
 }
 
 
@@ -144,7 +147,7 @@ export class PrefixExpr extends Expr {
         this.operator = operator;
     }
     accept<R>(visitor: ExprVisitor<R>): R {
-       return visitor.visitPrefixExpr(this);
+        return visitor.visitPrefixExpr(this);
     }
 }
 
@@ -232,5 +235,23 @@ export class VariableExpr extends Expr {
     }
     accept<R>(visitor: ExprVisitor<R>): R {
         return visitor.visitVariableExpr(this);
+    }
+}
+
+
+export class LambdaExpr extends Expr {
+    paren: Token;
+    parameters: Parameter[];
+    returnType: GrusType;
+    body: Stmt[];
+    constructor(paren: Token, parameters: Parameter[], returnType: GrusType, body: Stmt[]) {
+        super();
+        this.paren = paren;
+        this.parameters = parameters;
+        this.returnType = returnType;
+        this.body = body;
+    }
+    accept<R>(visitor: ExprVisitor<R>): R {
+        return visitor.visitLambdaExpr(this);
     }
 }
