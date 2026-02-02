@@ -1,6 +1,6 @@
 import { GrusType } from "./GrusTypes";
 import { GrusValue } from "./GrusValue";
-import { Function_, Parameter, Stmt } from "./Stmt";
+import { Function_, Parameter, Stmt, Variable } from "./Stmt";
 import { Token } from "./Token";
 export abstract class Expr {
     abstract accept<R>(visitor: ExprVisitor<R>): R;
@@ -240,16 +240,18 @@ export class VariableExpr extends Expr {
 
 
 export class LambdaExpr extends Expr {
+    closure:Variable[];
     paren: Token;
     parameters: Parameter[];
     returnType: GrusType;
     body: Stmt[];
-    constructor(paren: Token, parameters: Parameter[], returnType: GrusType, body: Stmt[]) {
+    constructor(paren: Token, parameters: Parameter[], returnType: GrusType, body: Stmt[], closure: Variable[]) {
         super();
         this.paren = paren;
         this.parameters = parameters;
         this.returnType = returnType;
         this.body = body;
+        this.closure = closure;
     }
     accept<R>(visitor: ExprVisitor<R>): R {
         return visitor.visitLambdaExpr(this);

@@ -5,17 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "compile": "tsx src/index.ts",
-    "format-ir": "/opt/homebrew/opt/llvm/bin/opt -S \"src/llvm ir/ir.ll\" -o \"src/llvm ir/ir.ll\"",
-    "format-temp-to-ir": "node scripts/format-temp-to-ir.js",
-    "p": "node scripts/compile-and-run.js",
+    "c": "tsx src/main.ts",
     "watch": "npm-watch",
-    "build": "tsc && vite build",
-    "preview": "vite preview",
-    "ir": "/opt/homebrew/opt/llvm/bin/lli \"src/llvm ir/ir.ll\"",
-    "test": "vitest",
-    "test:run": "vitest run",
-    "test:coverage": "vitest run --coverage"
+    "build": "tsc && vite build"
   },
   "devDependencies": {
     "@types/node": "^24.10.1",
@@ -27,19 +19,7 @@
     "vitest": "^3.2.4"
   },
   "dependencies": {
+    "llvm-bindings": "^0.4.2",
     "vue": "^3.5.24"
-  },
-  "watch": {
-    "format-temp-to-ir": {
-      "patterns": [
-        "src/llvm ir/temp-ir.ll"
-      ],
-      "extensions": "ll",
-      "ignore": [
-        "src/llvm ir/.formatting-temp.lock",
-        "src/llvm ir/.formatting-temp.state",
-        "src/llvm ir/*.tmp"
-      ]
-    }
   }
 }

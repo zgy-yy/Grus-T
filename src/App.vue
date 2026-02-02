@@ -13,7 +13,7 @@
 <script setup lang="ts">
 import { reactive } from 'vue';
 import content from '@/grammar/program.e';
-import { Grus } from './Grus';
+import { Grus } from './Grus.ts';
 
 // 错误光标位置
 const errorCursor = reactive<{

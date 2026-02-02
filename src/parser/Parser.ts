@@ -528,7 +528,7 @@ export class Parser {
 
         const body = this.block();
 
-        return new LambdaExpr(this.previous(), params, returnType, body);
+        return new LambdaExpr(this.previous(), params, returnType, body,[]);
 
     }
 

@@ -100,8 +100,7 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
                 const code: IrFragment[] = [];
                 const varName = var_.name.lexeme;
                 const var_ir_type = this.irType(var_.type_);
-                // 如果类型是函数类型或指针类型，且没有初始化器，默认使用 null
-                const isObjectType = var_.type_ instanceof FunctionType;
+
                 let init_comp: ExprCompose;
                 init_comp = var_.initializer?.accept(this) ?? new ExprCompose("void", "zeroinitializer", "");
                 let ir_name = this.define(varName, var_.type_, var_.capture);
@@ -120,17 +119,11 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
                     code.push(`${data_ptr_reg} = getelementptr {i32,${var_ir_type}}, {i32,${var_ir_type}}* ${ir_name}, i32 0, i32 1`);
                     code.push(`store ${var_ir_type} ${comp.reg}, ${var_ir_type}* ${num_ptr_reg}`);
                 } else {
-                    if (isObjectType) {
-                        code.push(`${ir_name} = alloca ${var_ir_type}*`);
-                        code.push(init_comp.ir);
-                        code.push(`store ${var_ir_type} ${init_comp.reg}, ${var_ir_type}* ${ir_name}`);
-                    } else {
-                        code.push(`${ir_name} = alloca ${var_ir_type}`);
-                        code.push(init_comp.ir);
-                        const comp = this.matchingTargetType(var_ir_type, init_comp.irtype, init_comp.reg);
-                        code.push(comp.ir);
-                        code.push(`store ${var_ir_type} ${comp.reg}, ${var_ir_type}* ${ir_name}`);
-                    }
+                    code.push(`${ir_name} = alloca ${var_ir_type}`);
+                    code.push(init_comp.ir);
+                    const comp = this.matchingTargetType(var_ir_type, init_comp.irtype, init_comp.reg);
+                    code.push(comp.ir);
+                    code.push(`store ${var_ir_type} ${comp.reg}, ${var_ir_type}* ${ir_name}`);
                 }
 
                 return code.join("\n");
@@ -170,6 +163,7 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
                 reg: ir_param_reg,
             }
         });
+        parameters.unshift(new ExprCompose("i8*", "%env", ""));
 
         const fn_body = stmt.body.map(stmt => stmt.accept(this)).join("\n");
         const code =
@@ -588,7 +582,6 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
                 ir_type = this.irType(irVar.type.returnType);
             }
         }
-
         const arg_comps = args.map(arg => {
             ir_code.push(arg.ir);
 
@@ -610,8 +603,21 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
                 reg: finalReg,
             };
         });
+        if (callee.reg !== "@printf") {
+            arg_comps.unshift(new ExprCompose("i8*", "null", ""));
+        } else {
+            callee.irtype = "i32(i8*, ...)";
+        }
 
-        const call_ir = `call ${callee.irtype} ${callee.reg}(${arg_comps.map(arg => `${arg.irtype} ${arg.reg}`).join(", ")})`;
+        const closure_call_reg = this.reg();
+        const call_reg = this.reg();
+        ir_code.push(`${closure_call_reg} = getelementptr {i8*,i8*}, {i8*,i8*}* ${callee.reg}, i32 0, i32 1`);
+        ir_code.push(`${call_reg} = load ptr, ptr ${closure_call_reg}`);
+
+        const closure_env_reg = this.reg();
+        ir_code.push(`${closure_env_reg} = getelementptr {i8*,i8*}, {i8*,i8*}* ${callee.reg}, i32 0, i32 0`);
+
+        const call_ir = `call ${callee.irtype} ${call_reg}(${arg_comps.map(arg => `${arg.irtype} ${arg.reg}`).join(", ")})`;
         if (ir_type === "void") {
             ir_code.push(call_ir);
             return new ExprCompose(ir_type, reg, ir_code.join("\n"));
@@ -636,8 +642,18 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
         if (irVar.captured) {
 
         }
-        if(irVar.type instanceof FunctionType) {
-            return new ExprCompose(ir_type, irVar.name, "", irVar.name);
+        if (irVar.type instanceof FunctionType) {
+            const ir_code: IrFragment[] = [];
+            const closure_reg = this.reg();
+            const code_ptr_reg = this.reg();
+            // const closure_value_reg = this.reg();
+            ir_code.push(`${closure_reg} = alloca {i8*,i8*}`);
+            ir_code.push(`${code_ptr_reg} = getelementptr {i8*,i8*}, {i8*,i8*}* ${closure_reg}, i32 0, i32 1`);
+            ir_code.push(`store ptr ${irVar.name}, ptr ${code_ptr_reg}`);
+            // console.log(closure_value_reg)
+            return new ExprCompose("{i8*,i8*}", closure_reg, ir_code.join("\n"));
+        }else if(irVar.type instanceof ClosureType){
+            return new ExprCompose("{i8*,i8*}", irVar.name, "", irVar.name);
         }
         const ir_code = `${reg} = load ${ir_type} , ${ir_type}* ${irVar.name}\n`;
         return new ExprCompose(ir_type, reg, ir_code, irVar.name);
@@ -681,7 +697,7 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
                 reg: ir_param_reg,
             }
         });
-
+        parameters.unshift(new ExprCompose("i8*", "%env", ""));
         const fn_body = expr.body.map(stmt => stmt.accept(this)).join("\n");
         const code =
             `define ${returnType} @${fn_name}(${parameters.map(param => `${param.irtype} ${param.reg}`).join(", ")}) {
@@ -692,7 +708,16 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
 }`;
         this.endScope();
         this.globals.push(code);
-        return new ExprCompose("aewew", `@${fn_name}`, "", `@${fn_name}`);
+        const ir_code: IrFragment[] = [];
+        const closure_reg = this.reg();
+        const code_ptr_reg = this.reg();
+        const closure_value_reg = this.reg();
+        ir_code.push(`${closure_reg} = alloca {i8*,i8*}`);
+        ir_code.push(`${code_ptr_reg} = getelementptr {i8*,i8*}, {i8*,i8*}* ${closure_reg}, i32 0, i32 1`);
+        ir_code.push(`store ptr @${fn_name}, ptr ${code_ptr_reg}`);
+        // 加载结构体值（从指针加载）
+        ir_code.push(`${closure_value_reg} = load {i8*,i8*}, {i8*,i8*}* ${closure_reg}`);
+        return new ExprCompose("{i8*,i8*}", closure_value_reg, ir_code.join("\n"));
     }
 
     //编译类型表达式
@@ -708,10 +733,16 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
             return type.name;
         }
         if (type instanceof FunctionType) {
-            return this.irType(type.returnType) + "(" + type.paramTypes.map(param => this.irType(param)).join(", ") + ")";
+            type.paramTypes.unshift(new SimpleType("i8*"));
+            const ret_ir_type = this.irType(type.returnType);
+            const param_ir_types = type.paramTypes.map(param => this.irType(param)).join(", ");
+            return `${ret_ir_type}(${param_ir_types})`;
         }
         if (type instanceof ClosureType) {
-            return this.irType(type.funType.returnType) + "(" + type.funType.paramTypes.map(param => this.irType(param)).join(", ") + ")*";
+            type.funType.paramTypes.unshift(new SimpleType("i8*"));
+            // const ret_ir_type = this.irType(type.funType.returnType);
+            // const param_ir_types = type.funType.paramTypes.map(param => this.irType(param)).join(", ");
+            return `{i8*,i8*}`;
         }
         if (type instanceof PointerType) {
             return this.irType(type.name) + "*";
