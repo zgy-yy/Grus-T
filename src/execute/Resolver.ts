@@ -3,7 +3,7 @@ import { BlockStmt, BreakStmt, ClassStmt, ContinueStmt, DoWhileStmt, ExpressionS
 import { Token } from "@/ast/Token";
 import { ParserErrorHandler } from "@/parser/ErrorHandler";
 import { TokenType } from "@/ast/TokenType";
-import { GrusType, SimpleType, FunctionType, TempOmittedType, PointerType } from "../ast/GrusTypes";
+import { GrusType, SimpleType, FunctionType, TempOmittedType, PointerType, ClosureType } from "../ast/GrusTypes";
 
 
 class FunEnv {
@@ -100,7 +100,7 @@ export class Resolver implements ExprVisitor<GrusType>, StmtVisitor<void> {
                 const initType = this.resolveExpr(_var.initializer);
                 if (_var.type_ === null) {
                     _var.type_ = initType;
-                } 
+                }
 
                 if (!checkSameType(_var.type_, initType)) {
                     throw this.error(_var.name, `Type mismatch: ${initType} != ${_var.type_}`);
@@ -262,12 +262,8 @@ export class Resolver implements ExprVisitor<GrusType>, StmtVisitor<void> {
             const scope = this.scopes[this.scopes.length - 1];
             const var_ = scope.get(expr.name.lexeme);
             if (var_) {
-                if (var_.identifier instanceof Function_) {
-
-                } else {
-                    if (!var_.defined) {
-                        throw this.error(expr.name, `cannot read local variable in its own initializer.`);
-                    }
+                if (!var_.defined) {
+                    throw this.error(expr.name, `cannot read local variable in its own initializer.`);
                 }
             }
         }
@@ -346,7 +342,6 @@ export class Resolver implements ExprVisitor<GrusType>, StmtVisitor<void> {
         } else if (typeof expr.value === "number") {
             if (!Number.isInteger(expr.value)) {
                 literalType = new SimpleType("float");
-
             } else {
                 literalType = new SimpleType("i32");
             }
@@ -379,7 +374,7 @@ export class Resolver implements ExprVisitor<GrusType>, StmtVisitor<void> {
         const calleeType = this.resolveExpr(expr.callee);
         if (calleeType instanceof FunctionType) {
             for (const i in calleeType.paramTypes) {
-                const paramType:GrusType = calleeType.paramTypes[i]; //形参类型
+                const paramType: GrusType = calleeType.paramTypes[i]; //形参类型
                 const arg = expr.arguments[i];
                 if (paramType instanceof TempOmittedType) {
                     break;
@@ -430,7 +425,7 @@ export class Resolver implements ExprVisitor<GrusType>, StmtVisitor<void> {
         this.endFunction(expr.paren);
         this.endScope();
         const paramTypes = expr.parameters.map(param => param.type_);
-        return new FunctionType(expr.returnType, paramTypes);
+        return new ClosureType(expr.returnType, paramTypes);
     }
 
 
@@ -495,6 +490,9 @@ export class Resolver implements ExprVisitor<GrusType>, StmtVisitor<void> {
             const scope = this.scopes[this.scopes.length - 1];
             const declared = scope.get(name.lexeme);
             if (declared) {
+                if (declared.identifier.type_ instanceof SimpleType && declared.identifier.type_.name === "void") {
+                    throw this.error(name, `Variable with this name ${name.lexeme} is a void type, which is not allowed.`);
+                }
                 declared.defined = true;
             } else {
                 throw this.error(name, `Variable with this name ${name.lexeme} not declared in this scope.`);
@@ -548,10 +546,14 @@ function checkSameType(left: GrusType, right: GrusType): boolean {
         }
         return left.name === right.name;
     }
-    if (left instanceof FunctionType && right instanceof FunctionType) {
-        return checkSameType(left.returnType, right.returnType) && left.paramTypes.every((param, index) => checkSameType(param, right.paramTypes[index]));
+    if ((left instanceof  ClosureType) && right instanceof ClosureType) {
+        return checkSameType(left.funType.returnType, right.funType.returnType) && left.funType.paramTypes.every((param: GrusType, index: number) => checkSameType(param, right.funType.paramTypes[index]));
+    }else if(left instanceof ClosureType && right instanceof FunctionType) {
+        return checkSameType(left.funType.returnType, right.returnType) && left.funType.paramTypes.every((param: GrusType, index: number) => checkSameType(param, right.paramTypes[index]));
+    }else {
+        // throw new ResolverError(left, `Type mismatch: ${left} != ${right}`);
+        return false;
     }
-    return false;
 }
 
 function checkBooleanType(type: GrusType): boolean {

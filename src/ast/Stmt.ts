@@ -189,11 +189,9 @@ export class Parameter implements Symbol_ {
 export class Function_ implements Symbol_ {
     capture: boolean;
     type_: GrusType;
-    upValues: Variable[];
     constructor(public name: Token, public parameters: Parameter[], public returnType: GrusType) {
         this.capture = false;
         this.type_ = new FunctionType(returnType, parameters.map(param => param.type_));
-        this.upValues = [];
     }
 }
 export class VarStmt extends Stmt {

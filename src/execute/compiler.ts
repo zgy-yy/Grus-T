@@ -5,7 +5,7 @@ import { CompilerErrorHandler } from "@/parser/ErrorHandler";
 import { TokenType } from "@/ast/TokenType";
 import { Token } from "@/ast/Token";
 import { binaryOperator } from "./utils";
-import { FunctionType, GrusType, SimpleType, TempOmittedType } from "@/ast/GrusTypes";
+import { ClosureType, FunctionType, GrusType, PointerType, SimpleType, TempOmittedType } from "@/ast/GrusTypes";
 
 
 export class CompilerError extends Error {
@@ -100,7 +100,10 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
                 const code: IrFragment[] = [];
                 const varName = var_.name.lexeme;
                 const var_ir_type = this.irType(var_.type_);
-                const init_comp = var_.initializer?.accept(this) ?? new ExprCompose("void", "zeroinitializer", "");
+                // 如果类型是函数类型或指针类型，且没有初始化器，默认使用 null
+                const isObjectType = var_.type_ instanceof FunctionType;
+                let init_comp: ExprCompose;
+                init_comp = var_.initializer?.accept(this) ?? new ExprCompose("void", "zeroinitializer", "");
                 let ir_name = this.define(varName, var_.type_, var_.capture);
                 if (var_.capture) {
                     const mem = this.memSizeOf(var_.type_);
@@ -117,12 +120,17 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
                     code.push(`${data_ptr_reg} = getelementptr {i32,${var_ir_type}}, {i32,${var_ir_type}}* ${ir_name}, i32 0, i32 1`);
                     code.push(`store ${var_ir_type} ${comp.reg}, ${var_ir_type}* ${num_ptr_reg}`);
                 } else {
-                    code.push(`${ir_name} = alloca ${var_ir_type}`);
-                    code.push(init_comp.ir);
-                    const comp = this.matchingTargetType(var_ir_type, init_comp.irtype, init_comp.reg);
-                    code.push(comp.ir);
-                    code.push(`store ${var_ir_type} ${comp.reg}, ${var_ir_type}* ${ir_name}`);
-
+                    if (isObjectType) {
+                        code.push(`${ir_name} = alloca ${var_ir_type}*`);
+                        code.push(init_comp.ir);
+                        code.push(`store ${var_ir_type} ${init_comp.reg}, ${var_ir_type}* ${ir_name}`);
+                    } else {
+                        code.push(`${ir_name} = alloca ${var_ir_type}`);
+                        code.push(init_comp.ir);
+                        const comp = this.matchingTargetType(var_ir_type, init_comp.irtype, init_comp.reg);
+                        code.push(comp.ir);
+                        code.push(`store ${var_ir_type} ${comp.reg}, ${var_ir_type}* ${ir_name}`);
+                    }
                 }
 
                 return code.join("\n");
@@ -131,10 +139,16 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
             return stmt.vars.map(var_ => {
                 const varName = var_.name.lexeme;
                 const var_ir_type = this.irType(var_.type_);
-                const init_comp = var_.initializer?.accept(this) ?? new ExprCompose("void", "zeroinitializer", "");
-                const init_reg = init_comp.reg;
+                // 如果类型是函数类型或指针类型，且没有初始化器，默认使用 null
+                let defaultInit: ExprCompose;
+                if (!var_.initializer && (var_.type_ instanceof FunctionType || var_.type_ instanceof PointerType)) {
+                    defaultInit = new ExprCompose(var_ir_type + (var_.type_ instanceof FunctionType ? "*" : ""), "null", "");
+                } else {
+                    defaultInit = var_.initializer?.accept(this) ?? new ExprCompose("void", "zeroinitializer", "");
+                }
+                const init_reg = defaultInit.reg;
                 let ir_name = this.define(varName, var_.type_, false);
-                return `${ir_name} = global ${var_ir_type} ${init_reg}`
+                return `${ir_name} = global ${var_ir_type}${var_.type_ instanceof FunctionType ? "*" : ""} ${init_reg}`
             }).join("\n");
         }
     }
@@ -558,6 +572,7 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
         const callee = expr.callee.accept(this);
         const args = expr.arguments.map(argument => argument.accept(this));
         const ir_code: IrFragment[] = [];
+        ir_code.push(callee.ir);
 
         let ir_type = "void";
 
@@ -616,23 +631,24 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
     }
     visitVariableExpr(expr: VariableExpr): ExprCompose {
         const irVar = this.findIrVar(expr.name);
-        if (irVar.type instanceof FunctionType) {
-            const ir_type = this.irType(irVar.type);
-            // 对于函数类型，直接返回函数名（如 @printf），不需要创建寄存器
-            return new ExprCompose(ir_type, irVar.name, "", irVar.name);
-        }
+        const reg = this.reg();
+        const ir_type = this.irType(irVar.type);
         if (irVar.captured) {
 
         }
-        const reg = this.reg();
-        const ir_type = this.irType(irVar.type);
+        if(irVar.type instanceof FunctionType) {
+            return new ExprCompose(ir_type, irVar.name, "", irVar.name);
+        }
         const ir_code = `${reg} = load ${ir_type} , ${ir_type}* ${irVar.name}\n`;
         return new ExprCompose(ir_type, reg, ir_code, irVar.name);
     }
 
     visitLiteralExpr(expr: LiteralExpr): ExprCompose {
         const globalReg = `@.constant_${Compiler.constStrI++}`
-        if (typeof expr.value === "string") {
+        if (expr.value === null) {
+            // null 字面量，返回 null 指针
+            return new ExprCompose("i8*", "null", "");
+        } else if (typeof expr.value === "string") {
             const g_ir = `${globalReg} = private unnamed_addr constant [${expr.value.length + 2} x i8] c"${expr.value}\\0A\\00", align 1\n`;
             this.globals.push(g_ir);
             // 不在这里返回 g_ir，因为它会被添加到全局作用域
@@ -650,7 +666,33 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
     }
 
     visitLambdaExpr(expr: LambdaExpr): ExprCompose {
-        throw new Error("Method not implemented.");
+        this.beginScope(expr.body);
+        const fn_name = "lf" + Compiler.regI++;
+        const returnType = this.irType(expr.returnType);
+        const param_code_ir: IrFragment[] = [];
+        const parameters = expr.parameters.map(param => {
+            const ir_param_reg = `%${param.name.lexeme}.p`;
+            const ir_param_type = this.irType(param.type_);
+            const ir_param_name = this.define(param.name.lexeme, param.type_, false);
+            param_code_ir.push(`${ir_param_name} = alloca ${ir_param_type}`);
+            param_code_ir.push(`store ${ir_param_type} ${ir_param_reg}, ${ir_param_type}* ${ir_param_name}`);
+            return {
+                irtype: ir_param_type,
+                reg: ir_param_reg,
+            }
+        });
+
+        const fn_body = expr.body.map(stmt => stmt.accept(this)).join("\n");
+        const code =
+            `define ${returnType} @${fn_name}(${parameters.map(param => `${param.irtype} ${param.reg}`).join(", ")}) {
+    entry:
+    ${param_code_ir.join("\n")}
+    ${fn_body}
+    ret ${returnType} ${returnType === "void" ? "" : "zeroinitializer"}
+}`;
+        this.endScope();
+        this.globals.push(code);
+        return new ExprCompose("aewew", `@${fn_name}`, "", `@${fn_name}`);
     }
 
     //编译类型表达式
@@ -667,6 +709,12 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
         }
         if (type instanceof FunctionType) {
             return this.irType(type.returnType) + "(" + type.paramTypes.map(param => this.irType(param)).join(", ") + ")";
+        }
+        if (type instanceof ClosureType) {
+            return this.irType(type.funType.returnType) + "(" + type.funType.paramTypes.map(param => this.irType(param)).join(", ") + ")*";
+        }
+        if (type instanceof PointerType) {
+            return this.irType(type.name) + "*";
         }
         if (type instanceof TempOmittedType) {
             return "...";
@@ -691,7 +739,7 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
     define(name: string, type: GrusType, captured: boolean): Reg {
         const currentScope = this.scopes[this.scopes.length - 1];
         const distance = this.findVarDistance(name);
-        const prefix = this.scopes.length == 1 || type instanceof FunctionType ? "@" : "%";
+        const prefix = this.scopes.length == 1 ? "@" : "%";
         const ir_name = `${prefix}${captured ? "ptr_" : ""}${name}${distance > 0 ? distance : ''}`;
         currentScope.set(name, new IrVar(ir_name, type, captured));
         return ir_name;
@@ -746,36 +794,36 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
         } else if (targetI < sourceI) { //降级
             if (targetI < 4) {
                 if (sourceI < 4) {//整数间转换
-                    const ir = `${turnReg} = trunc ${sourceType} ${reg} to ${targetType}`;
+                    const ir = `${turnReg} = trunc ${sourceType} ${reg} to ${targetType} `;
                     return new ExprCompose(targetType, turnReg, ir);
                 } else { //浮点数转整数
-                    const ir = `${turnReg} = fptosi ${sourceType} ${reg} to ${targetType}`;
+                    const ir = `${turnReg} = fptosi ${sourceType} ${reg} to ${targetType} `;
                     return new ExprCompose(targetType, turnReg, ir);
                 }
             } else {
-                const ir = `${turnReg} = fptrunc ${sourceType} ${reg} to ${targetType}`;
+                const ir = `${turnReg} = fptrunc ${sourceType} ${reg} to ${targetType} `;
                 return new ExprCompose(targetType, turnReg, ir);
             }
         } else { //升级
             if (targetI > 3) {
                 if (sourceI > 3) {//浮点数间转换
-                    const ir = `${turnReg} = fpext ${sourceType} ${reg} to ${targetType}`;
+                    const ir = `${turnReg} = fpext ${sourceType} ${reg} to ${targetType} `;
                     return new ExprCompose(targetType, turnReg, ir);
                 } else { //整数转浮点数
-                    const ir = `${turnReg} = sitofp ${sourceType} ${reg} to ${targetType}`;
+                    const ir = `${turnReg} = sitofp ${sourceType} ${reg} to ${targetType} `;
                     return new ExprCompose(targetType, turnReg, ir);
                 }
             } else {
                 // 对于 i1 (布尔值)，使用 zext (零扩展)，其他整数类型使用 sext (符号扩展)
                 const extendOp = sourceType === "i1" ? "zext" : "sext";
-                const ir = `${turnReg} = ${extendOp} ${sourceType} ${reg} to ${targetType}`;
+                const ir = `${turnReg} = ${extendOp} ${sourceType} ${reg} to ${targetType} `;
                 return new ExprCompose(targetType, turnReg, ir);
             }
         }
     }
 
     reg() {
-        return `%r${Compiler.regI++}`;
+        return `%r${Compiler.regI++} `;
     }
 
     memSizeOf(type: GrusType): ExprCompose {
@@ -785,8 +833,8 @@ export class Compiler implements ExprVisitor<ExprCompose>, StmtVisitor<IrFragmen
 
         if (type instanceof SimpleType) {
             const ir_type = type.name;
-            ir_code.push(`${sizePtrReg} = getelementptr {i32,${ir_type}},{i32,${ir_type}}* null, i64 1)`);
-            ir_code.push(`${sizeIntReg} = ptrtoint {i32,${ir_type}}* ${sizePtrReg} to i64`);
+            ir_code.push(`${sizePtrReg} = getelementptr { i32, ${ir_type} }, { i32, ${ir_type} }* null, i64 1)`);
+            ir_code.push(`${sizeIntReg} = ptrtoint { i32, ${ir_type} }* ${sizePtrReg} to i64`);
             return new ExprCompose("i64", sizeIntReg, ir_code.join("\n"));
         }
         throw new Error("Unsupported type: " + type.toString());
