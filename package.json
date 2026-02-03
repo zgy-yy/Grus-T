@@ -5,9 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "c": "tsx src/main.ts",
-    "watch": "npm-watch",
-    "build": "tsc && vite build"
+    "build": "tsc && vite build",
+    "c": "tsx src/main.ts"
   },
   "devDependencies": {
     "@types/node": "^24.10.1",

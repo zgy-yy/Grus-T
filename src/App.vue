@@ -13,7 +13,9 @@
 <script setup lang="ts">
 import { reactive } from 'vue';
 import content from '@/grammar/program.e';
-import { Grus } from './Grus.ts';
+import { Scanner } from './parser/Scanner.ts';
+import { Parser } from './parser/Parser.ts';
+import { Resolver } from './execute/Resolver.ts';
 
 // 错误光标位置
 const errorCursor = reactive<{
@@ -31,9 +33,25 @@ const reportError = (line: number, column: number) => {
 };
 
 try {
-    const grus = new Grus(content, reportError);
-    const code = grus.run();
-    console.log(code);
+    const scanner = new Scanner(content, reportError);
+    const tokens = scanner.scanTokens();
+    const parser = new Parser(tokens, (token, message) => {
+        reportError(token.line, token.column);
+        console.error(`parser error [${token.line}:${token.column}] ${message}`);
+    });
+    const statements = parser.parse();
+    if (statements) {
+        const resolver = new Resolver((token, message) => {
+            reportError(token.line, token.column);
+            console.error(`resolver error [${token.line}:${token.column}] ${message}`);
+        });
+        try {
+            resolver.resolveProgram(statements);
+            console.log(statements);
+        } catch (e) {
+            console.error(e);
+        }
+    }
 } catch (e) {
     console.error(e);
 }

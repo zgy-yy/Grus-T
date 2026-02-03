@@ -29,3 +29,7 @@ src/llvm ir/.formatting.state
 src/llvm ir/.formatting-temp.lock
 src/llvm ir/.formatting-temp.state
 src/llvm ir/*.tmp
+
+
+src/grammar/*.e
+*.ll

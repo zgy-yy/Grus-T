@@ -1,25 +1,15 @@
-; ModuleID = '/Users/tal/Desktop/Grus-T/src/llvm ir/temp-ir.ll'
-source_filename = "/Users/tal/Desktop/Grus-T/src/llvm ir/temp-ir.ll"
+; ModuleID = 'demo_module'
+source_filename = "demo_module"
 
-@.constant_0 = private unnamed_addr constant [4 x i8] c"%d\0A\00", align 1
+@0 = private unnamed_addr constant [5 x i8] c"%d\\n\00", align 1
 
-declare i32 @printf(ptr, ...)
+declare i32 @printf(i8*, ...)
 
-declare noalias ptr @malloc(i64)
-
-declare void @free(ptr)
-
-define i32 @main(ptr %env) {
+define i32 @main() {
 entry:
-  %r2 = alloca { ptr, ptr }, align 8
-  %r3 = getelementptr { ptr, ptr }, ptr %r2, i32 0, i32 1
-  store ptr @printf, ptr %r3, align 8
-  %r4 = getelementptr { ptr, ptr }, ptr %r2, i32 0, i32 1
-  %r5 = load ptr, ptr %r4, align 8
-  %r6 = getelementptr { ptr, ptr }, ptr %r2, i32 0, i32 0
-  %r0 = call ptr %r5(ptr null, ptr @.constant_0, i32 1)
-  ret i32 0
-
-0:                                                ; No predecessors!
+  %a = alloca i32, align 4
+  store i32 12, i32* %a, align 4
+  %a1 = load i32, i32* %a, align 4
+  %0 = call i32 (i8*, ...) @printf(i8* getelementptr inbounds ([5 x i8], [5 x i8]* @0, i32 0, i32 0), i32 %a1)
   ret i32 0
 }

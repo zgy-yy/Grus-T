@@ -166,37 +166,23 @@ export class ExpressionStmt extends Stmt {
     }
 }
 
-export interface Symbol_ {
+export class Identifier {
     name: Token;
-    type_: GrusType
+    defaultValue: Expr |null;
+    type: GrusType;
     capture: boolean;
-}
-
-export class Variable implements Symbol_ {
-    capture: boolean;
-    constructor(public name: Token, public type_: GrusType, public initializer: Expr | null) {
+    constructor(name: Token, type: GrusType, defaultValue: Expr | null) {
+        this.name = name;
+        this.type = type;
         this.capture = false;
+        this.defaultValue = defaultValue;
     }
 }
 
-export class Parameter implements Symbol_ {
-    capture: boolean;
-    constructor(public name: Token, public type_: GrusType, public defaultValue: Expr | null) {
-        this.capture = false;
-    }
-}
 
-export class Function_ implements Symbol_ {
-    capture: boolean;
-    type_: GrusType;
-    constructor(public name: Token, public parameters: Parameter[], public returnType: GrusType) {
-        this.capture = false;
-        this.type_ = new FunctionType(returnType, parameters.map(param => param.type_));
-    }
-}
 export class VarStmt extends Stmt {
-    vars: Variable[];
-    constructor(vars: Variable[]) {
+    vars: Identifier[];
+    constructor(vars: Identifier[]) {
         super();
         this.vars = vars;
     }
@@ -206,11 +192,15 @@ export class VarStmt extends Stmt {
 }
 
 export class FunctionStmt extends Stmt {
-    fun: Function_;
+    name: Token;
+    parameters: Identifier[];
+    returnType: GrusType;
     body: Stmt[];
-    constructor(name: Token, parameters: Parameter[], returnType: GrusType, body: Stmt[]) {
+    constructor(name: Token, parameters: Identifier[], returnType: GrusType, body: Stmt[]) {
         super();
-        this.fun = new Function_(name, parameters, returnType);
+        this.name = name;
+        this.parameters = parameters;
+        this.returnType = returnType;
         this.body = body;
     }
     accept<R>(visitor: StmtVisitor<R>): R {

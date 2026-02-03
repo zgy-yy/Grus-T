@@ -49,7 +49,7 @@ export class Scanner {
     }
 
     this.tokens.push(new Token(TokenType.EOF, '', null, this.line, this.column));
-    console.log(this.tokens)
+    // console.log(this.tokens)
     return this.tokens;
   }
 
