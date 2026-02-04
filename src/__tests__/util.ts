@@ -2,7 +2,7 @@ import { execSync } from 'child_process';
 import { Grus } from '@/Grus';
 
 const projectRoot = process.cwd();
-const lliPath = '/opt/homebrew/opt/llvm/bin/lli';
+const lliPath = '/opt/homebrew/bin/lli';
 
 /**
  * 编译源码字符串并运行生成的 IR 代码
@@ -12,7 +12,7 @@ const lliPath = '/opt/homebrew/opt/llvm/bin/lli';
  */
 export function compileAndRun(source: string): string {
   // 编译源代码为 IR
-  const grus = new Grus(source, () => {})
+  const grus = new Grus(source, () => {});
   const irCode = grus.run();
   
   if (!irCode || irCode.trim() === '') {
@@ -27,9 +27,14 @@ export function compileAndRun(source: string): string {
       cwd: projectRoot,
       stdio: 'pipe'
     });
+    
+    // 去除首尾空白，包括可能的换行符和 zsh 的 % 提示符
     return output.trim();
   } catch (error: any) {
-    throw new Error(`IR 执行失败: ${error.message}`);
+    // 如果 stderr 有输出，也包含在错误信息中
+    const errorMessage = error.stderr 
+      ? `${error.message}\n${error.stderr.toString()}`
+      : error.message;
+    throw new Error(`IR 执行失败: ${errorMessage}`);
   }
 }
-

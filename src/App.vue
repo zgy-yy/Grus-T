@@ -39,23 +39,21 @@ try {
         reportError(token.line, token.column);
         console.error(`parser error [${token.line}:${token.column}] ${message}`);
     });
+    console.log(tokens)
     const statements = parser.parse();
     if (statements) {
         const resolver = new Resolver((token, message) => {
             reportError(token.line, token.column);
             console.error(`resolver error [${token.line}:${token.column}] ${message}`);
         });
-        try {
-            resolver.resolveProgram(statements);
-            console.log(statements);
-        } catch (e) {
-            console.error(e);
-        }
+        console.log(statements);
+        resolver.resolveProgram(statements);
+        
+
     }
 } catch (e) {
     console.error(e);
 }
-
 
 </script>
 

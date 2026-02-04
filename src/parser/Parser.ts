@@ -1,9 +1,9 @@
 import { Token } from "@/ast/Token";
 import { ParserErrorHandler } from "./ErrorHandler";
 import { TokenType } from "@/ast/TokenType";
-import { AssignExpr, BinaryExpr, CallExpr, Expr, LambdaExpr, LiteralExpr, PostfixExpr, PrefixExpr, ThisExpr, UnaryExpr, VariableExpr } from "@/ast/Expr";
+import { AssignExpr, BinaryExpr, CallExpr, CastExpr, Expr, LambdaExpr, LiteralExpr, PostfixExpr, PrefixExpr, ThisExpr, UnaryExpr, VariableExpr } from "@/ast/Expr";
 import { BlockStmt, BreakStmt, ContinueStmt, DoWhileStmt, ExpressionStmt, ForStmt, FunctionStmt, GotoStmt, IfStmt, LabelStmt, LoopStmt, ReturnStmt, Stmt, Identifier, VarStmt, WhileStmt } from "@/ast/Stmt";
-import { ClosureType, GrusType, PointerType, SimpleType } from "@/ast/GrusTypes";
+import { ClosureType, GrusType, literalType, PointerType, SimpleType } from "@/ast/GrusTypes";
 
 class SyntaxError extends Error {
     public token: Token;
@@ -76,7 +76,7 @@ export class Parser {
         [TokenType.LessLess]: [null, this.binary.bind(this), Precedence.SHIFT],// <<
 
         [TokenType.Greater]: [null, this.binary.bind(this), Precedence.COMPARISON],// >
-        [TokenType.Less]: [null, this.binary.bind(this), Precedence.COMPARISON],// <
+        [TokenType.Less]: [this.primary.bind(this), this.binary.bind(this), Precedence.COMPARISON],// <
         [TokenType.GreaterEqual]: [null, this.binary.bind(this), Precedence.COMPARISON],// >=
         [TokenType.LessEqual]: [null, this.binary.bind(this), Precedence.COMPARISON],// <=
 
@@ -386,7 +386,7 @@ export class Parser {
         } else {
             initializer = this.expressionStatement();
         }
-        const condition = this.check(TokenType.Semicolon) ? new LiteralExpr(true) : this.expression();
+        const condition = this.check(TokenType.Semicolon) ? new LiteralExpr('true') : this.expression();
         this.consume(TokenType.Semicolon, "Expect ';' after condition.");
         const increment = this.check(TokenType.RightParen) ? null : this.expression();
         this.consume(TokenType.RightParen, "Expect ')' after condition.");
@@ -482,13 +482,13 @@ export class Parser {
     private primary(token: Token): Expr {
         switch (token.type) {
             case TokenType.True:
-                return new LiteralExpr(true);
+                return new LiteralExpr('true');
             case TokenType.False:
-                return new LiteralExpr(false);
+                return new LiteralExpr('false');
             case TokenType.Null:
-                return new LiteralExpr(null);
+                return new LiteralExpr('null');
             case TokenType.Number:
-                return new LiteralExpr(parseFloat(token.literal!.toString()));
+                return new LiteralExpr(token.literal);
             case TokenType.String:
                 return new LiteralExpr(token.literal);
             case TokenType.This:
@@ -510,6 +510,11 @@ export class Parser {
                 const expr = this.expression();
                 this.consume(TokenType.RightParen, "Expect ')' after expression.");
                 return expr;
+            case TokenType.Less:
+                const type = this.type();
+                this.consume(TokenType.Greater, "Expect '>' after type.");
+                const target = this.expression(Precedence.UNARY);
+                return new CastExpr(type, target);
             default:
                 throw this.error(token, "Expect expression.");
         }
@@ -539,7 +544,7 @@ export class Parser {
     private type(): GrusType {
         if (this.match(TokenType.Identifier)) {
             const name = this.previous();
-            return new SimpleType(name.lexeme);
+            return new SimpleType(name.lexeme as literalType);
         } else if (this.match(TokenType.Star)) {
             return new PointerType(this.type());
         } else if (this.match(TokenType.LeftParen)) {
@@ -553,7 +558,6 @@ export class Parser {
             this.consume(TokenType.RightParen, "Expect ')' after parameters.");
             this.consume(TokenType.Arrow, "Expect '->' after parameters.");
             const returnType = this.type();
-            const paren = this.previous();
             return new ClosureType(returnType, declTypes);
         }
         throw this.error(this.peek(), "Expect type.");

@@ -1,7 +1,6 @@
 import { Token } from '@/ast/Token.ts';
 import { TokenType } from '@/ast/TokenType.ts';
 import { ScannerErrorHandler } from './ErrorHandler';
-import { GrusValue } from '@/ast/GrusValue';
 // 关键字映射
 const keywords = new Map<string, TokenType>([
   ['new', TokenType.New],
@@ -48,7 +47,7 @@ export class Scanner {
       this.scanToken();
     }
 
-    this.tokens.push(new Token(TokenType.EOF, '', null, this.line, this.column));
+    this.tokens.push(new Token(TokenType.EOF, '', '', this.line, this.column));
     // console.log(this.tokens)
     return this.tokens;
   }
@@ -231,8 +230,7 @@ export class Scanner {
           break;
       }
       const num = this.source.substring(this.start, this.current).slice(2);
-      const value = parseInt(num, base);
-      this.addToken(TokenType.Number, value);
+      this.addToken(TokenType.Number, num);
       return;
     }
 
@@ -250,8 +248,7 @@ export class Scanner {
         this.advance();
       }
     }
-
-    const value = parseFloat(this.source.substring(this.start, this.current));
+    const value = this.source.substring(this.start, this.current);
     this.addToken(TokenType.Number, value);
 
   }
@@ -274,7 +271,7 @@ export class Scanner {
     return this.current >= this.source.length;
   }
 
-  private addToken(type: TokenType, literal: GrusValue = null): void {
+  private addToken(type: TokenType, literal: string = 'null'): void {
     const text = this.source.substring(this.start, this.current);
     this.tokens.push(new Token(type, text, literal, this.line, this.column));
   }

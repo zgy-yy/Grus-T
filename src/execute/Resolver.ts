@@ -1,4 +1,4 @@
-import { AssignExpr, BinaryExpr, CallExpr, ConditionalExpr, Expr, ExprVisitor, GetExpr, LambdaExpr, LiteralExpr, LogicalExpr, PostfixExpr, PrefixExpr, SetExpr, ThisExpr, UnaryExpr, VariableExpr } from "@/ast/Expr";
+import { AssignExpr, BinaryExpr, CallExpr, CastExpr, ConditionalExpr, Expr, ExprVisitor, GetExpr, LambdaExpr, LiteralExpr, LogicalExpr, PostfixExpr, PrefixExpr, SetExpr, ThisExpr, UnaryExpr, VariableExpr } from "@/ast/Expr";
 import { BlockStmt, BreakStmt, ClassStmt, ContinueStmt, DoWhileStmt, ExpressionStmt, ForStmt, FunctionStmt, GotoStmt, Identifier, IfStmt, LabelStmt, LoopStmt, ReturnStmt, Stmt, StmtVisitor, VarStmt, WhileStmt } from "@/ast/Stmt";
 import { Token } from "@/ast/Token";
 import { ParserErrorHandler } from "@/parser/ErrorHandler";
@@ -76,7 +76,9 @@ export class Resolver implements ExprVisitor<GrusType>, StmtVisitor<void> {
         try {
             this.beginScope(stmts);
             const globalScope = this.scopes[this.scopes.length - 1];
-            globalScope.set("printf", new Member(new Identifier(new Token(TokenType.Identifier, "printf", null, 0, 0), new SimpleType("i32"), null), true));
+            const printf = new Token(TokenType.Identifier, "printf", 'null', 0, 0);
+            globalScope.set("printf", new Member(new Identifier(new Token(TokenType.Identifier, "printf", 'null', 0, 0),
+                new FunctionType(new SimpleType("i32"), [new SimpleType("string"), new TempOmittedType()]), null), true));
             for (const stmt of stmts) {
                 this.resolveStmt(stmt);
             }
@@ -101,9 +103,8 @@ export class Resolver implements ExprVisitor<GrusType>, StmtVisitor<void> {
                 if (_var.type === null) {
                     _var.type = initType;
                 }
-
                 if (!checkSameType(_var.type, initType)) {
-                    throw this.error(_var.name, `Type mismatch: ${initType} != ${_var.type}`);
+                    throw this.error(_var.name, `Type mismatch:  ${_var.type} != ${initType} `);
                 }
             } else {
                 if (!_var.type) {
@@ -150,7 +151,8 @@ export class Resolver implements ExprVisitor<GrusType>, StmtVisitor<void> {
         this.currentFun.ifStack.push('if');
         const conditionType = this.resolveExpr(stmt.condition);
         if (!checkBooleanType(conditionType)) {
-            throw this.error(stmt.condition, "Type mismatch: boolean type expected");
+            throw new Error("Type mismatch: boolean type expected");
+            // throw this.error(stmt.condition.operator, "Type mismatch: boolean type expected");
         }
 
         this.resolveStmt(stmt.thenBranch);
@@ -168,7 +170,7 @@ export class Resolver implements ExprVisitor<GrusType>, StmtVisitor<void> {
         this.beginScope(stmt.body instanceof BlockStmt ? stmt.body.statements : [stmt.body]);
         const conditionType = this.resolveExpr(stmt.condition);
         if (!checkBooleanType(conditionType)) {
-            throw this.error(stmt.condition, "Type mismatch: boolean type expected");
+            throw new Error("Type mismatch: boolean type expected");
         }
         this.currentFun.loopDepth++;
         this.resolveStmt(stmt.body);
@@ -182,7 +184,7 @@ export class Resolver implements ExprVisitor<GrusType>, StmtVisitor<void> {
         this.currentFun.loopDepth--;
         const conditionType = this.resolveExpr(stmt.condition);
         if (!checkBooleanType(conditionType)) {
-            throw this.error(stmt.condition, "Type mismatch: boolean type expected");
+            throw new Error("Type mismatch: boolean type expected");
         }
         this.endScope();
     }
@@ -193,7 +195,7 @@ export class Resolver implements ExprVisitor<GrusType>, StmtVisitor<void> {
         }
         const conditionType = this.resolveExpr(stmt.condition);
         if (!checkBooleanType(conditionType)) {
-            throw this.error(stmt.condition, "Type mismatch: boolean type expected");
+            throw new Error("Type mismatch: boolean type expected");
         }
         if (stmt.increment) {
             this.resolveExpr(stmt.increment);
@@ -240,7 +242,7 @@ export class Resolver implements ExprVisitor<GrusType>, StmtVisitor<void> {
         currentGotoLabels.push(label);
     }
     visitReturnStmt(stmt: ReturnStmt): void {
-        if (this.currentFun.returnType instanceof SimpleType && this.currentFun.returnType.name === "void") {
+        if (this.currentFun.returnType instanceof SimpleType && this.currentFun.returnType.typ === "void") {
             if (stmt.value) {
                 throw this.error(stmt.keyword, `Cannot return a value from a function with no return type.`);
             }
@@ -249,7 +251,7 @@ export class Resolver implements ExprVisitor<GrusType>, StmtVisitor<void> {
                 throw this.error(stmt.keyword, `Function with return type must return a value.`);
             }
             const returnType = this.resolveExpr(stmt.value);
-            if (!checkSameType(returnType, this.currentFun.returnType)) {
+            if (!checkSameType(this.currentFun.returnType, returnType)) {
                 throw this.error(stmt.keyword, `Type mismatch: ${returnType} != ${this.currentFun.returnType}`);
             }
         }
@@ -291,14 +293,14 @@ export class Resolver implements ExprVisitor<GrusType>, StmtVisitor<void> {
         this.resolveExpr(expr.right);
     }
     visitBinaryExpr(expr: BinaryExpr): GrusType {
-        let leftType = this.resolveExpr(expr.left);
+        const leftType = this.resolveExpr(expr.left);
         const rightType = this.resolveExpr(expr.right)
         if (['<<', '>>', '|', '&', '^'].includes(expr.operator.lexeme)) {
             if (!checkIntegerType(leftType) || !checkIntegerType(rightType)) {
                 throw this.error(expr.operator, `Type mismatch: ${leftType} != ${rightType}`);
             }
         } else if (['!=', '==', '>', '>=', '<', '<='].includes(expr.operator.lexeme)) {
-            leftType = new SimpleType("bool");
+            return new SimpleType("boolean");
         } else if (['&&', '||'].includes(expr.operator.lexeme)) {
             if (!checkBooleanType(leftType) || !checkBooleanType(rightType)) {
                 throw this.error(expr.operator, "Type mismatch: boolean type expected");
@@ -306,7 +308,9 @@ export class Resolver implements ExprVisitor<GrusType>, StmtVisitor<void> {
         } else if ([',', '='].includes(expr.operator.lexeme)) {
             return rightType;
         } else {
-            if (!checkSameType(leftType, rightType)) {
+            if (checkNumberType(leftType) && checkNumberType(rightType)) {
+                // throw this.error(expr.operator, `Type mismatch: ${leftType} != ${rightType}`);
+            }else {
                 throw this.error(expr.operator, `Type mismatch: ${leftType} != ${rightType}`);
             }
         }
@@ -336,21 +340,7 @@ export class Resolver implements ExprVisitor<GrusType>, StmtVisitor<void> {
         return type;
     }
     visitLiteralExpr(expr: LiteralExpr): GrusType {
-        let literalType: GrusType;
-        if (typeof expr.value === "string") {
-            literalType = new SimpleType("string");
-        } else if (typeof expr.value === "number") {
-            if (!Number.isInteger(expr.value)) {
-                literalType = new SimpleType("float");
-            } else {
-                literalType = new SimpleType("i32");
-            }
-        } else if (typeof expr.value === "boolean") {
-            literalType = new SimpleType("bool");
-        } else {
-            literalType = new SimpleType("void");
-        }
-        return literalType;
+        return new SimpleType(expr.literalType);
     }
     visitPostfixExpr(expr: PostfixExpr): GrusType {
         const leftType = this.resolveExpr(expr.target);
@@ -380,6 +370,7 @@ export class Resolver implements ExprVisitor<GrusType>, StmtVisitor<void> {
                     break;
                 }
                 if (arg) {
+
                     const argType = this.resolveExpr(arg);
 
                     if (!checkSameType(paramType, argType)) {
@@ -409,6 +400,11 @@ export class Resolver implements ExprVisitor<GrusType>, StmtVisitor<void> {
         } else {
             // this.resolveLocal(expr, expr.keyword);
         }
+    }
+
+    visitCastExpr(expr: CastExpr): GrusType {
+        const targetType = this.resolveExpr(expr.target);
+        return expr.type;
     }
 
     visitLambdaExpr(expr: LambdaExpr): GrusType {
@@ -463,7 +459,7 @@ export class Resolver implements ExprVisitor<GrusType>, StmtVisitor<void> {
 
     beginFunction(returnType: GrusType): void {
         const env = new FunEnv(returnType);
-        if (returnType instanceof SimpleType && returnType.name === "void") {
+        if (returnType instanceof SimpleType && returnType.typ === "void") {
             env.rightReturned = true;
         }
         this.funEnvs.push(env);
@@ -491,7 +487,7 @@ export class Resolver implements ExprVisitor<GrusType>, StmtVisitor<void> {
             const scope = this.scopes[this.scopes.length - 1];
             const declared = scope.get(name.lexeme);
             if (declared) {
-                if (declared.identifier.type instanceof SimpleType && declared.identifier.type.name === "void") {
+                if (declared.identifier.type instanceof SimpleType && declared.identifier.type.typ === "void") {
                     throw this.error(name, `Variable with this name ${name.lexeme} is a void type, which is not allowed.`);
                 }
                 declared.defined = true;
@@ -522,14 +518,9 @@ export class Resolver implements ExprVisitor<GrusType>, StmtVisitor<void> {
     }
 
 
-    error(token: Token | Expr, message: string): ResolverError {
-        if (token instanceof Expr) {
-            console.error(token, message);
-        } else {
-            token = token as Token;
-            this.errorHandler(token, message);
+    error(token: Token, message: string): ResolverError {
+        this.errorHandler(token, message);
 
-        }
         return new ResolverError(token, message);
 
     }
@@ -537,15 +528,18 @@ export class Resolver implements ExprVisitor<GrusType>, StmtVisitor<void> {
 
 
 function checkSameType(left: GrusType, right: GrusType): boolean {
-    const numberTypes = ["i8", "i16", "i32", "i64", "float", "double"];
+    if (checkFloatType(left) && checkFloatType(right)) {
+        const leftSize = typeSize(left);
+        const rightSize = typeSize(right);
+        return leftSize >= rightSize;
+    }
+    if (checkIntegerType(left) && checkIntegerType(right)) {
+        const leftSize = typeSize(left);
+        const rightSize = typeSize(right);
+        return leftSize >= rightSize
+    }
     if (left instanceof SimpleType && right instanceof SimpleType) {
-        if (left.name === "bool" && right.name === "bool") {
-            return true;
-        }
-        if (numberTypes.includes(left.name) && numberTypes.includes(right.name)) {
-            return true;
-        }
-        return left.name === right.name;
+        return left.typ === right.typ;
     }
     if ((left instanceof ClosureType) && right instanceof ClosureType) {
         return checkSameType(left.funType.returnType, right.funType.returnType) && left.funType.paramTypes.every((param: GrusType, index: number) => checkSameType(param, right.funType.paramTypes[index]));
@@ -558,7 +552,7 @@ function checkSameType(left: GrusType, right: GrusType): boolean {
 }
 
 function checkBooleanType(type: GrusType): boolean {
-    return type instanceof SimpleType && type.name === "bool";
+    return type instanceof SimpleType && type.typ === "boolean";
 }
 
 function checkNumberType(type: GrusType): boolean {
@@ -568,15 +562,35 @@ function checkNumberType(type: GrusType): boolean {
 function checkIntegerType(type: GrusType): boolean {
     const integerTypes = ["i8", "i16", "i32", "i64"];
     if (type instanceof SimpleType) {
-        return integerTypes.includes(type.name);
+        return integerTypes.includes(type.typ);
     }
     return false;
 }
 
 function checkFloatType(type: GrusType): boolean {
     if (type instanceof SimpleType) {
-        return ["float", "double"].includes(type.name);
+        return ["float", "double"].includes(type.typ);
     }
     return false;
 
+}
+
+function typeSize(type: GrusType): number {
+    if (type instanceof SimpleType) {
+        switch (type.typ) {
+            case "i8":
+                return 1;
+            case "i16":
+                return 2;
+            case "i32":
+                return 4;
+            case "i64":
+                return 8;
+            case "float":
+                return 4;
+            case "double":
+                return 8;
+        }
+    }
+    return 0;
 }

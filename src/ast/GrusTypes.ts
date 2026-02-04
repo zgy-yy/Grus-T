@@ -4,25 +4,29 @@
 export interface GrusType {
     i: number;
 }
-
-// export type Primitive = 'void'| 'bool'| 'i8'| 'i16'| 'i32'| 'i64'| 'float'| 'double'| 'string';
-
+export type literalType = 'void' | 'float' | 'double' | 'i8' | 'i16' | 'i32' | 'i64' | 'string' | 'boolean' | 'null';
 export class SimpleType implements GrusType {
-    name: string;
+    typ: literalType;
     i: number;
-    constructor(name: string) {
-        this.name = name;
+    constructor(typ: literalType) {
+        this.typ = typ;
         this.i = 0
+    }
+    toString(): string {
+        return this.typ;
     }
 }
 
 
 export class PointerType implements GrusType {
-    name: GrusType;
+    typ: GrusType;
     i: number;
-    constructor(name: GrusType) {
-        this.name = name;
+    constructor(typ: GrusType) {
+        this.typ = typ;
         this.i = 1;
+    }
+    toString(): string {
+        return this.typ.toString();
     }
 }
 
@@ -35,6 +39,9 @@ export class FunctionType implements GrusType {
         this.paramTypes = paramTypes;
         this.i = 2;
     }
+    toString(): string {
+        return this.returnType.toString() + " -> " + this.paramTypes.map(param => param.toString()).join(", ");
+    }
 }
 
 export class ClosureType implements GrusType {
@@ -43,6 +50,9 @@ export class ClosureType implements GrusType {
     constructor(returnType: GrusType, paramTypes: GrusType[]) {
         this.funType = new FunctionType(returnType, paramTypes);
         this.i = 4;
+    }
+    toString(): string {
+        return this.funType.toString();
     }
 }
 

@@ -1,5 +1,4 @@
-import { GrusType } from "./GrusTypes";
-import { GrusValue } from "./GrusValue";
+import { GrusType, literalType } from "./GrusTypes";
 import { Identifier, Stmt } from "./Stmt";
 import { Token } from "./Token";
 export abstract class Expr {
@@ -21,6 +20,7 @@ export interface ExprVisitor<R> {
     visitThisExpr(expr: ThisExpr): R;
     visitVariableExpr(expr: VariableExpr): R;
     visitLambdaExpr(expr: LambdaExpr): R;
+    visitCastExpr(expr: CastExpr): R;
 }
 
 
@@ -215,10 +215,35 @@ export class ThisExpr extends Expr {
  * 字面量表达式
  */
 export class LiteralExpr extends Expr {
-    value: GrusValue;
-    constructor(value: GrusValue) {
+    literalType: literalType;
+    value: string;
+    constructor(value: string) {
         super();
         this.value = value;
+        switch (value) {
+            case 'true':
+                this.literalType = 'boolean';
+                break;
+            case 'false':
+                this.literalType = 'boolean';
+                break;
+            case 'null':
+                this.literalType = 'null';
+                break;
+            case 'void':
+                this.literalType = 'void';
+                break;
+            default:
+                const num = Number(value);
+                if (isNaN(num)) {
+                    this.literalType = 'string';
+                } else if (value.includes('.')) {
+                    this.literalType = 'float';
+                } else {
+                    this.literalType = 'i32';
+                }
+                break;
+        }
     }
     accept<R>(visitor: ExprVisitor<R>): R {
         return visitor.visitLiteralExpr(this);
@@ -238,9 +263,21 @@ export class VariableExpr extends Expr {
     }
 }
 
+export class CastExpr extends Expr {
+    type: GrusType;
+    target: Expr;
+    constructor(type: GrusType, target: Expr) {
+        super();
+        this.type = type;
+        this.target = target;
+    }
+    accept<R>(visitor: ExprVisitor<R>): R {
+        return visitor.visitCastExpr(this);
+    }
+}
 
 export class LambdaExpr extends Expr {
-    closure:Identifier[];
+    closure: Identifier[];
     paren: Token;
     parameters: Identifier[];
     returnType: GrusType;
