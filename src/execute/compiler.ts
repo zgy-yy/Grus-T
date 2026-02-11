@@ -36,6 +36,7 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
     builder: llvm.IRBuilder;
     constantTypes: {
         void: llvm.Type,
+        bool: llvm.Type,
         i8: llvm.Type,
         i16: llvm.Type,
         i32: llvm.Type,
@@ -50,6 +51,7 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
         this.builder = new llvm.IRBuilder(this.context);
         this.constantTypes = {
             void: llvm.Type.getVoidTy(this.context),
+            bool: llvm.Type.getInt1Ty(this.context),
             i8: llvm.Type.getInt8Ty(this.context),
             i16: llvm.Type.getInt16Ty(this.context),
             i32: llvm.Type.getInt32Ty(this.context),
@@ -183,7 +185,7 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
         let rightValue = expr.value.accept(this);
         // 进行类型对齐：将右值转换为左值的原始类型
         rightValue = this.promoteType(rightValue, targetType);
-        
+
         // 存储到左值
         this.builder.CreateStore(rightValue, left);
 
@@ -219,6 +221,18 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
                     return this.builder.CreateFDiv(left, right);
                 case TokenType.Percent:
                     return this.builder.CreateFRem(left, right);
+                case TokenType.EqualEqual:
+                    return this.builder.CreateFCmpOEQ(left, right);
+                case TokenType.BangEqual:
+                    return this.builder.CreateFCmpUNE(left, right);
+                case TokenType.Greater:
+                    return this.builder.CreateFCmpOGT(left, right);
+                case TokenType.GreaterEqual:
+                    return this.builder.CreateFCmpOGE(left, right);
+                case TokenType.Less:
+                    return this.builder.CreateFCmpOLT(left, right);
+                case TokenType.LessEqual:
+                    return this.builder.CreateFCmpOLE(left, right);
             }
         } else {
             switch (expr.operator.type) {
@@ -240,13 +254,13 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
                     return this.builder.CreateICmpSLE(left, right);
                 case TokenType.GreaterEqual:
                     return this.builder.CreateICmpSGE(left, right);
-                case TokenType.Equal:
+                case TokenType.EqualEqual:
                     return this.builder.CreateICmpEQ(left, right);
                 case TokenType.BangEqual:
                     return this.builder.CreateICmpNE(left, right);
-                case TokenType.And:
+                case TokenType.BitAnd:
                     return this.builder.CreateAnd(left, right);
-                case TokenType.Or:
+                case TokenType.BitOr:
                     return this.builder.CreateOr(left, right);
                 case TokenType.Caret:
                     return this.builder.CreateXor(left, right);
@@ -256,6 +270,7 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
                     return this.builder.CreateAShr(left, right);
             }
         }
+
         throw new Error(`Unsupported binary operator: ${expr.operator.type}`);
     }
     visitUnaryExpr(expr: UnaryExpr): llvm.Value {
@@ -269,10 +284,10 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
                 } else {
                     return this.builder.CreateNeg(operand);
                 }
-            // case TokenType.Tilde:
-            //     return this.builder.CreateNot(expr.right.accept(this));
-            // case TokenType.Bang:
-            //     return this.builder.CreateNot(expr.right.accept(this));
+            case TokenType.Tilde:
+                return this.builder.CreateNot(expr.right.accept(this));
+            case TokenType.Bang:
+                return this.builder.CreateNot(expr.right.accept(this));
         }
         throw new Error(`Unsupported unary operator: ${operator.type}`);
     }
@@ -280,7 +295,7 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
         switch (expr.literalType) {
             case 'string':
                 return this.builder.CreateGlobalStringPtr(expr.value);
-            case 'boolean':
+            case 'bool':
                 return this.builder.getInt1(expr.value === 'true' ? true : false);
             case 'i8':
                 return this.builder.getInt8(Number(expr.value));
@@ -322,11 +337,11 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
     visitVariableExpr(expr: VariableExpr): llvm.Value {
         const variable = this.currentScope.get(expr.name.lexeme);
         if (this.isLieft) {
-           if(variable){
-            return variable
-           }else{
-            throw new Error(`Variable ${expr.name.lexeme} not found`);
-           }
+            if (variable) {
+                return variable
+            } else {
+                throw new Error(`Variable ${expr.name.lexeme} not found`);
+            }
         }
         if (variable instanceof llvm.AllocaInst) {
             return this.builder.CreateLoad(variable.getAllocatedType(), variable, expr.name.lexeme);
@@ -365,11 +380,18 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
         const rightType = right.getType()
         const leftBitWidth = this.getIntegerBitWidth(leftType);
         const rightBitWidth = this.getIntegerBitWidth(rightType);
+        console.log("===leftBitWidth", leftBitWidth);
+        console.log("===rightBitWidth", rightBitWidth);
         // 如果类型相同，不需要转换
         if (leftBitWidth == rightBitWidth) {
             return [left, right];
         }
-        if (leftBitWidth < rightBitWidth) {
+
+        if (leftBitWidth == 0) {//左边是float或double
+            right = this.builder.CreateSIToFP(right, leftType);
+        } else if (rightBitWidth == 0) {//右边是float或double
+            left = this.builder.CreateSIToFP(left, rightType);
+        } else if (leftBitWidth < rightBitWidth) {
             // 使用有符号扩展（SExt）而不是无符号扩展（ZExt）
             left = this.builder.CreateSExt(left, rightType);
         } else {
@@ -435,6 +457,9 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
     }
 
     private getIntegerBitWidth(type: llvm.Type): number {
+        if (type.isIntegerTy(1)) {
+            return 1;
+        }
         if (type.isIntegerTy(8)) {
             return 8;
         } else if (type.isIntegerTy(16)) {
@@ -471,6 +496,8 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
                     return this.constantTypes.float;
                 case 'double':
                     return this.constantTypes.double;
+                case 'bool':
+                    return this.constantTypes.bool;
             }
         }
 

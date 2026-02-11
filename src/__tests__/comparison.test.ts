@@ -480,7 +480,7 @@ fun main() i32 {
     it('应该正确处理括号中的比较运算', () => {
       const source = `
 fun main() i32 {
-  let bool x = (5 > 3) == 1;
+  let bool x = (5 > 3) == true;
   printf("%d\\n", x);
   return 0;
 }

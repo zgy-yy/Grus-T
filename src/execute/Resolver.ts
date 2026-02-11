@@ -300,7 +300,10 @@ export class Resolver implements ExprVisitor<GrusType>, StmtVisitor<void> {
                 throw this.error(expr.operator, `Type mismatch: ${leftType} != ${rightType}`);
             }
         } else if (['!=', '==', '>', '>=', '<', '<='].includes(expr.operator.lexeme)) {
-            return new SimpleType("boolean");
+            if(!checkSameType(leftType, rightType)){
+                throw this.error(expr.operator, `Type mismatch: ${leftType} != ${rightType}`);
+            }
+            return new SimpleType("bool");
         } else if (['&&', '||'].includes(expr.operator.lexeme)) {
             if (!checkBooleanType(leftType) || !checkBooleanType(rightType)) {
                 throw this.error(expr.operator, "Type mismatch: boolean type expected");
@@ -528,15 +531,8 @@ export class Resolver implements ExprVisitor<GrusType>, StmtVisitor<void> {
 
 
 function checkSameType(left: GrusType, right: GrusType): boolean {
-    if (checkFloatType(left) && checkFloatType(right)) {
-        const leftSize = typeSize(left);
-        const rightSize = typeSize(right);
-        return leftSize >= rightSize;
-    }
-    if (checkIntegerType(left) && checkIntegerType(right)) {
-        const leftSize = typeSize(left);
-        const rightSize = typeSize(right);
-        return leftSize >= rightSize
+    if(checkNumberType(left)&&checkNumberType(right)){
+        return true;
     }
     if (left instanceof SimpleType && right instanceof SimpleType) {
         return left.typ === right.typ;
@@ -552,7 +548,7 @@ function checkSameType(left: GrusType, right: GrusType): boolean {
 }
 
 function checkBooleanType(type: GrusType): boolean {
-    return type instanceof SimpleType && type.typ === "boolean";
+    return type instanceof SimpleType && type.typ === "bool";
 }
 
 function checkNumberType(type: GrusType): boolean {

@@ -222,10 +222,10 @@ export class LiteralExpr extends Expr {
         this.value = value;
         switch (value) {
             case 'true':
-                this.literalType = 'boolean';
+                this.literalType = 'bool';
                 break;
             case 'false':
-                this.literalType = 'boolean';
+                this.literalType = 'bool';
                 break;
             case 'null':
                 this.literalType = 'null';

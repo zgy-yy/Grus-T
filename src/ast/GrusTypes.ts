@@ -4,7 +4,7 @@
 export interface GrusType {
     i: number;
 }
-export type literalType = 'void' | 'float' | 'double' | 'i8' | 'i16' | 'i32' | 'i64' | 'string' | 'boolean' | 'null';
+export type literalType = 'void' | 'float' | 'double' | 'i8' | 'i16' | 'i32' | 'i64' | 'string' | 'bool' | 'null';
 export class SimpleType implements GrusType {
     typ: literalType;
     i: number;

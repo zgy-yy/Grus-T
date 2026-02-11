@@ -413,7 +413,7 @@ fun main() i32 {
 fun main() i32 {
   let i8 a = 5;
   let i8 b = 3;
-  let i32 x = a & b;
+  let i32 x = <i32>(a & b);
   printf("%d\\n", x);
   return 0;
 }
@@ -456,7 +456,8 @@ fun main() i32 {
   let i8 a = 255;
   let i8 b = 1;
   let i8 c = a | b;
-  printf("%d\\n", c);
+  let i32 x = <i32>c;
+  printf("%d\\n", x);
   return 0;
 }
 `;
