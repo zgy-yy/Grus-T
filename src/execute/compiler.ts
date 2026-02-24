@@ -18,9 +18,9 @@ export class CompilerError extends Error {
 
 export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
 
-    LoopStack: {
-        startLabel: string,
-        endLabel: string,
+    loopStack: {
+        continueBb: llvm.BasicBlock,
+        breakBb: llvm.BasicBlock,
     }[] = [];
     scopes: Map<string, llvm.Value>[] = []; // sourceName -> compiledName
     currentScope: Map<string, llvm.Value> = new Map<string, llvm.Value>();
@@ -154,7 +154,34 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
         this.builder.SetInsertPoint(mergeBb);
     }
     visitWhileStmt(stmt: WhileStmt): void {
-        throw new Error("Method not implemented.");
+        const insertBlock = this.builder.GetInsertBlock();
+        if (!insertBlock) {
+            throw new Error("No insert block found");
+        }
+        const parentFunc = insertBlock.getParent();
+        if (!parentFunc) {
+            throw new Error("No parent function found");
+        }
+        // 创建基本块
+        const condBb = llvm.BasicBlock.Create(this.context, 'while.cond', parentFunc);
+        const bodyBb = llvm.BasicBlock.Create(this.context, 'while.body', parentFunc);
+        const endBb = llvm.BasicBlock.Create(this.context, 'while.end', parentFunc);
+        this.loopStack.push({
+            continueBb: condBb,
+            breakBb: endBb,
+        });
+        // 从 entry 块跳转到条件块
+        this.builder.CreateBr(condBb);
+        this.builder.SetInsertPoint(condBb);
+        const condition = stmt.condition.accept(this);
+        this.builder.CreateCondBr(condition, bodyBb, endBb);
+        // 进入循环体
+        this.builder.SetInsertPoint(bodyBb);
+        this.compileStmt(stmt.body);
+        this.builder.CreateBr(condBb);
+        // 从循环体跳转到条件块
+        this.builder.SetInsertPoint(endBb);
+        this.loopStack.pop();
     }
     visitForStmt(stmt: ForStmt): void {
         const insertBlock = this.builder.GetInsertBlock();
@@ -171,6 +198,10 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
         const bodyBb = llvm.BasicBlock.Create(this.context, 'for.body', parentFunc);
         const incBb = llvm.BasicBlock.Create(this.context, 'for.inc', parentFunc);
         const endBb = llvm.BasicBlock.Create(this.context, 'for.end', parentFunc);
+        this.loopStack.push({
+            continueBb: incBb,
+            breakBb: endBb,
+        });
 
         // 编译初始化语句（在 entry 块中）
         if (stmt.initializer) {
@@ -195,6 +226,7 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
         this.builder.CreateBr(condBb);
         // 进入结束块
         this.builder.SetInsertPoint(endBb);
+        this.loopStack.pop();
     }
     visitDoWhileStmt(stmt: DoWhileStmt): void {
         const insertBlock = this.builder.GetInsertBlock();
@@ -209,6 +241,10 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
         const condBb = llvm.BasicBlock.Create(this.context, 'do.cond', parentFunc);
         const bodyBb = llvm.BasicBlock.Create(this.context, 'do.body', parentFunc);
         const endBb = llvm.BasicBlock.Create(this.context, 'do.end', parentFunc);
+        this.loopStack.push({
+            continueBb: condBb,
+            breakBb: endBb,
+        });
         // 从 entry 块跳转到body
         this.builder.CreateBr(bodyBb);
         this.builder.SetInsertPoint(bodyBb);
@@ -220,15 +256,39 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
         this.builder.CreateCondBr(condition, bodyBb, endBb);
         // 从条件块跳转到结束块
         this.builder.SetInsertPoint(endBb);
+        this.loopStack.pop();
     }
     visitLoopStmt(stmt: LoopStmt): void {
         throw new Error("Method not implemented.");
     }
     visitBreakStmt(stmt: BreakStmt): void {
-        throw new Error("Method not implemented.");
+       const breakBb = this.loopStack[this.loopStack.length - 1].breakBb;
+       this.builder.CreateBr(breakBb);
+       const insertBlock = this.builder.GetInsertBlock();
+       if (!insertBlock) {
+           throw new Error("No insert block found");
+       }
+       const parentFunc = insertBlock.getParent();
+       if (!parentFunc) {
+           throw new Error("No parent function found");
+       }
+       const deleteBb = llvm.BasicBlock.Create(this.context, 'delete', parentFunc);
+       this.builder.SetInsertPoint(deleteBb);
     }
     visitContinueStmt(stmt: ContinueStmt): void {
-        throw new Error("Method not implemented.");
+        const continueBb = this.loopStack[this.loopStack.length - 1].continueBb;
+        this.builder.CreateBr(continueBb);
+        const insertBlock = this.builder.GetInsertBlock();
+        if (!insertBlock) {
+            throw new Error("No insert block found");
+        }
+        const parentFunc = insertBlock.getParent();
+        if (!parentFunc) {
+            throw new Error("No parent function found");
+        }
+        const deleteBb = llvm.BasicBlock.Create(this.context, 'delete', parentFunc);
+        this.builder.SetInsertPoint(deleteBb);
+
     }
     visitReturnStmt(stmt: ReturnStmt): void {
         if (stmt.value) {
@@ -407,13 +467,13 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
                 {
                     const newValue = this.builder.CreateAdd(oldValue, this.builder.getInt32(1));
                     this.builder.CreateStore(newValue, target);
-                    return newValue;
+                    return oldValue;
                 }
             case TokenType.MinusMinus:
                 {
                     const newValue = this.builder.CreateSub(oldValue, this.builder.getInt32(1));
                     this.builder.CreateStore(newValue, target);
-                    return newValue;
+                    return oldValue;
                 }
                 break;
         }

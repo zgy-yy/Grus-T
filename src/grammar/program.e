@@ -1,8 +1,12 @@
 fun main() i32 {
   let i32 i = 0;
-  do {
-    printf("%d\\n", i);
+  while (i < 12)
+   {
     i++;
-  } while (i < 3);
+    if(i==2){
+      continue;
+    }
+    printf("%d,",i);
+   }
   return 0;
 }
