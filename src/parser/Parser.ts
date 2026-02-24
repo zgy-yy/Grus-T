@@ -662,7 +662,7 @@ export class Parser {
     private synchronize(): void {
         this.advance();
         while (!this.isAtEnd()) {
-            const token = this.peek();
+            const token = this.previous();
             console.log("synchronize", token.type);
             if (token.type === TokenType.Semicolon) return;
             switch (token.type) {

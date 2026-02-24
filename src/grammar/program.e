@@ -1,7 +1,13 @@
 fun main() i32 {
-  let i32 a = 5;
-  let float b = 5;
-  let i32 x =  b+a;
-  printf("%d\\n", x);
+  let x =23;
+  if (x>23) {
+    printf("1212\\n");
+  }else {
+    printf("false\n");
+  }
+
+  if(x<89){
+    printf("%d",x);
+  }
   return 0;
 }

@@ -90,7 +90,9 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
 
     // StmtVisitor methods
     visitBlockStmt(stmt: BlockStmt): void {
-        throw new Error("Method not implemented.");
+        for (const s of stmt.statements) {
+            this.compileStmt(s);
+        }
     }
     visitVarStmt(stmt: VarStmt): void {
         for (const variable of stmt.vars) {
@@ -127,7 +129,29 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
         stmt.expression.accept(this);
     }
     visitIfStmt(stmt: IfStmt): void {
-        throw new Error("Method not implemented.");
+        const insertBlock = this.builder.GetInsertBlock();
+        if (!insertBlock) {
+            throw new Error("No insert block found");
+        }
+        const parentFunc = insertBlock.getParent();
+        if (!parentFunc) {
+            throw new Error("No parent function found");
+        }
+        const condition = stmt.condition.accept(this);
+        const thenBb = llvm.BasicBlock.Create(this.context, 'then', parentFunc);
+        const elseBb = llvm.BasicBlock.Create(this.context, 'else', parentFunc);
+        const mergeBb = llvm.BasicBlock.Create(this.context, 'merge', parentFunc);
+        this.builder.CreateCondBr(condition, thenBb, elseBb);
+        this.builder.SetInsertPoint(thenBb);
+        this.compileStmt(stmt.thenBranch);
+        this.builder.CreateBr(mergeBb);
+
+        this.builder.SetInsertPoint(elseBb);
+        if (stmt.elseBranch) {
+            this.compileStmt(stmt.elseBranch);
+        }
+        this.builder.CreateBr(mergeBb);
+        this.builder.SetInsertPoint(mergeBb);
     }
     visitWhileStmt(stmt: WhileStmt): void {
         throw new Error("Method not implemented.");
