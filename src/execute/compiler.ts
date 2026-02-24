@@ -157,7 +157,44 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
         throw new Error("Method not implemented.");
     }
     visitForStmt(stmt: ForStmt): void {
-        throw new Error("Method not implemented.");
+        const insertBlock = this.builder.GetInsertBlock();
+        if (!insertBlock) {
+            throw new Error("No insert block found");
+        }
+        const parentFunc = insertBlock.getParent();
+        if (!parentFunc) {
+            throw new Error("No parent function found");
+        }
+
+        //创建基本块
+        const condBb = llvm.BasicBlock.Create(this.context, 'for.cond', parentFunc);
+        const bodyBb = llvm.BasicBlock.Create(this.context, 'for.body', parentFunc);
+        const incBb = llvm.BasicBlock.Create(this.context, 'for.inc', parentFunc);
+        const endBb = llvm.BasicBlock.Create(this.context, 'for.end', parentFunc);
+        
+        // 编译初始化语句（在 entry 块中）
+        if (stmt.initializer) {
+            this.compileStmt(stmt.initializer);
+        }
+        // 从 entry 块跳转到条件块
+        this.builder.CreateBr(condBb);
+        // 进入条件块
+        this.builder.SetInsertPoint(condBb);
+        const condition = stmt.condition.accept(this);
+        this.builder.CreateCondBr(condition, bodyBb, endBb);
+        // 进入循环体
+        this.builder.SetInsertPoint(bodyBb);
+        this.compileStmt(stmt.body);
+        this.builder.CreateBr(incBb);
+        // 进入增量块
+        this.builder.SetInsertPoint(incBb);
+        if (stmt.increment) {
+            stmt.increment.accept(this);
+        }
+        // 增量块总是跳转回条件块
+        this.builder.CreateBr(condBb);
+        // 进入结束块
+        this.builder.SetInsertPoint(endBb);
     }
     visitDoWhileStmt(stmt: DoWhileStmt): void {
         throw new Error("Method not implemented.");
@@ -387,7 +424,7 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
 
     //作用域
     beginScope(): void {
-        this.scopes.push(new Map<string, any>());
+        this.scopes.push(new Map<string, llvm.Value>());
         this.currentScope = this.scopes[this.scopes.length - 1];
     }
     endScope(): void {
@@ -404,8 +441,6 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
         const rightType = right.getType()
         const leftBitWidth = this.getIntegerBitWidth(leftType);
         const rightBitWidth = this.getIntegerBitWidth(rightType);
-        console.log("===leftBitWidth", leftBitWidth);
-        console.log("===rightBitWidth", rightBitWidth);
         // 如果类型相同，不需要转换
         if (leftBitWidth == rightBitWidth) {
             return [left, right];

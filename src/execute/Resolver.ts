@@ -74,9 +74,8 @@ export class Resolver implements ExprVisitor<GrusType>, StmtVisitor<void> {
 
     resolveProgram(stmts: Stmt[]): void {
         try {
-            this.beginScope(stmts);
+            this.beginScope();
             const globalScope = this.scopes[this.scopes.length - 1];
-            const printf = new Token(TokenType.Identifier, "printf", 'null', 0, 0);
             globalScope.set("printf", new Member(new Identifier(new Token(TokenType.Identifier, "printf", 'null', 0, 0),
                 new FunctionType(new SimpleType("i32"), [new SimpleType("string"), new TempOmittedType()]), null), true));
             for (const stmt of stmts) {
@@ -116,7 +115,7 @@ export class Resolver implements ExprVisitor<GrusType>, StmtVisitor<void> {
     }
 
     visitBlockStmt(stmt: BlockStmt): void {
-        this.beginScope(stmt.statements);
+        this.beginScope();
         for (const statement of stmt.statements) {
             this.resolveStmt(statement);
         }
@@ -147,27 +146,22 @@ export class Resolver implements ExprVisitor<GrusType>, StmtVisitor<void> {
         this.resolveExpr(stmt.expression);
     }
     visitIfStmt(stmt: IfStmt): void {
-        this.beginScope(stmt.thenBranch instanceof BlockStmt ? stmt.thenBranch.statements : [stmt.thenBranch]);
         this.currentFun.ifStack.push('if');
         const conditionType = this.resolveExpr(stmt.condition);
         if (!checkBooleanType(conditionType)) {
             throw new Error("Type mismatch: boolean type expected");
             // throw this.error(stmt.condition.operator, "Type mismatch: boolean type expected");
         }
-
         this.resolveStmt(stmt.thenBranch);
         if (stmt.elseBranch) {
-            this.beginScope(stmt.elseBranch instanceof BlockStmt ? stmt.elseBranch.statements : [stmt.elseBranch]);
             this.currentFun.ifStack.push('else');
             this.resolveStmt(stmt.elseBranch);
             this.currentFun.ifStack.pop();
-            this.endScope();
         }
         this.currentFun.ifStack.pop();
-        this.endScope();
     }
     visitWhileStmt(stmt: WhileStmt): void {
-        this.beginScope(stmt.body instanceof BlockStmt ? stmt.body.statements : [stmt.body]);
+        this.beginScope();
         const conditionType = this.resolveExpr(stmt.condition);
         if (!checkBooleanType(conditionType)) {
             throw new Error("Type mismatch: boolean type expected");
@@ -178,7 +172,7 @@ export class Resolver implements ExprVisitor<GrusType>, StmtVisitor<void> {
         this.endScope();
     }
     visitDoWhileStmt(stmt: DoWhileStmt): void {
-        this.beginScope(stmt.body instanceof BlockStmt ? stmt.body.statements : [stmt.body]);
+        this.beginScope();
         this.currentFun.loopDepth++;
         this.resolveStmt(stmt.body);
         this.currentFun.loopDepth--;
@@ -189,7 +183,7 @@ export class Resolver implements ExprVisitor<GrusType>, StmtVisitor<void> {
         this.endScope();
     }
     visitForStmt(stmt: ForStmt): void {
-        this.beginScope(stmt.body instanceof BlockStmt ? stmt.body.statements : [stmt.body]);
+        this.beginScope();
         if (stmt.initializer) {
             this.resolveStmt(stmt.initializer);
         }
@@ -207,7 +201,7 @@ export class Resolver implements ExprVisitor<GrusType>, StmtVisitor<void> {
     }
 
     visitLoopStmt(stmt: LoopStmt): void {
-        this.beginScope(stmt.body instanceof BlockStmt ? stmt.body.statements : [stmt.body]);
+        this.beginScope();
         this.currentFun.loopDepth++;
         this.resolveStmt(stmt.body);
         this.currentFun.loopDepth--;
@@ -300,7 +294,7 @@ export class Resolver implements ExprVisitor<GrusType>, StmtVisitor<void> {
                 throw this.error(expr.operator, `Type mismatch: ${leftType} != ${rightType}`);
             }
         } else if (['!=', '==', '>', '>=', '<', '<='].includes(expr.operator.lexeme)) {
-            if(!checkSameType(leftType, rightType)){
+            if (!checkSameType(leftType, rightType)) {
                 throw this.error(expr.operator, `Type mismatch: ${leftType} != ${rightType}`);
             }
             return new SimpleType("bool");
@@ -313,7 +307,7 @@ export class Resolver implements ExprVisitor<GrusType>, StmtVisitor<void> {
         } else {
             if (checkNumberType(leftType) && checkNumberType(rightType)) {
                 // throw this.error(expr.operator, `Type mismatch: ${leftType} != ${rightType}`);
-            }else {
+            } else {
                 throw this.error(expr.operator, `Type mismatch: ${leftType} != ${rightType}`);
             }
         }
@@ -366,22 +360,22 @@ export class Resolver implements ExprVisitor<GrusType>, StmtVisitor<void> {
     visitCallExpr(expr: CallExpr): GrusType {
         const calleeType = this.resolveExpr(expr.callee);
         if (calleeType instanceof FunctionType) {
-            for (const i in calleeType.paramTypes) {
-                const paramType: GrusType = calleeType.paramTypes[i]; //形参类型
-                const arg = expr.arguments[i];
+            const lastParamType = calleeType.paramTypes[calleeType.paramTypes.length - 1];
+            for (const i in expr.arguments) {
+                const paramType = calleeType.paramTypes[i]??lastParamType;//形参类型
+                const argType = this.resolveExpr(expr.arguments[i]);//实参类型
                 if (paramType instanceof TempOmittedType) {
-                    break;
+                    continue;
                 }
-                if (arg) {
-
-                    const argType = this.resolveExpr(arg);
-
-                    if (!checkSameType(paramType, argType)) {
-                        throw this.error(expr.paren, `Type mismatch: ${paramType} != ${argType}`);
-                    }
-                } else {
-                    throw this.error(expr.paren, `Too few arguments for function call`);
+                if (!checkSameType(paramType, argType)) {
+                    throw this.error(expr.paren, `Type mismatch: ${paramType} != ${argType}`);
                 }
+            }
+            if (lastParamType instanceof TempOmittedType) {
+                return calleeType.returnType;
+            }
+            if (expr.arguments.length < calleeType.paramTypes.length) {
+                throw this.error(expr.paren, `Too few arguments for function call`);
             }
             return calleeType.returnType;
         }
@@ -411,7 +405,7 @@ export class Resolver implements ExprVisitor<GrusType>, StmtVisitor<void> {
     }
 
     visitLambdaExpr(expr: LambdaExpr): GrusType {
-        this.beginScope(expr.body);
+        this.beginScope();
         this.beginFunction(expr.returnType);
         for (const param of expr.parameters) {
             this.declare(param.name, param);
@@ -429,7 +423,7 @@ export class Resolver implements ExprVisitor<GrusType>, StmtVisitor<void> {
 
 
     resolveFunction(stmt: FunctionStmt): void {
-        this.beginScope(stmt.body);
+        this.beginScope();
         this.beginFunction(stmt.returnType);
         for (const param of stmt.parameters) {
             this.declare(param.name, param);
@@ -444,17 +438,9 @@ export class Resolver implements ExprVisitor<GrusType>, StmtVisitor<void> {
     }
 
 
-    beginScope(stmts: Stmt[]): void {
+    beginScope(): void {
         const scope = new Map<string, Member>()
         this.scopes.push(scope);
-        for (const stmt of stmts) {
-            if (stmt instanceof FunctionStmt) {
-                const funType = new FunctionType(stmt.returnType, stmt.parameters.map(param => param.type));
-                this.declare(stmt.name, new Identifier(stmt.name, funType, null));
-                this.define(stmt.name);
-            }
-        }
-
     }
     endScope(): void {
         this.scopes.pop();
@@ -531,7 +517,7 @@ export class Resolver implements ExprVisitor<GrusType>, StmtVisitor<void> {
 
 
 function checkSameType(left: GrusType, right: GrusType): boolean {
-    if(checkNumberType(left)&&checkNumberType(right)){
+    if (checkNumberType(left) && checkNumberType(right)) {
         return true;
     }
     if (left instanceof SimpleType && right instanceof SimpleType) {
