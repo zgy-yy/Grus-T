@@ -259,21 +259,43 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
         this.loopStack.pop();
     }
     visitLoopStmt(stmt: LoopStmt): void {
-        throw new Error("Method not implemented.");
+        const insertBlock = this.builder.GetInsertBlock();
+        if (!insertBlock) {
+            throw new Error("No insert block found");
+        }
+        const parentFunc = insertBlock.getParent();
+        if (!parentFunc) {
+            throw new Error("No parent function found");
+        }
+        //创建基本块
+        const loopBb = llvm.BasicBlock.Create(this.context, 'loop.body', parentFunc);
+        const endBb = llvm.BasicBlock.Create(this.context, 'loop.end', parentFunc);
+        this.loopStack.push({
+            continueBb: loopBb,
+            breakBb: endBb,
+        });
+        this.builder.CreateBr(loopBb);
+        //进入循环体
+        this.builder.SetInsertPoint(loopBb);
+        this.compileStmt(stmt.body);
+        this.builder.CreateBr(loopBb);
+        //进入结束块
+        this.builder.SetInsertPoint(endBb);
+        this.loopStack.pop();
     }
     visitBreakStmt(stmt: BreakStmt): void {
-       const breakBb = this.loopStack[this.loopStack.length - 1].breakBb;
-       this.builder.CreateBr(breakBb);
-       const insertBlock = this.builder.GetInsertBlock();
-       if (!insertBlock) {
-           throw new Error("No insert block found");
-       }
-       const parentFunc = insertBlock.getParent();
-       if (!parentFunc) {
-           throw new Error("No parent function found");
-       }
-       const deleteBb = llvm.BasicBlock.Create(this.context, 'delete', parentFunc);
-       this.builder.SetInsertPoint(deleteBb);
+        const breakBb = this.loopStack[this.loopStack.length - 1].breakBb;
+        this.builder.CreateBr(breakBb);
+        const insertBlock = this.builder.GetInsertBlock();
+        if (!insertBlock) {
+            throw new Error("No insert block found");
+        }
+        const parentFunc = insertBlock.getParent();
+        if (!parentFunc) {
+            throw new Error("No parent function found");
+        }
+        const deleteBb = llvm.BasicBlock.Create(this.context, 'delete', parentFunc);
+        this.builder.SetInsertPoint(deleteBb);
     }
     visitContinueStmt(stmt: ContinueStmt): void {
         const continueBb = this.loopStack[this.loopStack.length - 1].continueBb;

@@ -1,12 +1,11 @@
 fun main() i32 {
   let i32 i = 0;
-  while (i < 12)
-   {
-    i++;
-    if(i==2){
-      continue;
+  loop {
+    printf("%d\\n", i);
+    i = i + 1;
+    if (i >= 10) {
+      break;
     }
-    printf("%d,",i);
-   }
+  }
   return 0;
 }
