@@ -1,8 +1,8 @@
 fun main() i32 {
-  for (let i32 i = 0; i < 2; i = i + 1) {
-    for (let i32 j = 0; j < 2; j = j + 1) {
-      printf("%d,%d\\n", i, j);
-    }
-  }
+  let i32 i = 0;
+  do {
+    printf("%d\\n", i);
+    i++;
+  } while (i < 3);
   return 0;
 }

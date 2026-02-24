@@ -171,7 +171,7 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
         const bodyBb = llvm.BasicBlock.Create(this.context, 'for.body', parentFunc);
         const incBb = llvm.BasicBlock.Create(this.context, 'for.inc', parentFunc);
         const endBb = llvm.BasicBlock.Create(this.context, 'for.end', parentFunc);
-        
+
         // 编译初始化语句（在 entry 块中）
         if (stmt.initializer) {
             this.compileStmt(stmt.initializer);
@@ -197,7 +197,29 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
         this.builder.SetInsertPoint(endBb);
     }
     visitDoWhileStmt(stmt: DoWhileStmt): void {
-        throw new Error("Method not implemented.");
+        const insertBlock = this.builder.GetInsertBlock();
+        if (!insertBlock) {
+            throw new Error("No insert block found");
+        }
+        const parentFunc = insertBlock.getParent();
+        if (!parentFunc) {
+            throw new Error("No parent function found");
+        }
+        // 创建基本块
+        const condBb = llvm.BasicBlock.Create(this.context, 'do.cond', parentFunc);
+        const bodyBb = llvm.BasicBlock.Create(this.context, 'do.body', parentFunc);
+        const endBb = llvm.BasicBlock.Create(this.context, 'do.end', parentFunc);
+        // 从 entry 块跳转到body
+        this.builder.CreateBr(bodyBb);
+        this.builder.SetInsertPoint(bodyBb);
+        this.compileStmt(stmt.body);
+        this.builder.CreateBr(condBb);
+        // 从body跳转到条件块
+        this.builder.SetInsertPoint(condBb);
+        const condition = stmt.condition.accept(this);
+        this.builder.CreateCondBr(condition, bodyBb, endBb);
+        // 从条件块跳转到结束块
+        this.builder.SetInsertPoint(endBb);
     }
     visitLoopStmt(stmt: LoopStmt): void {
         throw new Error("Method not implemented.");
@@ -376,10 +398,49 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
         return this.builder.getInt32(0);
     }
     visitPostfixExpr(expr: PostfixExpr): llvm.Value {
-        throw new Error("Method not implemented.");
+        this.isLieft = true;
+        const target = expr.target.accept(this);
+        this.isLieft = false;
+        let oldValue = expr.target.accept(this);
+        switch (expr.operator.type) {
+            case TokenType.PlusPlus:
+                {
+                    const newValue = this.builder.CreateAdd(oldValue, this.builder.getInt32(1));
+                    this.builder.CreateStore(newValue, target);
+                    return newValue;
+                }
+            case TokenType.MinusMinus:
+                {
+                    const newValue = this.builder.CreateSub(oldValue, this.builder.getInt32(1));
+                    this.builder.CreateStore(newValue, target);
+                    return newValue;
+                }
+                break;
+        }
+        throw new Error(`Unsupported postfix operator: ${expr.operator.type}`);
     }
     visitPrefixExpr(expr: PrefixExpr): llvm.Value {
-        throw new Error("Method not implemented.");
+        this.isLieft = true;
+        const target = expr.target.accept(this);
+        this.isLieft = false;
+        let oldValue = expr.target.accept(this);
+        switch (expr.operator.type) {
+            case TokenType.PlusPlus:
+                {
+                    const newValue = this.builder.CreateAdd(oldValue, this.builder.getInt32(1));
+                    this.builder.CreateStore(newValue, target);
+                    return newValue;
+                }
+                break;
+            case TokenType.MinusMinus:
+                {
+                    const newValue = this.builder.CreateSub(oldValue, this.builder.getInt32(1));
+                    this.builder.CreateStore(newValue, target);
+                    return newValue;
+                }
+                break;
+        }
+        throw new Error(`Unsupported prefix operator: ${expr.operator.type}`);
     }
     visitCallExpr(expr: CallExpr): llvm.Value {
         const callee = expr.callee.accept(this);
