@@ -22,6 +22,7 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
         continueBb: llvm.BasicBlock,
         breakBb: llvm.BasicBlock,
     }[] = [];
+    labelMap: Map<string, llvm.BasicBlock> = new Map<string, llvm.BasicBlock>();
     scopes: Map<string, llvm.Value>[] = []; // sourceName -> compiledName
     currentScope: Map<string, llvm.Value> = new Map<string, llvm.Value>();
     currentFunction: {
@@ -184,15 +185,7 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
         this.loopStack.pop();
     }
     visitForStmt(stmt: ForStmt): void {
-        const insertBlock = this.builder.GetInsertBlock();
-        if (!insertBlock) {
-            throw new Error("No insert block found");
-        }
-        const parentFunc = insertBlock.getParent();
-        if (!parentFunc) {
-            throw new Error("No parent function found");
-        }
-
+        const parentFunc = this.findParentFunction();
         //创建基本块
         const condBb = llvm.BasicBlock.Create(this.context, 'for.cond', parentFunc);
         const bodyBb = llvm.BasicBlock.Create(this.context, 'for.body', parentFunc);
@@ -229,14 +222,8 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
         this.loopStack.pop();
     }
     visitDoWhileStmt(stmt: DoWhileStmt): void {
-        const insertBlock = this.builder.GetInsertBlock();
-        if (!insertBlock) {
-            throw new Error("No insert block found");
-        }
-        const parentFunc = insertBlock.getParent();
-        if (!parentFunc) {
-            throw new Error("No parent function found");
-        }
+        const parentFunc = this.findParentFunction();
+
         // 创建基本块
         const condBb = llvm.BasicBlock.Create(this.context, 'do.cond', parentFunc);
         const bodyBb = llvm.BasicBlock.Create(this.context, 'do.body', parentFunc);
@@ -259,14 +246,7 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
         this.loopStack.pop();
     }
     visitLoopStmt(stmt: LoopStmt): void {
-        const insertBlock = this.builder.GetInsertBlock();
-        if (!insertBlock) {
-            throw new Error("No insert block found");
-        }
-        const parentFunc = insertBlock.getParent();
-        if (!parentFunc) {
-            throw new Error("No parent function found");
-        }
+        const parentFunc = this.findParentFunction();
         //创建基本块
         const loopBb = llvm.BasicBlock.Create(this.context, 'loop.body', parentFunc);
         const endBb = llvm.BasicBlock.Create(this.context, 'loop.end', parentFunc);
@@ -286,28 +266,14 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
     visitBreakStmt(stmt: BreakStmt): void {
         const breakBb = this.loopStack[this.loopStack.length - 1].breakBb;
         this.builder.CreateBr(breakBb);
-        const insertBlock = this.builder.GetInsertBlock();
-        if (!insertBlock) {
-            throw new Error("No insert block found");
-        }
-        const parentFunc = insertBlock.getParent();
-        if (!parentFunc) {
-            throw new Error("No parent function found");
-        }
+        const parentFunc = this.findParentFunction();
         const deleteBb = llvm.BasicBlock.Create(this.context, 'delete', parentFunc);
         this.builder.SetInsertPoint(deleteBb);
     }
     visitContinueStmt(stmt: ContinueStmt): void {
         const continueBb = this.loopStack[this.loopStack.length - 1].continueBb;
         this.builder.CreateBr(continueBb);
-        const insertBlock = this.builder.GetInsertBlock();
-        if (!insertBlock) {
-            throw new Error("No insert block found");
-        }
-        const parentFunc = insertBlock.getParent();
-        if (!parentFunc) {
-            throw new Error("No parent function found");
-        }
+        const parentFunc = this.findParentFunction();
         const deleteBb = llvm.BasicBlock.Create(this.context, 'delete', parentFunc);
         this.builder.SetInsertPoint(deleteBb);
 
@@ -326,10 +292,19 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
         throw new Error("Method not implemented.");
     }
     visitLabelStmt(stmt: LabelStmt): void {
-        throw new Error("Method not implemented.");
+        const labelBb = this.getLabelBlock(stmt.label.lexeme);
+        this.builder.CreateBr(labelBb);
+        this.builder.SetInsertPoint(labelBb);
+        if (stmt.body) {
+            this.compileStmt(stmt.body);
+        }
     }
     visitGotoStmt(stmt: GotoStmt): void {
-        throw new Error("Method not implemented.");
+        const targetBb = this.getLabelBlock(stmt.label.lexeme);
+        this.builder.CreateBr(targetBb);
+        const parentFunc = this.findParentFunction();
+        const deleteBb = llvm.BasicBlock.Create(this.context, 'delete', parentFunc);
+        this.builder.SetInsertPoint(deleteBb);
     }
 
     // ExprVisitor methods
@@ -365,6 +340,52 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
     }
 
     visitBinaryExpr(expr: BinaryExpr): llvm.Value {
+        const parentFunc = this.findParentFunction();
+        switch (expr.operator.type) {
+            case TokenType.And:
+                {
+                    const rhsBb = llvm.BasicBlock.Create(this.context, 'and.rhs', parentFunc);
+                    const mergeBb = llvm.BasicBlock.Create(this.context, 'and.merge', parentFunc);
+                    const leftValue = expr.left.accept(this);
+                    const startBb = this.builder.GetInsertBlock();
+                    //短路跳转，真值跳转到rhsBb，假值跳转到mergeBb
+                    this.builder.CreateCondBr(leftValue, rhsBb, mergeBb);
+                    //填充rhsBb
+                    this.builder.SetInsertPoint(rhsBb);
+                    const rightValue = expr.right.accept(this);
+                    const rhsActualBb = this.builder.GetInsertBlock();
+                    this.builder.CreateBr(mergeBb);
+                    //填充mergeBb，合并lhs和rhs的值
+                    this.builder.SetInsertPoint(mergeBb);
+                    const phi = this.builder.CreatePHI(this.builder.getInt1Ty(), 2, "and_res");
+                    phi.addIncoming(this.builder.getInt1(false), startBb!); // 来自 LHS 的假
+                    phi.addIncoming(rightValue, rhsActualBb!);                 // 来自 RHS 的结果
+                    return phi;
+                }
+            case TokenType.Or:
+                {
+                    const rhsBb = llvm.BasicBlock.Create(this.context, 'or.rhs', parentFunc);
+                    const mergeBb = llvm.BasicBlock.Create(this.context, 'or.merge', parentFunc);
+                    const leftValue = expr.left.accept(this);
+                    const startBb = this.builder.GetInsertBlock();
+                    //短路跳转，真值跳转到mergeBb,假值跳转到rhsBb
+                    this.builder.CreateCondBr(leftValue, mergeBb, rhsBb);
+                    //填充rhsBb
+                    this.builder.SetInsertPoint(rhsBb);
+                    const rightValue = expr.right.accept(this);
+                    const rhsActualBb = this.builder.GetInsertBlock();
+                    this.builder.CreateBr(mergeBb);
+                    //填充mergeBb，合并lhs和rhs的值
+                    this.builder.SetInsertPoint(mergeBb);
+                    const phi = this.builder.CreatePHI(this.builder.getInt1Ty(), 2, "or_res");
+                    phi.addIncoming(leftValue, startBb!); // 来自 LHS 的结果
+                    phi.addIncoming(rightValue, rhsActualBb!);                 // 来自 RHS 的结果
+                    return phi;
+                }
+        }
+
+
+
         let left = expr.left.accept(this);
         let right = expr.right.accept(this);
 
@@ -579,6 +600,33 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
         this.currentScope.set(name, val);
     }
 
+    getLabelBlock(labelName: string): llvm.BasicBlock {
+        const insertBlock = this.builder.GetInsertBlock();
+        if (!insertBlock) {
+            throw new Error("No insert block found");
+        }
+        const parentFunc = insertBlock.getParent();
+        if (!parentFunc) {
+            throw new Error("No parent function found");
+        }
+        if (this.labelMap.has(labelName)) {
+            return this.labelMap.get(labelName)!;
+        }
+        const labelBlock = llvm.BasicBlock.Create(this.context, `label.${labelName}`, parentFunc);
+        this.labelMap.set(labelName, labelBlock);
+        return labelBlock;
+    }
+    private findParentFunction(): llvm.Function {
+        const insertBlock = this.builder.GetInsertBlock();
+        if (!insertBlock) {
+            throw new Error("No insert block found");
+        }
+        const parentFunc = insertBlock.getParent();
+        if (!parentFunc) {
+            throw new Error("No parent function found");
+        }
+        return parentFunc;
+    }
     private upgradeType(left: llvm.Value, right: llvm.Value): [llvm.Value, llvm.Value] {
         const leftType = left.getType();
         const rightType = right.getType()
@@ -680,6 +728,7 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
         }
         return false
     }
+
 
     llvmType(type: GrusType): llvm.IntegerType {
         if (type instanceof SimpleType) {

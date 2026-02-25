@@ -9,16 +9,14 @@ import { GrusType, SimpleType, FunctionType, TempOmittedType, ClosureType } from
 class FunEnv {
     returnType: GrusType;
     rightReturned: boolean;
-    labels: string[]
-    gotoLabels: Token[];
+    labels: Map<string, boolean>;
     loopDepth: number;
     ifStack: ('if' | 'else')[];
     private shallowIfReturned: boolean;
     constructor(returnType: GrusType) {
         this.returnType = returnType;
         this.rightReturned = false;
-        this.labels = []; //函数内的标签
-        this.gotoLabels = []; //函数内的goto标签
+        this.labels = new Map<string, boolean>(); //函数内的标签
         this.loopDepth = 0; //函数内的循环深度
         this.ifStack = []; //函数内的if栈
         this.shallowIfReturned = false;
@@ -123,7 +121,6 @@ export class Resolver implements ExprVisitor<GrusType>, StmtVisitor<void> {
     }
 
     visitFunctionStmt(stmt: FunctionStmt): void {
-
         this.resolveFunction(stmt);
     }
 
@@ -219,21 +216,25 @@ export class Resolver implements ExprVisitor<GrusType>, StmtVisitor<void> {
         }
     }
     visitLabelStmt(stmt: LabelStmt): void {
-        const label = stmt.label.lexeme;
-        const currentLabels = this.currentFun.labels;
-        if (currentLabels.includes(label)) {
-            throw this.error(stmt.label, `Label ${label} already defined`);
+        const labelName = stmt.label.lexeme;
+        const labels = this.currentFun.labels;
+        if (labels.has(labelName)) {
+            if (labels.get(labelName)!) {
+                throw this.error(stmt.label, `Label ${labelName} already defined`);
+            }
         }
-        currentLabels.push(label);
+        labels.set(labelName, true);
         if (stmt.body) {
             this.resolveStmt(stmt.body);
         }
     }
 
     visitGotoStmt(stmt: GotoStmt): void {
-        const label = stmt.label;
-        const currentGotoLabels = this.currentFun.gotoLabels;
-        currentGotoLabels.push(label);
+        const targetLabel = stmt.label.lexeme;
+        const labels = this.currentFun.labels;
+        if (!labels.has(targetLabel)) {
+            labels.set(targetLabel, false);
+        }
     }
     visitReturnStmt(stmt: ReturnStmt): void {
         if (this.currentFun.returnType instanceof SimpleType && this.currentFun.returnType.typ === "void") {
@@ -362,7 +363,7 @@ export class Resolver implements ExprVisitor<GrusType>, StmtVisitor<void> {
         if (calleeType instanceof FunctionType) {
             const lastParamType = calleeType.paramTypes[calleeType.paramTypes.length - 1];
             for (const i in expr.arguments) {
-                const paramType = calleeType.paramTypes[i]??lastParamType;//形参类型
+                const paramType = calleeType.paramTypes[i] ?? lastParamType;//形参类型
                 const argType = this.resolveExpr(expr.arguments[i]);//实参类型
                 if (paramType instanceof TempOmittedType) {
                     continue;
@@ -459,6 +460,12 @@ export class Resolver implements ExprVisitor<GrusType>, StmtVisitor<void> {
             throw this.error(mark, `Function with return type must return a value.`);
         }
         this.funEnvs.pop();
+        const labels = this.currentFun.labels;
+        for (const label of labels.keys()) {
+            if (!labels.get(label)!) {
+                throw this.error(mark, `Label ${label} not defined`);
+            }
+        }
         this.currentFun = this.funEnvs[this.funEnvs.length - 1];
     }
 
