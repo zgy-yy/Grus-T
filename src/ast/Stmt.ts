@@ -190,13 +190,13 @@ export class VarStmt extends Stmt {
 }
 
 export class FunctionStmt extends Stmt {
-    fn: GSymbol;
+    name: Token;
     parameters: GSymbol[];
     returnType: GrusType;
     body: Stmt[];
     constructor(name: Token, parameters: GSymbol[], returnType: GrusType, body: Stmt[]) {
         super();
-        this.fn = new GSymbol(name, new FunctionType(returnType, parameters.map(param => param.type)), null);
+        this.name = name;
         this.parameters = parameters;
         this.returnType = returnType;
         this.body = body;

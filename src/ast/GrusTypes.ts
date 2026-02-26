@@ -44,17 +44,6 @@ export class FunctionType implements GrusType {
     }
 }
 
-export class ClosureType implements GrusType {
-    i: number;
-    funType: FunctionType;
-    constructor(returnType: GrusType, paramTypes: GrusType[]) {
-        this.funType = new FunctionType(returnType, paramTypes);
-        this.i = 4;
-    }
-    toString(): string {
-        return this.funType.toString();
-    }
-}
 
 
 export class TempOmittedType implements GrusType {

@@ -4,7 +4,7 @@ import { Stmt } from "@/ast/Stmt";
 import { CompilerErrorHandler } from "@/parser/ErrorHandler";
 import { Token } from "@/ast/Token";
 import llvm from "llvm-bindings";
-import { GrusType, SimpleType } from "@/ast/GrusTypes";
+import { FunctionType, GrusType, SimpleType } from "@/ast/GrusTypes";
 import { TokenType } from "@/ast/TokenType";
 
 export class CompilerError extends Error {
@@ -108,7 +108,7 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
      * 4. 将函数添加到作用域中，供后续调用使用
      */
     private declareFunction(stmt: FunctionStmt): void {
-        const funName = stmt.fn.name.lexeme;
+        const funName = stmt.name.lexeme;
         // 如果函数已经声明过，跳过
         if (this.currentScope.has(funName)) {
             return;
@@ -143,7 +143,7 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
         }
     }
     visitFunctionStmt(stmt: FunctionStmt): void {
-        const funName = stmt.fn.name.lexeme;
+        const funName = stmt.name.lexeme;
         const retType = this.llvmType(stmt.returnType);
         this.currentFunction = {
             returnType: retType,
@@ -803,7 +803,7 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
         return terminator instanceof llvm.ReturnInst;
     }
 
-    llvmType(type: GrusType): llvm.IntegerType {
+    llvmType(type: GrusType): llvm.Type {
         if (type instanceof SimpleType) {
             switch (type.typ) {
                 case 'void':
@@ -823,6 +823,9 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
                 case 'bool':
                     return this.constantTypes.bool;
             }
+        }
+        if (type instanceof FunctionType) {
+            // return llvm.FunctionType.get(this.llvmType(type.returnType), type.parameters.map(param => this.llvmType(param.type)), false);
         }
 
         throw new Error(`Unsupported type: ${type}`);

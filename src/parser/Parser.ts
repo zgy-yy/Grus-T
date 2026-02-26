@@ -3,7 +3,7 @@ import { ParserErrorHandler } from "./ErrorHandler";
 import { TokenType } from "@/ast/TokenType";
 import { AssignExpr, BinaryExpr, CallExpr, CastExpr, Expr, LambdaExpr, LiteralExpr, PostfixExpr, PrefixExpr, ThisExpr, UnaryExpr, VariableExpr } from "@/ast/Expr";
 import { BlockStmt, BreakStmt, ContinueStmt, DoWhileStmt, ExpressionStmt, ForStmt, FunctionStmt, GotoStmt, IfStmt, LabelStmt, LoopStmt, ReturnStmt, Stmt, GSymbol, VarStmt, WhileStmt } from "@/ast/Stmt";
-import { ClosureType, GrusType, literalType, PointerType, SimpleType } from "@/ast/GrusTypes";
+import {  FunctionType, GrusType, literalType, PointerType, SimpleType } from "@/ast/GrusTypes";
 
 class SyntaxError extends Error {
     public token: Token;
@@ -558,7 +558,7 @@ export class Parser {
             this.consume(TokenType.RightParen, "Expect ')' after parameters.");
             this.consume(TokenType.Arrow, "Expect '->' after parameters.");
             const returnType = this.type();
-            return new ClosureType(returnType, declTypes);
+            return new FunctionType(returnType, declTypes);
         }
         throw this.error(this.peek(), "Expect type.");
     }

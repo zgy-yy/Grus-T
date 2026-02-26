@@ -1,8 +1,7 @@
 fun main() i32 {
-  if (true) {
-    if (true) {
-      printf("nested\\n");
-    }
-  }
+  let a = 5;
+  let i32 b = 5;
+  let bool x = a == b;
+  printf("%d\\n", x);
   return 0;
 }
