@@ -1,6 +1,8 @@
 fun main() i32 {
-  let x =23;
-  l1:
-  printf("%d",x);
+  if (true) {
+    if (true) {
+      printf("nested\\n");
+    }
+  }
   return 0;
 }

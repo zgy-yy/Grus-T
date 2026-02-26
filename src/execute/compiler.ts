@@ -30,8 +30,6 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
     }
     isLieft: boolean = false; //当前是否是左值，左值时取地址
 
-
-
     context: llvm.LLVMContext;
     module: llvm.Module;
     builder: llvm.IRBuilder;
@@ -76,6 +74,18 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
         const printf = llvm.Function.Create(printfType, llvm.Function.LinkageTypes.ExternalLinkage, "printf", this.module);
 
         this.currentScope.set("printf", printf);
+
+        // ========== 第一遍编译：声明所有函数 ==========
+        // 目的：创建所有函数的签名（函数类型和名称），但不编译函数体
+        // 这样即使函数定义在使用之后，也能正确编译
+        for (const stmt of stmts) {
+            if (stmt instanceof FunctionStmt) {
+                this.declareFunction(stmt);
+            }
+        }
+
+        // ========== 第二遍编译：编译所有语句 ==========
+        // 目的：编译所有语句，包括函数体、变量声明、表达式等
         for (const stmt of stmts) {
             this.compileStmt(stmt);
         }
@@ -85,6 +95,30 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
 
     compileStmt(stmt: Stmt): void {
         return stmt.accept(this);
+    }
+
+    /**
+     * 第一遍编译：声明函数（只创建函数签名，不编译函数体）
+     * 用于支持函数声明在后面的情况
+     * 
+     * 工作原理：
+     * 1. 检查函数是否已经声明过，如果已声明则跳过
+     * 2. 创建函数类型（返回类型 + 参数类型）
+     * 3. 创建函数对象并添加到模块中
+     * 4. 将函数添加到作用域中，供后续调用使用
+     */
+    private declareFunction(stmt: FunctionStmt): void {
+        const funName = stmt.fn.name.lexeme;
+        // 如果函数已经声明过，跳过
+        if (this.currentScope.has(funName)) {
+            return;
+        }
+
+        const retType = this.llvmType(stmt.returnType);
+        const paramTypes = stmt.parameters.map(param => this.llvmType(param.type));
+        const funcType = llvm.FunctionType.get(retType, paramTypes, false);
+        const func = llvm.Function.Create(funcType, llvm.Function.LinkageTypes.ExternalLinkage, funName, this.module);
+        this.define(funName, func);
     }
 
 
@@ -109,21 +143,49 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
         }
     }
     visitFunctionStmt(stmt: FunctionStmt): void {
+        const funName = stmt.fn.name.lexeme;
         const retType = this.llvmType(stmt.returnType);
         this.currentFunction = {
             returnType: retType,
         };
-        const paramTypes = stmt.parameters.map(param => this.llvmType(param.type));
-        const funcType = llvm.FunctionType.get(retType, paramTypes, false);
-        const func = llvm.Function.Create(funcType, llvm.Function.LinkageTypes.ExternalLinkage, stmt.name.lexeme, this.module);
+        // 第二遍编译：获取已声明的函数（在第一遍中已创建）
+        let func = this.currentScope.get(funName) as llvm.Function;
+
+        // 创建函数的基本块并编译函数体
         const bb = llvm.BasicBlock.Create(this.context, 'entry', func);
         this.builder.SetInsertPoint(bb);
-        // for (const param of stmt.parameters) {
-        //     const paramValue = this.builder.CreateAlloca(this.llvmType(param.type));
-        //     this.builder.CreateStore(paramValue, paramValue);
-        // }
+
+        // 处理函数参数：为每个参数创建 alloca，并从函数参数中加载值存储到 alloca
+        for (let i = 0; i < stmt.parameters.length; i++) {
+            const param = stmt.parameters[i];
+            const paramType = this.llvmType(param.type);
+            const paramAlloca = this.builder.CreateAlloca(paramType, null, param.name.lexeme);
+
+            // 从函数参数中获取值（函数参数是 Value，不是指针）
+            const funcArg = func.getArg(i);
+            if (funcArg) {
+                // 将函数参数的值存储到 alloca
+                this.builder.CreateStore(funcArg, paramAlloca);
+            }
+            // 将 alloca 存储到作用域中，供后续使用
+            this.define(param.name.lexeme, paramAlloca);
+        }
+
+        // 编译函数体
         for (const bodyStmt of stmt.body) {
             this.compileStmt(bodyStmt);
+        }
+
+        // 检查函数的基本块是否已经有终止指令
+        const currentBb = this.builder.GetInsertBlock();
+        if (currentBb && !this.hasRetTerminator(currentBb)) {
+            // 如果没有终止指令，根据返回类型添加默认返回
+            if (retType === this.constantTypes.void) {
+                this.builder.CreateRetVoid();
+            } else {
+                // 非 void 函数如果没有 return 语句，标记为不可达
+                this.builder.CreateUnreachable();
+            }
         }
     }
     visitExpressionStmt(stmt: ExpressionStmt): void {
@@ -145,13 +207,17 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
         this.builder.CreateCondBr(condition, thenBb, elseBb);
         this.builder.SetInsertPoint(thenBb);
         this.compileStmt(stmt.thenBranch);
-        this.builder.CreateBr(mergeBb);
+        if (!this.hasRetTerminator(thenBb)) {
+            this.builder.CreateBr(mergeBb);
+        }
 
         this.builder.SetInsertPoint(elseBb);
         if (stmt.elseBranch) {
             this.compileStmt(stmt.elseBranch);
         }
-        this.builder.CreateBr(mergeBb);
+        if (!this.hasRetTerminator(elseBb)) {
+            this.builder.CreateBr(mergeBb);
+        }
         this.builder.SetInsertPoint(mergeBb);
     }
     visitWhileStmt(stmt: WhileStmt): void {
@@ -729,6 +795,13 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
         return false
     }
 
+    /**
+     * 检查基本块是否已经有终止指令（terminator）
+     */
+    private hasRetTerminator(bb: llvm.BasicBlock): boolean {
+        const terminator = bb.getTerminator();
+        return terminator instanceof llvm.ReturnInst;
+    }
 
     llvmType(type: GrusType): llvm.IntegerType {
         if (type instanceof SimpleType) {

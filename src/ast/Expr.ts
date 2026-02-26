@@ -1,5 +1,5 @@
 import { GrusType, literalType } from "./GrusTypes";
-import { Identifier, Stmt } from "./Stmt";
+import { GSymbol, Stmt } from "./Stmt";
 import { Token } from "./Token";
 export abstract class Expr {
     abstract accept<R>(visitor: ExprVisitor<R>): R;
@@ -277,12 +277,12 @@ export class CastExpr extends Expr {
 }
 
 export class LambdaExpr extends Expr {
-    closure: Identifier[];
+    closure: GSymbol[];
     paren: Token;
-    parameters: Identifier[];
+    parameters: GSymbol[];
     returnType: GrusType;
     body: Stmt[];
-    constructor(paren: Token, parameters: Identifier[], returnType: GrusType, body: Stmt[], closure: Identifier[]) {
+    constructor(paren: Token, parameters: GSymbol[], returnType: GrusType, body: Stmt[], closure: GSymbol[]) {
         super();
         this.paren = paren;
         this.parameters = parameters;
