@@ -247,7 +247,7 @@ export class Resolver implements ExprVisitor<GrusType>, StmtVisitor<void> {
         }
     }
     visitReturnStmt(stmt: ReturnStmt): void {
-        if (this.currentFun.returnType instanceof SimpleType && this.currentFun.returnType.typ === "void") {
+        if (this.currentFun.returnType instanceof SimpleType && this.currentFun.returnType.type === "void") {
             if (stmt.value) {
                 throw this.error(stmt.keyword, `Cannot return a value from a function with no return type.`);
             }
@@ -460,7 +460,7 @@ export class Resolver implements ExprVisitor<GrusType>, StmtVisitor<void> {
     beginFunction(returnType: GrusType): void {
         this.beginScope();
         const env = new FunEnv(returnType);
-        if (returnType instanceof SimpleType && returnType.typ === "void") {
+        if (returnType instanceof SimpleType && returnType.type === "void") {
             env.rightReturned = true;
         }
         this.funEnvs.push(env);
@@ -535,7 +535,7 @@ function checkSameType(left: GrusType, right: GrusType): boolean {
         return true;
     }
     if (left instanceof SimpleType && right instanceof SimpleType) {
-        return left.typ === right.typ;
+        return left.type === right.type;
     }
     if (left instanceof FunctionType && right instanceof FunctionType) {
         return checkSameType(left.returnType, right.returnType) && left.paramTypes.every((param: GrusType, index: number) => checkSameType(param, right.paramTypes[index]));
@@ -546,7 +546,7 @@ function checkSameType(left: GrusType, right: GrusType): boolean {
 }
 
 function checkBooleanType(type: GrusType): boolean {
-    return type instanceof SimpleType && type.typ === "bool";
+    return type instanceof SimpleType && type.type === "bool";
 }
 
 function checkNumberType(type: GrusType): boolean {
@@ -556,14 +556,14 @@ function checkNumberType(type: GrusType): boolean {
 function checkIntegerType(type: GrusType): boolean {
     const integerTypes = ["i8", "i16", "i32", "i64"];
     if (type instanceof SimpleType) {
-        return integerTypes.includes(type.typ);
+        return integerTypes.includes(type.type);
     }
     return false;
 }
 
 function checkFloatType(type: GrusType): boolean {
     if (type instanceof SimpleType) {
-        return ["float", "double"].includes(type.typ);
+        return ["float", "double"].includes(type.type);
     }
     return false;
 
@@ -571,7 +571,7 @@ function checkFloatType(type: GrusType): boolean {
 
 function typeSize(type: GrusType): number {
     if (type instanceof SimpleType) {
-        switch (type.typ) {
+        switch (type.type) {
             case "i8":
                 return 1;
             case "i16":

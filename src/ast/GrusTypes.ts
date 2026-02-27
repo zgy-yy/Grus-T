@@ -6,27 +6,27 @@ export interface GrusType {
 }
 export type literalType = 'void' | 'float' | 'double' | 'i8' | 'i16' | 'i32' | 'i64' | 'string' | 'bool' | 'null';
 export class SimpleType implements GrusType {
-    typ: literalType;
+    type: literalType;
     i: number;
-    constructor(typ: literalType) {
-        this.typ = typ;
+    constructor(type: literalType) {
+        this.type = type;
         this.i = 0
     }
     toString(): string {
-        return this.typ;
+        return this.type;
     }
 }
 
 
 export class PointerType implements GrusType {
-    typ: GrusType;
+    type: GrusType;
     i: number;
-    constructor(typ: GrusType) {
-        this.typ = typ;
+    constructor(type: GrusType) {
+        this.type = type;
         this.i = 1;
     }
     toString(): string {
-        return this.typ.toString();
+        return this.type.toString();
     }
 }
 

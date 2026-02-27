@@ -277,18 +277,16 @@ export class CastExpr extends Expr {
 }
 
 export class LambdaExpr extends Expr {
-    closure: GSymbol[];
     paren: Token;
     parameters: GSymbol[];
     returnType: GrusType;
     body: Stmt[];
-    constructor(paren: Token, parameters: GSymbol[], returnType: GrusType, body: Stmt[], closure: GSymbol[]) {
+    constructor(paren: Token, parameters: GSymbol[], returnType: GrusType, body: Stmt[]) {
         super();
         this.paren = paren;
         this.parameters = parameters;
         this.returnType = returnType;
         this.body = body;
-        this.closure = closure;
     }
     accept<R>(visitor: ExprVisitor<R>): R {
         return visitor.visitLambdaExpr(this);
