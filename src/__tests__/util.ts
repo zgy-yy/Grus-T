@@ -2,9 +2,9 @@ import { execSync } from 'child_process';
 import { Grus } from '@/Grus';
 
 const projectRoot = process.cwd();
-const lliPath = '/opt/homebrew/bin/lli';
+const lliPath = '/opt/homebrew/opt/llvm@15/bin/lli';
 
-/**
+/** 
  * 编译源码字符串并运行生成的 IR 代码
  * @param source 源代码字符串
  * @returns 程序运行结果（去除首尾空白）

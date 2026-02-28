@@ -1,8 +1,8 @@
-fun main() i16 {
-   let (i32) -> bool isEven = (i32 n) -> bool {
-    return n % 2 == 0;
+fun main() i32 {
+  let i32 i = 0;
+  let ()->void foo= ()->void{
+    printf("%d",12);
   };
-  let bool result = isEven(4);
-  printf("%d\\n", result);
+  foo();
   return 0;
 }

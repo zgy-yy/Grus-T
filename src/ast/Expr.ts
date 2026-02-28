@@ -281,12 +281,14 @@ export class LambdaExpr extends Expr {
     parameters: GSymbol[];
     returnType: GrusType;
     body: Stmt[];
+    captured: GrusType[];
     constructor(paren: Token, parameters: GSymbol[], returnType: GrusType, body: Stmt[]) {
         super();
         this.paren = paren;
         this.parameters = parameters;
         this.returnType = returnType;
         this.body = body;
+        this.captured = [];
     }
     accept<R>(visitor: ExprVisitor<R>): R {
         return visitor.visitLambdaExpr(this);

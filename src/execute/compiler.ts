@@ -3,8 +3,8 @@ import { BlockStmt, BreakStmt, ClassStmt, ContinueStmt, DoWhileStmt, ExpressionS
 import { Stmt } from "@/ast/Stmt";
 import { CompilerErrorHandler } from "@/parser/ErrorHandler";
 import { Token } from "@/ast/Token";
-import llvm from "llvm-bindings";
-import { FunctionType, GrusType, SimpleType, TempOmittedType } from "@/ast/GrusTypes";
+import llvm from "@wangziwenhk/llvm-bindings";
+import { FunctionType, GrusType, PointerType, SimpleType, TempOmittedType } from "@/ast/GrusTypes";
 import { TokenType } from "@/ast/TokenType";
 
 export class CompilerError extends Error {
@@ -18,29 +18,29 @@ export class CompilerError extends Error {
 
 export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
 
-    loopStack: {
+    private loopStack: {
         continueBb: llvm.BasicBlock,
         breakBb: llvm.BasicBlock,
     }[] = [];
-    labelMap: Map<string, llvm.BasicBlock> = new Map<string, llvm.BasicBlock>();
-    scopes: Map<string, {
+    private labelMap: Map<string, llvm.BasicBlock> = new Map<string, llvm.BasicBlock>();
+    private scopes: Map<string, {
         value: llvm.Value,
         type: GrusType,
     }>[] = []; // sourceName -> compiledName
-    currentScope: Map<string, {
+    private currentScope: Map<string, {
         value: llvm.Value,
         type: GrusType,
     }> = new Map();
-    currentFunction: {
+    private currentFunction: {
         returnType: llvm.Type,
     }
-    isLieft: boolean = false; //当前是否是左值，左值时取地址
-    closureTypeCache: Map<string, llvm.Type> = new Map(); // 缓存 closure 类型
+    private isLieft: boolean = false; //当前是否是左值，左值时取地址
+    captured: Set<GSymbol> = new Set(); // 缓存捕获的变量
 
-    context: llvm.LLVMContext;
-    module: llvm.Module;
-    builder: llvm.IRBuilder;
-    constantTypes: {
+    private context: llvm.LLVMContext;
+    private module: llvm.Module;
+    private builder: llvm.IRBuilder;
+    private constantTypes: {
         void: llvm.Type,
         bool: llvm.Type,
         i8: llvm.Type,
@@ -49,6 +49,7 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
         i64: llvm.Type,
         float: llvm.Type,
         double: llvm.Type,
+        closure: llvm.Type,
     }
 
     constructor(private readonly errorHandler: CompilerErrorHandler) {
@@ -64,6 +65,13 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
             i64: llvm.Type.getInt64Ty(this.context),
             float: llvm.Type.getFloatTy(this.context),
             double: llvm.Type.getDoubleTy(this.context),
+            closure: llvm.StructType.create(this.context,
+                [
+                    llvm.PointerType.get(llvm.Type.getInt8PtrTy(this.context), 0),
+                    llvm.PointerType.get(llvm.Type.getInt8PtrTy(this.context), 0),
+                ],
+                "closure"
+            ),
         };
 
         this.currentFunction = {
@@ -80,6 +88,12 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
         const printfType = llvm.FunctionType.get(i32Type, [i8PtrTy], true);
         const printf = llvm.Function.Create(printfType, llvm.Function.LinkageTypes.ExternalLinkage, "printf", this.module);
         this.define("printf", printf, new FunctionType(new SimpleType("i32"), [new SimpleType("string"), new TempOmittedType()]));
+        // 声明malloc
+        const mallocType = llvm.FunctionType.get(i8PtrTy, [i32Type], false);
+        const malloc = llvm.Function.Create(mallocType, llvm.Function.LinkageTypes.ExternalLinkage, "malloc", this.module);
+        this.define("malloc", malloc, new FunctionType(
+            new PointerType(new SimpleType("i8"))
+            , [new SimpleType("i32")]));
         // ========== 第一遍编译：声明所有函数 ==========
         // 目的：创建所有函数的签名（函数类型和名称），但不编译函数体
         for (const stmt of stmts) {
@@ -110,9 +124,11 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
 
     // StmtVisitor methods
     visitBlockStmt(stmt: BlockStmt): void {
+        this.beginScope();
         for (const s of stmt.statements) {
             this.compileStmt(s);
         }
+        this.endScope();
     }
     visitVarStmt(stmt: VarStmt): void {
         for (const variable of stmt.vars) {
@@ -201,6 +217,7 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
         this.loopStack.pop();
     }
     visitForStmt(stmt: ForStmt): void {
+        this.beginScope();
         const parentFunc = this.findParentFunction();
         //创建基本块
         const condBb = llvm.BasicBlock.Create(this.context, 'for.cond', parentFunc);
@@ -236,6 +253,7 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
         // 进入结束块
         this.builder.SetInsertPoint(endBb);
         this.loopStack.pop();
+        this.endScope();
     }
     visitDoWhileStmt(stmt: DoWhileStmt): void {
         const parentFunc = this.findParentFunction();
@@ -563,31 +581,26 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
     }
     visitCallExpr(expr: CallExpr): llvm.Value {
         const args = expr.arguments.map(arg => arg.accept(this));
-        let callee = expr.callee.accept(this);
+        if (expr.callee instanceof VariableExpr) {
+            const calleeVal = this.visitVariableExpr(expr.callee);
+            if (calleeVal instanceof llvm.Function) { //直接调用函数
+                return this.builder.CreateCall(calleeVal, args);
+            }
 
-        // 如果 callee 是 AllocaInst，需要先加载
-        if (callee instanceof llvm.AllocaInst) {
-            const allocatedType = callee.getAllocatedType();
-            callee = this.builder.CreateLoad(allocatedType, callee);
-        }
+            if (calleeVal instanceof llvm.LoadInst) { //提取函数指针
+                //提取函数指针
+                const funcPtr = this.builder.CreateExtractValue(calleeVal, [0], "closure.code");
 
-        // 如果 callee 是 Function，直接调用
-        if (callee instanceof llvm.Function) {
-            return this.builder.CreateCall(callee, args);
-        }
-        // 否则，callee 应该是 closure 结构体
-        // 提取函数指针
-        const funcPtr = this.builder.CreateExtractValue(callee, [0], "closure.code");
-        // 从函数指针类型中提取函数类型
-        const funcPtrType = funcPtr.getType();
-        if (funcPtrType instanceof llvm.PointerType) {
-            const pointeeType = funcPtrType.getPointerElementType();
-            if (pointeeType instanceof llvm.FunctionType) {
-                return this.builder.CreateCall(pointeeType, funcPtr, args);
+                const calleeType = this.getVariableType(expr.callee.name.lexeme);
+                if (calleeType instanceof FunctionType) {
+                    const retType = this.llvmType(calleeType.returnType);
+                    const paramTypes = calleeType.paramTypes.map(param => this.llvmType(param));
+                    const funcType = llvm.FunctionType.get(retType, paramTypes, false);
+                    return this.builder.CreateCall(funcType, funcPtr, args);
+                }
             }
         }
-
-        throw new Error(`Unsupported callee type: ${callee.getType().toString()}. Expected Function or closure struct.`);
+        throw new Error(`Unsupported callee type: ${expr.callee.accept(this).getType().toString()}. Expected Function or closure struct.`);
     }
     visitSetExpr(expr: SetExpr): llvm.Value {
         throw new Error("Method not implemented.");
@@ -599,19 +612,20 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
         throw new Error("Method not implemented.");
     }
     visitVariableExpr(expr: VariableExpr): llvm.Value {
-        const variable = this.currentScope.get(expr.name.lexeme)?.value;
-        if (this.isLieft) {
-            if (variable) {
-                return variable;
-            } else {
-                throw new Error(`Variable ${expr.name.lexeme} not found`);
+        for (let i = this.scopes.length - 1; i >= 0; i--) {
+            const scope = this.scopes[i];
+            const variable = scope.get(expr.name.lexeme)?.value;
+            if (this.isLieft) {
+                if (variable) {
+                    return variable;
+                }
             }
-        }
-        if (variable instanceof llvm.AllocaInst) {
-            return this.builder.CreateLoad(variable.getAllocatedType(), variable, expr.name.lexeme);
-        }
-        if (variable instanceof llvm.Function) {
-            return variable;
+            if (variable instanceof llvm.AllocaInst) {
+                return this.builder.CreateLoad(variable.getAllocatedType(), variable, expr.name.lexeme);
+            }
+            if (variable instanceof llvm.Function) {
+                return variable;
+            }
         }
         throw new Error(`Variable ${expr.name.lexeme} not found`);
     }
@@ -628,10 +642,10 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
         if (savedInsertBlock) {
             this.builder.SetInsertPoint(savedInsertBlock);
         }
-        const closureType = this.getClosureType(expr.returnType, expr.parameters.map(param => param.type));
+        const closureType = this.constantTypes.closure;
         //创建闭包结构体
         let closureVal = llvm.UndefValue.get(closureType);
-        //填充code ptr（直接使用函数，不需要转换为 i8*）
+        //填充code ptr
         const val = this.builder.CreateInsertValue(closureVal, func, [0], "closure.code");
         //填充env ptr
         return val;
@@ -859,28 +873,16 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
         return terminator instanceof llvm.ReturnInst;
     }
 
-    /**
-     * 获取或创建对应函数签名的 closure 类型
-     * @param retType 返回类型
-     * @param paramTypes 参数类型数组
-     * @returns closure 结构体类型
-     */
-    private getClosureType(retType: GrusType, paramTypes: GrusType[]): llvm.Type {
-        const typeKey = `${retType.toString()}_${paramTypes.map(t => t.toString()).join('_')}`;
-        console.log("-----", typeKey);
-        if (this.closureTypeCache.has(typeKey)) {
-            return this.closureTypeCache.get(typeKey)!;
+
+    private getVariableType(name: string): GrusType {
+        for (let i = this.scopes.length - 1; i >= 0; i--) {
+            const scope = this.scopes[i];
+            const variable = scope.get(name)?.type;
+            if (variable) {
+                return variable;
+            }
         }
-        const retT = this.llvmType(retType);
-        const paramTs = paramTypes.map(t => this.llvmType(t));
-        const funcType = llvm.FunctionType.get(retT, paramTs, false);
-        const funcPtrType = llvm.PointerType.get(funcType, 0);
-        const closureType = llvm.StructType.create(this.context, [
-            funcPtrType,  // code ptr: 使用函数指针类型而不是 i8*
-            this.builder.getInt8PtrTy(),  // env ptr
-        ], `closure.${this.closureTypeCache.size}`);
-        this.closureTypeCache.set(typeKey, closureType);
-        return closureType;
+        throw new Error(`Variable ${name} not found`);
     }
 
     llvmType(type: GrusType): llvm.Type {
@@ -906,7 +908,7 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
         }
         //函数类型变量 转换为 闭包结构体
         if (type instanceof FunctionType) {
-            return this.getClosureType(type.returnType, type.paramTypes);
+            return this.constantTypes.closure;
         }
 
         throw new Error(`Unsupported type: ${type}`);

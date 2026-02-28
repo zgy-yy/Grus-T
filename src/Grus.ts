@@ -19,14 +19,15 @@ export class Grus {
         if (!statements) {
             throw new Error('解析失败');
         }
-        const resolver = new Resolver(this.resolverErrorHandler.bind(this));
+        const compiler = new Compiler(this.compilerErrorHandler.bind(this));
+        const resolver = new Resolver(this.resolverErrorHandler.bind(this), compiler);
         try {
             resolver.resolveProgram(statements);
         } catch (error) {
             console.error(error);
             return "";
         }
-        const compiler = new Compiler(this.compilerErrorHandler.bind(this));
+    
         return compiler.compileProgram(statements);
     }
 
