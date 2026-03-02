@@ -300,7 +300,7 @@ fun main() i32 {
       const source = `
 fun main() i32 {
   let i32 x = 10;
-  let (void) -> void increment = () -> void {
+  let () -> void increment = () -> void {
     x = x + 1;
   };
   increment();
@@ -317,7 +317,7 @@ fun main() i32 {
     it('应该正确处理空 lambda', () => {
       const source = `
 fun main() i32 {
-  let (void) -> void empty = () -> void {
+  let () -> void empty = () -> void {
   };
   empty();
   printf("done\\n");
@@ -331,7 +331,7 @@ fun main() i32 {
     it('应该正确处理返回 0 的 lambda', () => {
       const source = `
 fun main() i32 {
-  let (void) -> i32 zero = () -> i32 {
+  let () -> i32 zero = () -> i32 {
     return 0;
   };
   let i32 result = zero();

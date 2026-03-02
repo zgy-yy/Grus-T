@@ -24,11 +24,11 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
     }[] = [];
     private labelMap: Map<string, llvm.BasicBlock> = new Map<string, llvm.BasicBlock>();
     private scopes: Map<string, {
-        value: llvm.Value,
+        val: llvm.Value,
         type: GrusType,
     }>[] = []; // sourceName -> compiledName
     private currentScope: Map<string, {
-        value: llvm.Value,
+        val: llvm.Value,
         type: GrusType,
     }> = new Map();
     private currentFunction: {
@@ -36,6 +36,11 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
     }
     private isLieft: boolean = false; //当前是否是左值，左值时取地址
     captured: Set<GSymbol> = new Set(); // 缓存捕获的变量
+    currentClosure: {
+        captured: GSymbol[],
+        envType: llvm.Type,
+    } | null = null;
+
 
     private context: llvm.LLVMContext;
     private module: llvm.Module;
@@ -51,6 +56,7 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
         double: llvm.Type,
         closure: llvm.Type,
     }
+    private mallocFunc: llvm.FunctionCallee;
 
     constructor(private readonly errorHandler: CompilerErrorHandler) {
         this.context = new llvm.LLVMContext();
@@ -77,6 +83,15 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
         this.currentFunction = {
             returnType: llvm.Type.getVoidTy(this.context),
         };
+        const i32Type = llvm.Type.getInt32Ty(this.context);
+        const i8PtrTy = llvm.PointerType.get(llvm.Type.getInt8Ty(this.context), 0);
+
+        const mallocType = llvm.FunctionType.get(i8PtrTy, [i32Type], false);
+        const malloc = llvm.Function.Create(mallocType, llvm.Function.LinkageTypes.ExternalLinkage, "malloc", this.module);
+        this.define("malloc", malloc, new FunctionType(
+            new PointerType(new SimpleType("i8"))
+            , [new SimpleType("i32")]));
+        this.mallocFunc = this.module.getOrInsertFunction('malloc', mallocType);
 
     }
 
@@ -88,12 +103,7 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
         const printfType = llvm.FunctionType.get(i32Type, [i8PtrTy], true);
         const printf = llvm.Function.Create(printfType, llvm.Function.LinkageTypes.ExternalLinkage, "printf", this.module);
         this.define("printf", printf, new FunctionType(new SimpleType("i32"), [new SimpleType("string"), new TempOmittedType()]));
-        // 声明malloc
-        const mallocType = llvm.FunctionType.get(i8PtrTy, [i32Type], false);
-        const malloc = llvm.Function.Create(mallocType, llvm.Function.LinkageTypes.ExternalLinkage, "malloc", this.module);
-        this.define("malloc", malloc, new FunctionType(
-            new PointerType(new SimpleType("i8"))
-            , [new SimpleType("i32")]));
+
         // ========== 第一遍编译：声明所有函数 ==========
         // 目的：创建所有函数的签名（函数类型和名称），但不编译函数体
         for (const stmt of stmts) {
@@ -134,13 +144,28 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
         for (const variable of stmt.vars) {
             const varType = this.llvmType(variable.type);
             const varName = variable.name.lexeme;
-            const varAlloca = this.builder.CreateAlloca(varType, null, varName);
-            this.define(varName, varAlloca, variable.type);
-            if (variable.defaultValue) {
-                let defaultValue = variable.defaultValue.accept(this);
-                defaultValue = this.promoteType(defaultValue, varType);
-                this.builder.CreateStore(defaultValue, varAlloca);
+            if (this.captured.has(variable)) {
+                const dataLayout = this.module.getDataLayout();
+                const size = dataLayout.getTypeAllocSize(varType);
+                // 将大小转换为 LLVM 的 ConstantInt
+                const sizeValue = llvm.ConstantInt.get(llvm.Type.getInt32Ty(this.context), size);
+                const varMalloc = this.builder.CreateCall(this.mallocFunc, [sizeValue]);
+                this.define(varName, varMalloc, variable.type);
+                if (variable.defaultValue) {
+                    let defaultValue = variable.defaultValue.accept(this);
+                    defaultValue = this.promoteType(defaultValue, varType);
+                    this.builder.CreateStore(defaultValue, varMalloc);
+                }
+            } else {
+                const varAlloca = this.builder.CreateAlloca(varType, null, varName);
+                this.define(varName, varAlloca, variable.type);
+                if (variable.defaultValue) {
+                    let defaultValue = variable.defaultValue.accept(this);
+                    defaultValue = this.promoteType(defaultValue, varType);
+                    this.builder.CreateStore(defaultValue, varAlloca);
+                }
             }
+
         }
     }
     visitFunctionStmt(stmt: FunctionStmt): void {
@@ -150,7 +175,7 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
             returnType: retType,
         };
         // 第二遍编译：获取已声明的函数（在第一遍中已创建）
-        let func = this.currentScope.get(funName)?.value as llvm.Function;
+        let func = this.currentScope.get(funName)?.val as llvm.Function;
         this.defineFunction(func, stmt.parameters, stmt.body, retType);
 
     }
@@ -343,17 +368,17 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
 
     // ExprVisitor methods
     visitAssignExpr(expr: AssignExpr): llvm.Value {
+        const leftExpr = expr.target;
         this.isLieft = true;
-        const left = expr.target.accept(this);
+        const leftValue = expr.target.accept(this);
         this.isLieft = false;
         // 获取 left 的原始类型（变量的声明类型）
         let targetType: llvm.Type;
-        if (left instanceof llvm.AllocaInst) {
-            // 如果是 alloca，获取其分配的类型（原始类型）
-            targetType = left.getAllocatedType();
+        if (leftExpr instanceof VariableExpr) {
+            const type = this.findVariable(leftExpr.name.lexeme).type;
+            targetType = this.llvmType(type);
         } else {
-            // 如果不是 alloca，使用其类型
-            targetType = left.getType();
+            targetType = leftValue.getType();
         }
         // 计算右值
         let rightValue = expr.value.accept(this);
@@ -361,7 +386,7 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
         rightValue = this.promoteType(rightValue, targetType);
 
         // 存储到左值
-        this.builder.CreateStore(rightValue, left);
+        this.builder.CreateStore(rightValue, leftValue);
 
         // 返回右值（赋值表达式的值）
         return rightValue;
@@ -587,16 +612,18 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
                 return this.builder.CreateCall(calleeVal, args);
             }
 
+            //闭包
             if (calleeVal instanceof llvm.LoadInst) { //提取函数指针
                 //提取函数指针
                 const funcPtr = this.builder.CreateExtractValue(calleeVal, [0], "closure.code");
+                const envPtr = this.builder.CreateExtractValue(calleeVal, [1], "closure.env");
 
-                const calleeType = this.getVariableType(expr.callee.name.lexeme);
+                const calleeType = this.findVariable(expr.callee.name.lexeme).type;
                 if (calleeType instanceof FunctionType) {
                     const retType = this.llvmType(calleeType.returnType);
                     const paramTypes = calleeType.paramTypes.map(param => this.llvmType(param));
                     const funcType = llvm.FunctionType.get(retType, paramTypes, false);
-                    return this.builder.CreateCall(funcType, funcPtr, args);
+                    return this.builder.CreateCall(funcType, funcPtr, [envPtr, ...args]);
                 }
             }
         }
@@ -612,28 +639,57 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
         throw new Error("Method not implemented.");
     }
     visitVariableExpr(expr: VariableExpr): llvm.Value {
-        for (let i = this.scopes.length - 1; i >= 0; i--) {
-            const scope = this.scopes[i];
-            const variable = scope.get(expr.name.lexeme)?.value;
+        const variable = this.findVariable(expr.name.lexeme);
+        if (variable) {
+            const varValue = variable.val;
+            if (varValue instanceof llvm.Function) {
+                return varValue;
+            }
+
             if (this.isLieft) {
-                if (variable) {
-                    return variable;
-                }
+                return variable.val;
             }
-            if (variable instanceof llvm.AllocaInst) {
-                return this.builder.CreateLoad(variable.getAllocatedType(), variable, expr.name.lexeme);
+
+            if (varValue instanceof llvm.AllocaInst) {
+                return this.builder.CreateLoad(varValue.getAllocatedType(), varValue, expr.name.lexeme);
             }
-            if (variable instanceof llvm.Function) {
-                return variable;
-            }
+
+            //指针类型
+            const varType = variable!.type;
+            return this.builder.CreateLoad(this.llvmType(varType), varValue, expr.name.lexeme);
         }
         throw new Error(`Variable ${expr.name.lexeme} not found`);
     }
     visitLambdaExpr(expr: LambdaExpr): llvm.Value {
+        //创建闭包环境类型
+        const capturedTypes = expr.captured.map(captured =>
+            llvm.PointerType.get(this.llvmType(captured.type), 0)
+        );
+        const envType = llvm.StructType.create(this.context, capturedTypes, "closure.env");
+
+        //在堆上分配闭包环境
+        const dataLayout = this.module.getDataLayout();
+        const size = dataLayout.getTypeAllocSize(envType);
+        // 将大小转换为 LLVM 的 ConstantInt
+        const sizeValue = llvm.ConstantInt.get(llvm.Type.getInt32Ty(this.context), size);
+        const envPtr = this.builder.CreateCall(this.mallocFunc, [sizeValue], "closure.envPtr");
+        for (let i = 0; i < expr.captured.length; i++) {
+            const captured = expr.captured[i];
+            const capturedVar = this.findVariable(captured.name.lexeme).val;
+            const capturedConst = llvm.ConstantInt.get(llvm.Type.getInt32Ty(this.context), i);
+            const memPtr = this.builder.CreateGEP(envType, envPtr, capturedConst, "closure.env.memPtr");
+            this.builder.CreateStore(capturedVar, memPtr);
+        }
+
+        this.currentClosure = {
+            envType: envType,
+            captured: expr.captured,
+        }
         // 保存当前的插入点，以便编译完 lambda 函数后恢复
         const savedInsertBlock = this.builder.GetInsertBlock();
         //创建函数
         const retType = this.llvmType(expr.returnType);
+
         const paramTypes = expr.parameters.map(param => this.llvmType(param.type));
         const func = this.declareFunction("lambda", retType, paramTypes);
         this.defineFunction(func, expr.parameters, expr.body, retType);
@@ -646,8 +702,11 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
         //创建闭包结构体
         let closureVal = llvm.UndefValue.get(closureType);
         //填充code ptr
-        const val = this.builder.CreateInsertValue(closureVal, func, [0], "closure.code");
-        //填充env ptr
+        let val = this.builder.CreateInsertValue(closureVal, func, [0], "closure.code");
+        //填充env ptr const envType
+        val = this.builder.CreateInsertValue(val, envPtr, [1], "closure.env");
+
+        this.currentClosure = null;
         return val;
     }
 
@@ -659,6 +718,9 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
 
 
     private declareFunction(funName: string, retType: llvm.Type, paramTypes: llvm.Type[]): llvm.Function {
+        if (this.currentClosure) {
+            paramTypes.unshift(llvm.PointerType.get(llvm.Type.getInt8PtrTy(this.context), 0));
+        }
         const funcType = llvm.FunctionType.get(retType, paramTypes, false);
         const func = llvm.Function.Create(funcType, llvm.Function.LinkageTypes.ExternalLinkage, funName, this.module);
         return func;
@@ -675,6 +737,22 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
         const bb = llvm.BasicBlock.Create(this.context, 'entry', func);
         this.builder.SetInsertPoint(bb);
 
+        this.beginScope();
+
+        if (this.currentClosure) {
+            const envPtr = func.getArg(0);
+            const envType = this.currentClosure.envType;
+            for (let i = 0; i < this.currentClosure.captured.length; i++) {
+                const captured = this.currentClosure.captured[i];
+                const capturedConst = llvm.ConstantInt.get(llvm.Type.getInt32Ty(this.context), i);
+                const memPtr = this.builder.CreateGEP(envType, envPtr, capturedConst, "closure.env.memPtr");
+                const ptrType = llvm.PointerType.get(this.llvmType(captured.type), 0);
+                const memVal = this.builder.CreateLoad(ptrType, memPtr, "closure.env.memVal");
+                this.define(captured.name.lexeme, memVal, captured.type);
+            }
+        }
+
+
         // 处理函数参数：为每个参数创建 alloca，并从函数参数中加载值存储到 alloca
         for (let i = 0; i < parameters.length; i++) {
             const param = parameters[i];
@@ -682,14 +760,15 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
             const paramAlloca = this.builder.CreateAlloca(paramType, null, param.name.lexeme);
 
             // 从函数参数中获取值（函数参数是 Value，不是指针）
-            const funcArg = func.getArg(i);
+            const funcArg = func.getArg(i + 1);
             if (funcArg) {
                 // 将函数参数的值存储到 alloca
                 this.builder.CreateStore(funcArg, paramAlloca);
             }
             // 将 alloca 存储到作用域中，供后续使用
-            this.define(param.name.lexeme, paramAlloca, new FunctionType(param.type, parameters.map(item => item.type)));
+            this.define(param.name.lexeme, paramAlloca, param.type);
         }
+
 
         // 编译函数体
         for (const bodyStmt of body) {
@@ -708,6 +787,8 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
             }
         }
 
+        this.endScope();
+
         // 恢复旧的返回类型
         this.currentFunction = {
             returnType: oldReturnType,
@@ -717,7 +798,7 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
     //作用域
     beginScope(): void {
         const scope = new Map<string, {
-            value: llvm.Value,
+            val: llvm.Value,
             type: GrusType,
         }>();
         this.currentScope = scope;
@@ -731,7 +812,7 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
 
     define(name: string, val: llvm.Value, type: GrusType): void {
         this.currentScope.set(name, {
-            value: val,
+            val: val,
             type: type,
         });
     }
@@ -874,10 +955,10 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
     }
 
 
-    private getVariableType(name: string): GrusType {
+    private findVariable(name: string) {
         for (let i = this.scopes.length - 1; i >= 0; i--) {
             const scope = this.scopes[i];
-            const variable = scope.get(name)?.type;
+            const variable = scope.get(name)
             if (variable) {
                 return variable;
             }

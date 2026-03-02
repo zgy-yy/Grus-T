@@ -68,6 +68,7 @@ export class Resolver implements ExprVisitor<GrusType>, StmtVisitor<void> {
     private currentScope: Map<string, Member> = new Map<string, Member>();
     private funEnvs: FunEnv[] = [];
     private currentFun: FunEnv = this.funEnvs[this.funEnvs.length - 1];
+    private closureDeep: number = 0;//闭包所在的作用域深度，用于判断变量是否被捕获
 
     private errorHandler: ParserErrorHandler;
     private currentClass: ClassType = "NONE";
@@ -415,6 +416,7 @@ export class Resolver implements ExprVisitor<GrusType>, StmtVisitor<void> {
     }
 
     visitLambdaExpr(expr: LambdaExpr): GrusType {
+        this.closureDeep = this.scopes.length - 1;
         this.beginFunction(expr.returnType);
         for (const param of expr.parameters) {
             this.declare(param.name, param);
@@ -424,8 +426,9 @@ export class Resolver implements ExprVisitor<GrusType>, StmtVisitor<void> {
             this.resolveStmt(bodyStmt);
         }
         for (const captured of this.currentFun.captured) {
-            expr.captured.push(captured.type);
+            expr.captured.push(captured);
         }
+        console.log("---captured", this.currentFun.captured);
         this.endFunction(expr.paren);
         const paramTypes = expr.parameters.map(param => param.type);
         return new FunctionType(expr.returnType, paramTypes);
@@ -508,7 +511,7 @@ export class Resolver implements ExprVisitor<GrusType>, StmtVisitor<void> {
             const scope = this.scopes[i];
             const _var = scope.get(name);
             if (_var) {
-                if (this.funEnvs.length > 1) {
+                if (i <= this.closureDeep) {
                     if (i !== 0) {//非全局变量
                         this.compiler?.captured.add(_var.symbol);
                         this.currentFun.captured.add(_var.symbol);

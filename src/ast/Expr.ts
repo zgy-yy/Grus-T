@@ -281,7 +281,7 @@ export class LambdaExpr extends Expr {
     parameters: GSymbol[];
     returnType: GrusType;
     body: Stmt[];
-    captured: GrusType[];
+    captured: GSymbol[];
     constructor(paren: Token, parameters: GSymbol[], returnType: GrusType, body: Stmt[]) {
         super();
         this.paren = paren;
