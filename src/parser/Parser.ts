@@ -2,8 +2,8 @@ import { Token } from "@/ast/Token";
 import { ParserErrorHandler } from "./ErrorHandler";
 import { TokenType } from "@/ast/TokenType";
 import { AssignExpr, BinaryExpr, CallExpr, CastExpr, Expr, LambdaExpr, LiteralExpr, PostfixExpr, PrefixExpr, ThisExpr, UnaryExpr, VariableExpr } from "@/ast/Expr";
-import { BlockStmt, BreakStmt, ContinueStmt, DoWhileStmt, ExpressionStmt, ForStmt, FunctionStmt, GotoStmt, IfStmt, LabelStmt, LoopStmt, ReturnStmt, Stmt, GSymbol, VarStmt, WhileStmt } from "@/ast/Stmt";
-import {  FunctionType, GrusType, literalType, PointerType, SimpleType } from "@/ast/GrusTypes";
+import { BlockStmt, BreakStmt, ContinueStmt, DoWhileStmt, ExpressionStmt, ForStmt, FunctionStmt, GotoStmt, IfStmt, LabelStmt, LoopStmt, ReturnStmt, Stmt, GSymbol, VarStmt, WhileStmt, Variable, Parameter } from "@/ast/Stmt";
+import { FunctionType, GrusType, literalType, PointerType, SimpleType } from "@/ast/GrusTypes";
 
 class SyntaxError extends Error {
     public token: Token;
@@ -201,14 +201,14 @@ export class Parser {
      * let IDENTIFIER ( "=" expression )? ";" 
      */
     private varDeclaration(): VarStmt {
-        const vars: GSymbol[] = [];
+        const vars: Variable[] = [];
         let decType: GrusType = null as unknown as GrusType;
         do {
             if (this.match(TokenType.Identifier)) {
                 const name = this.previous();
                 if (this.match(TokenType.Equal)) {
                     const initializer = this.expression(Precedence.ASSIGNMENT);
-                    vars.push(new GSymbol(name, decType, initializer));
+                    vars.push(new Variable(name, decType, initializer));
                     continue;
                 } else {
                     this.back();
@@ -216,8 +216,13 @@ export class Parser {
             }
             decType = this.type();
             const name = this.consume(TokenType.Identifier, "Expect variable name.");
-            const initializer = this.match(TokenType.Equal) ? this.expression(Precedence.ASSIGNMENT) : null;
-            vars.push(new GSymbol(name, decType, initializer));
+            if (this.match(TokenType.Equal)) {
+                const initializer = this.expression(Precedence.ASSIGNMENT);
+                vars.push(new Variable(name, decType, initializer));
+
+            } else {
+                this.error(name, "Expect '=' after variable name.");
+            }
 
         } while (this.match(TokenType.Comma));
         this.consume(TokenType.Semicolon, "Expect ';' after variable declaration.");
@@ -228,7 +233,7 @@ export class Parser {
     private funDeclaration(): FunctionStmt {
         const name = this.consume(TokenType.Identifier, "Expect function name.");
         this.consume(TokenType.LeftParen, "Expect '(' after function name.");
-        const parameters: GSymbol[] = [];
+        const parameters: Parameter[] = [];
         if (!this.check(TokenType.RightParen)) {
             if (parameters.length >= 255) {
                 throw this.error(this.previous(), "Can't have more than 255 parameters.");
@@ -252,13 +257,13 @@ export class Parser {
      * 解析参数
      * parameter → typeExpr IDENTIFIER ( "=" expression )?
      */
-    private parameter(): GSymbol[] {
-        const parameters: GSymbol[] = [];
+    private parameter(): Parameter[] {
+        const parameters: Parameter[] = [];
         do {
             let type = this.type();
             const name = this.consume(TokenType.Identifier, "Expect parameter name.");
             const defaultValue = this.match(TokenType.Equal) ? this.expression(Precedence.ASSIGNMENT) : null;
-            parameters.push(new GSymbol(name, type, defaultValue));
+            parameters.push(new Parameter(name, type, defaultValue));
             while (this.match(TokenType.Comma)) {
                 if (this.match(TokenType.Identifier)) {
                     if (this.check(TokenType.Identifier)) {
@@ -272,7 +277,7 @@ export class Parser {
                 }
                 const name = this.consume(TokenType.Identifier, "Expect parameter name.");
                 const defaultValue = this.match(TokenType.Equal) ? this.expression(Precedence.ASSIGNMENT) : null;
-                parameters.push(new GSymbol(name, type, defaultValue));
+                parameters.push(new Parameter(name, type, defaultValue));
             }
         } while (this.match(TokenType.Comma));
         return parameters;

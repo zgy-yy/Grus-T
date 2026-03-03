@@ -166,10 +166,26 @@ export class ExpressionStmt extends Stmt {
     }
 }
 
-export class GSymbol {
+export interface GSymbol {
     name: Token;
-    defaultValue: Expr | null;
     type: GrusType;
+}
+
+export class Variable implements GSymbol {
+    name: Token;
+    type: GrusType;
+    defaultValue: Expr
+    constructor(name: Token, type: GrusType, defaultValue: Expr) {
+        this.name = name;
+        this.type = type;
+        this.defaultValue = defaultValue;
+    }
+}
+
+export class Parameter implements GSymbol {
+    name: Token;
+    type: GrusType;
+    defaultValue: Expr | null;
     constructor(name: Token, type: GrusType, defaultValue: Expr | null) {
         this.name = name;
         this.type = type;
@@ -178,9 +194,10 @@ export class GSymbol {
 }
 
 
+
 export class VarStmt extends Stmt {
-    vars: GSymbol[];
-    constructor(vars: GSymbol[]) {
+    vars: Variable[];
+    constructor(vars: Variable[]) {
         super();
         this.vars = vars;
     }
@@ -191,10 +208,10 @@ export class VarStmt extends Stmt {
 
 export class FunctionStmt extends Stmt {
     name: Token;
-    parameters: GSymbol[];
+    parameters: Parameter[];
     returnType: GrusType;
     body: Stmt[];
-    constructor(name: Token, parameters: GSymbol[], returnType: GrusType, body: Stmt[]) {
+    constructor(name: Token, parameters: Parameter[], returnType: GrusType, body: Stmt[]) {
         super();
         this.name = name;
         this.parameters = parameters;

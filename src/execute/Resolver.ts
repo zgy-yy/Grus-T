@@ -1,5 +1,5 @@
 import { AssignExpr, BinaryExpr, CallExpr, CastExpr, ConditionalExpr, Expr, ExprVisitor, GetExpr, LambdaExpr, LiteralExpr, LogicalExpr, PostfixExpr, PrefixExpr, SetExpr, ThisExpr, UnaryExpr, VariableExpr } from "@/ast/Expr";
-import { BlockStmt, BreakStmt, ClassStmt, ContinueStmt, DoWhileStmt, ExpressionStmt, ForStmt, FunctionStmt, GotoStmt, GSymbol, IfStmt, LabelStmt, LoopStmt, ReturnStmt, Stmt, StmtVisitor, VarStmt, WhileStmt } from "@/ast/Stmt";
+import { BlockStmt, BreakStmt, ClassStmt, ContinueStmt, DoWhileStmt, ExpressionStmt, ForStmt, FunctionStmt, GotoStmt, GSymbol, IfStmt, LabelStmt, LoopStmt, ReturnStmt, Stmt, StmtVisitor, Variable, VarStmt, WhileStmt } from "@/ast/Stmt";
 import { Token } from "@/ast/Token";
 import { ParserErrorHandler } from "@/parser/ErrorHandler";
 import { TokenType } from "@/ast/TokenType";
@@ -80,16 +80,16 @@ export class Resolver implements ExprVisitor<GrusType>, StmtVisitor<void> {
     resolveProgram(stmts: Stmt[]): void {
         try {
             this.beginScope();
-            this.currentScope.set("printf", new Member(new GSymbol(
+            this.currentScope.set("printf", new Member(new Variable(
                 new Token(TokenType.Identifier, "printf", "", 0, 0),
                 new FunctionType(new SimpleType("i32"), [new SimpleType("string"), new TempOmittedType()]),
-                null
+                new LiteralExpr("0")
             ), true));
             stmts.forEach(stmt => {
                 if (stmt instanceof FunctionStmt) {
-                    this.declare(stmt.name, new GSymbol(stmt.name,
+                    this.declare(stmt.name, new Variable(stmt.name,
                         new FunctionType(stmt.returnType, stmt.parameters.map(param => param.type)),
-                        null));
+                        new LiteralExpr("0")));
                     this.define(stmt.name);
                 }
             });
@@ -428,9 +428,9 @@ export class Resolver implements ExprVisitor<GrusType>, StmtVisitor<void> {
         for (const captured of this.currentFun.captured) {
             expr.captured.push(captured);
         }
-        console.log("---captured", this.currentFun.captured);
         this.endFunction(expr.paren);
         const paramTypes = expr.parameters.map(param => param.type);
+        this.closureDeep = -1;
         return new FunctionType(expr.returnType, paramTypes);
     }
 

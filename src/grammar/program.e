@@ -1,13 +1,14 @@
-fun main() i32 {
 
-let x=1;
-  let () -> i32 f = () -> i32 {
-  x=2;
-    let x=22;
-    printf("%d",x);
-    return 42;
-  };
-  let i32 result = f();
-  printf("%d\\n", result);
+fun step3(i32 i) void {
+  printf("%d,",i);
+}
+
+fun main() i32 {
+    let (i32)->void foo= step3;
+    let ()->void bar=()->void{
+      foo(1);
+    };
+    bar();
+    step3(1);
   return 0;
 }
