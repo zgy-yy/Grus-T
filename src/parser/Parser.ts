@@ -262,8 +262,7 @@ export class Parser {
         do {
             let type = this.type();
             const name = this.consume(TokenType.Identifier, "Expect parameter name.");
-            const defaultValue = this.match(TokenType.Equal) ? this.expression(Precedence.ASSIGNMENT) : null;
-            parameters.push(new Parameter(name, type, defaultValue));
+            parameters.push(new Parameter(name, type));
             while (this.match(TokenType.Comma)) {
                 if (this.match(TokenType.Identifier)) {
                     if (this.check(TokenType.Identifier)) {
@@ -276,8 +275,7 @@ export class Parser {
                     type = this.type();
                 }
                 const name = this.consume(TokenType.Identifier, "Expect parameter name.");
-                const defaultValue = this.match(TokenType.Equal) ? this.expression(Precedence.ASSIGNMENT) : null;
-                parameters.push(new Parameter(name, type, defaultValue));
+                parameters.push(new Parameter(name, type));
             }
         } while (this.match(TokenType.Comma));
         return parameters;

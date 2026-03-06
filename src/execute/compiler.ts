@@ -755,16 +755,28 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
         for (let i = 0; i < parameters.length; i++) {
             const param = parameters[i];
             const paramLType = this.llvmType(param.type);
-            const paramAlloca = this.builder.CreateAlloca(paramLType, null, param.name.lexeme);
+
             const argInd = this.currentClosure ? i + 1 : i;
             // 从函数参数中获取值（函数参数是 Value，不是指针）
             const funcArg = func.getArg(argInd);
-            if (funcArg) {
-                // 将函数参数的值存储到 alloca
+
+            if (this.captured.has(param)) {
+                const dataLayout = this.module.getDataLayout();
+                const size = dataLayout.getTypeAllocSize(paramLType);
+                // 将大小转换为 LLVM 的 ConstantInt
+                const sizeValue = llvm.ConstantInt.get(llvm.Type.getInt32Ty(this.context), size);
+                const val = this.builder.CreateCall(this.mallocFunc, [sizeValue]);
+                this.builder.CreateStore(funcArg, val);
+                this.define(param.name.lexeme, val, param.type);
+            } else {
+                // 将 alloca 存储到作用域中，供后续使用
+                const paramAlloca = this.builder.CreateAlloca(paramLType, null, param.name.lexeme);
                 this.builder.CreateStore(funcArg, paramAlloca);
+                this.define(param.name.lexeme, paramAlloca, param.type);
             }
-            // 将 alloca 存储到作用域中，供后续使用
-            this.define(param.name.lexeme, paramAlloca, param.type);
+
+
+
         }
 
 
@@ -882,7 +894,7 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
             //填充code ptr
             let val = this.builder.CreateInsertValue(closureVal, wfunc, [0], "closure.code");
             //填充env ptr const envType
-       
+
             return val;
         }
 

@@ -185,11 +185,9 @@ export class Variable implements GSymbol {
 export class Parameter implements GSymbol {
     name: Token;
     type: GrusType;
-    defaultValue: Expr | null;
-    constructor(name: Token, type: GrusType, defaultValue: Expr | null) {
+    constructor(name: Token, type: GrusType) {
         this.name = name;
         this.type = type;
-        this.defaultValue = defaultValue;
     }
 }
 

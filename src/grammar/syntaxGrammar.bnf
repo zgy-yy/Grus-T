@@ -24,6 +24,6 @@ block          → "{" declaration* | statement* "}" ;
 
 expression     → assignment ;
 
-typeExpr       →  IDENTIFIER([])?
+typeExpr       →  ([]|@)?IDENTIFIER
 
 
