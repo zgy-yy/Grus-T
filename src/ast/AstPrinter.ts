@@ -1,4 +1,4 @@
-import { AssignExpr, BinaryExpr, CallExpr, CastExpr, ConditionalExpr, Expr, ExprVisitor, GetExpr, LambdaExpr, LiteralExpr, LogicalExpr, PostfixExpr, PrefixExpr, SetExpr, ThisExpr, UnaryExpr, VariableExpr } from "@/ast/Expr";
+import { AssignExpr, BinaryExpr, CallExpr, CastExpr, ConditionalExpr, Expr, ExprVisitor, GetExpr, LambdaExpr, LiteralExpr, LogicalExpr, PointExpr, PostfixExpr, PrefixExpr, SetExpr, ThisExpr, UnaryExpr, VariableExpr } from "@/ast/Expr";
 
 
 
@@ -9,6 +9,9 @@ export class AstPrinter implements ExprVisitor<string> {
     }
     visitAssignExpr(expr: AssignExpr): string {
         return this.parenthesize("=", expr.target.accept(this), expr.value.accept(this));
+    }
+    visitPointExpr(expr: PointExpr): string {
+        return this.parenthesize("=>", expr.target.accept(this), expr.value.accept(this));
     }
     visitConditionalExpr(expr: ConditionalExpr): string {
         return this.parenthesize("?", expr.condition, expr.trueExpr, expr.falseExpr);

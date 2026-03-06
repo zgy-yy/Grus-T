@@ -19,14 +19,14 @@ export class SimpleType implements GrusType {
 
 
 export class PointerType implements GrusType {
-    type: GrusType;
+    oriType: GrusType;
     i: number;
     constructor(type: GrusType) {
-        this.type = type;
+        this.oriType = type;
         this.i = 1;
     }
     toString(): string {
-        return this.type.toString();
+        return "@" + this.oriType.toString();
     }
 }
 

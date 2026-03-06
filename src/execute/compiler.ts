@@ -1,4 +1,4 @@
-import { AssignExpr, BinaryExpr, CallExpr, CastExpr, ConditionalExpr, ExprVisitor, GetExpr, LambdaExpr, LiteralExpr, LogicalExpr, PostfixExpr, PrefixExpr, SetExpr, ThisExpr, UnaryExpr, VariableExpr } from "@/ast/Expr";
+import { AssignExpr, BinaryExpr, CallExpr, CastExpr, ConditionalExpr, ExprVisitor, GetExpr, LambdaExpr, LiteralExpr, LogicalExpr, PointExpr, PostfixExpr, PrefixExpr, SetExpr, ThisExpr, UnaryExpr, VariableExpr } from "@/ast/Expr";
 import { BlockStmt, BreakStmt, ClassStmt, ContinueStmt, DoWhileStmt, ExpressionStmt, ForStmt, FunctionStmt, GotoStmt, GSymbol, IfStmt, LabelStmt, LoopStmt, ReturnStmt, StmtVisitor, VarStmt, WhileStmt } from "@/ast/Stmt";
 import { Stmt } from "@/ast/Stmt";
 import { CompilerErrorHandler } from "@/parser/ErrorHandler";
@@ -35,10 +35,10 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
         returnType: llvm.Type,
     }
     private currentVar: {
-        isLeft: boolean,
-        lType: llvm.Type,
+        isAddr: boolean,
     }
-    captured: Set<GSymbol> = new Set(); // 缓存捕获的变量
+
+    escaped: Set<GSymbol> = new Set(); // 缓存捕获的变量
     currentClosure: {
         captured: GSymbol[],
         envType: llvm.Type,
@@ -90,8 +90,7 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
             returnType: llvm.Type.getVoidTy(this.context),
         };
         this.currentVar = {
-            isLeft: false,
-            lType: llvm.Type.getVoidTy(this.context),
+            isAddr: false
         };
         const mallocType = llvm.FunctionType.get(this.constantTypes.ptr, [this.constantTypes.i32], false);
         this.mallocFunc = this.module.getOrInsertFunction('malloc', mallocType);
@@ -99,6 +98,7 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
     }
 
     compileProgram(stmts: Stmt[]): string {
+        console.log("escaped", this.escaped);
         this.beginScope();
         //默认声明printf
         const LType = llvm.FunctionType.get(this.constantTypes.i32, [this.constantTypes.ptr], true);
@@ -145,24 +145,38 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
         for (const variable of stmt.vars) {
             const varLType = this.llvmType(variable.type);
             const varName = variable.name.lexeme;
-            let defaultValue = variable.defaultValue.accept(this);
-            defaultValue = this.promoteType(defaultValue, varLType);
-            if (this.captured.has(variable)) {
+
+            if (this.escaped.has(variable)) {
                 const dataLayout = this.module.getDataLayout();
                 const size = dataLayout.getTypeAllocSize(varLType);
                 // 将大小转换为 LLVM 的 ConstantInt
                 const sizeValue = llvm.ConstantInt.get(llvm.Type.getInt32Ty(this.context), size);
                 const val = this.builder.CreateCall(this.mallocFunc, [sizeValue]);
                 this.define(varName, val, variable.type);
-                if (variable.defaultValue) {
+                if (variable.type instanceof PointerType) {
+                    this.currentVar.isAddr = true;
+                    let varAddr = variable.defaultValue.accept(this);
+                    this.builder.CreateStore(varAddr, val);
+                    this.currentVar.isAddr = false;
+                } else {
+                    let defaultValue = variable.defaultValue.accept(this);
+                    defaultValue = this.promoteType(defaultValue, varLType);
                     this.builder.CreateStore(defaultValue, val);
                 }
             } else {
                 const val = this.builder.CreateAlloca(varLType, null, varName);
                 this.define(varName, val, variable.type);
-                if (variable.defaultValue) {
+                if (variable.type instanceof PointerType) {
+                    this.currentVar.isAddr = true;
+                    let varAddr = variable.defaultValue.accept(this);
+                    this.builder.CreateStore(varAddr, val);
+                    this.currentVar.isAddr = false;
+                } else {
+                    let defaultValue = variable.defaultValue.accept(this);
+                    defaultValue = this.promoteType(defaultValue, varLType);
                     this.builder.CreateStore(defaultValue, val);
                 }
+
             }
 
         }
@@ -380,21 +394,44 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
 
     // ExprVisitor methods
     visitAssignExpr(expr: AssignExpr): llvm.Value {
-        this.currentVar.isLeft = true;
-        const val = expr.target.accept(this);
-        let targetType: llvm.Type = this.currentVar.lType;
-        this.currentVar.isLeft = false;
+        if (expr.target instanceof VariableExpr) {
+            const variable = this.findVariable(expr.target.name.lexeme);
+            if (variable.type instanceof PointerType) {
+                this.currentVar.isAddr = true;
+                const val = expr.target.accept(this);
+                let targetType: llvm.Type = this.llvmType(variable.type.oriType);
+                this.currentVar.isAddr = false;
+                let rightValue = expr.value.accept(this);
+                rightValue = this.promoteType(rightValue, targetType);
+                this.builder.CreateStore(rightValue, val);
+                return rightValue;
+            } else {
+                let targetType: llvm.Type = this.llvmType(variable.type)
+                // 计算右值
+                let rightValue = expr.value.accept(this);
+                // 进行类型对齐：将右值转换为左值的原始类型
+                rightValue = this.promoteType(rightValue, targetType);
 
-        // 计算右值
-        let rightValue = expr.value.accept(this);
-        // 进行类型对齐：将右值转换为左值的原始类型
-        rightValue = this.promoteType(rightValue, targetType);
+                // 存储到左值
+                this.builder.CreateStore(rightValue, variable.val);
 
-        // 存储到左值
-        this.builder.CreateStore(rightValue, val);
+                // 返回右值（赋值表达式的值）
+                return rightValue;
+            }
+        }
+        throw new Error(`Unsupported assign target: ${expr.target.accept(this).getType().toString()}. Expected Variable or Pointer.`);
+    }
+    visitPointExpr(expr: PointExpr): llvm.Value {
+        if (expr.target instanceof VariableExpr) {
+            const ptrVariable = this.findVariable(expr.target.name.lexeme);
+            this.currentVar.isAddr = true;
+            let rightAddr = expr.value.accept(this);
+            this.currentVar.isAddr = false;
+            this.builder.CreateStore(rightAddr, ptrVariable.val);
+            return rightAddr;
+        }
+        throw new Error(`Unsupported point target: ${expr.target.accept(this).getType().toString()}. Expected Variable or Pointer.`);
 
-        // 返回右值（赋值表达式的值）
-        return rightValue;
     }
     visitConditionalExpr(expr: ConditionalExpr): llvm.Value {
         throw new Error("Method not implemented.");
@@ -565,9 +602,9 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
         return this.builder.getInt32(0);
     }
     visitPostfixExpr(expr: PostfixExpr): llvm.Value {
-        this.currentVar.isLeft = true;
+        this.currentVar.isAddr = true;
         const target = expr.target.accept(this);
-        this.currentVar.isLeft = false;
+        this.currentVar.isAddr = false;
         let oldValue = expr.target.accept(this);
         switch (expr.operator.type) {
             case TokenType.PlusPlus:
@@ -587,9 +624,9 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
         throw new Error(`Unsupported postfix operator: ${expr.operator.type}`);
     }
     visitPrefixExpr(expr: PrefixExpr): llvm.Value {
-        this.currentVar.isLeft = true;
+        this.currentVar.isAddr = true;
         const target = expr.target.accept(this);
-        this.currentVar.isLeft = false;
+        this.currentVar.isAddr = false;
         let oldValue = expr.target.accept(this);
         switch (expr.operator.type) {
             case TokenType.PlusPlus:
@@ -648,10 +685,16 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
             if (val instanceof llvm.Function) {
                 return val;
             }
-
+            if (variable.type instanceof PointerType) {
+                const oriLType = this.llvmType(variable.type.oriType);
+                const ptr = this.builder.CreateLoad(llvm.PointerType.get(oriLType, 0), val, expr.name.lexeme);
+                if (this.currentVar.isAddr) {
+                    return ptr;
+                }
+                return this.builder.CreateLoad(oriLType, ptr, expr.name.lexeme);
+            }
             const lType = this.llvmType(variable.type);
-            if (this.currentVar.isLeft) {
-                this.currentVar.lType = lType
+            if (this.currentVar.isAddr) {
                 return variable.val;
             }
             return this.builder.CreateLoad(lType, val, expr.name.lexeme);
@@ -760,7 +803,7 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
             // 从函数参数中获取值（函数参数是 Value，不是指针）
             const funcArg = func.getArg(argInd);
 
-            if (this.captured.has(param)) {
+            if (this.escaped.has(param)) {
                 const dataLayout = this.module.getDataLayout();
                 const size = dataLayout.getTypeAllocSize(paramLType);
                 // 将大小转换为 LLVM 的 ConstantInt
@@ -1014,7 +1057,9 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
         if (type instanceof FunctionType) {
             return this.constantTypes.closure;
         }
-
+        if (type instanceof PointerType) {
+            return llvm.PointerType.get(this.llvmType(type.oriType), 0);
+        }
         throw new Error(`Unsupported type: ${type}`);
     }
 

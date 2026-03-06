@@ -21,6 +21,7 @@ export enum TokenType {
     Percent = 'PERCENT',// %
     Caret = 'CARET',// ^
     Tilde = 'TILDE',// ~
+    At = 'AT',// @
 
     // 多字符 token
     Bang = 'BANG',// !
@@ -50,7 +51,7 @@ export enum TokenType {
     GreaterGreaterEqual = 'GREATER_GREATER_EQUAL',// >>=
     LessLessEqual = 'LESS_LESS_EQUAL',// <<=
     Arrow = 'ARROW',// ->
-
+    AArrow = 'A_ARROW',// =>
     // 关键字
     Goto = 'GOTO',// goto
     Class = 'CLASS',// class

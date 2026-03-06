@@ -1,14 +1,17 @@
 
-fun foo(i32 x) (i32)->void {
-  let a= (i32 i)->void{
-    printf("%d,%d",i,x);
+fun foo() ()->i32 {
+  let i32 a=23;
+  let @i32 pt =>a;
+  let bar =()->i32{
+    return pt;
   };
-  a(1);
-  return a;
+  printf("%d,",pt);
+  return bar;
 }
 
 fun main() i32 {
-  let (i32)->void b = foo(2);
-  b(1);
+ let c= foo();
+ let num =c();
+   printf("%d,",num);
   return 0;
 }

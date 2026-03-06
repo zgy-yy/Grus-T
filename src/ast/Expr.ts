@@ -7,6 +7,7 @@ export abstract class Expr {
 
 export interface ExprVisitor<R> {
     visitAssignExpr(expr: AssignExpr): R;
+    visitPointExpr(expr: PointExpr): R;
     visitConditionalExpr(expr: ConditionalExpr): R;
     visitLogicalExpr(expr: LogicalExpr): R;
     visitBinaryExpr(expr: BinaryExpr): R;
@@ -41,6 +42,21 @@ export class AssignExpr extends Expr {
     }
     accept<R>(visitor: ExprVisitor<R>): R {
         return visitor.visitAssignExpr(this);
+    }
+}
+//指向表达式
+export class PointExpr extends Expr {
+    target: Expr;
+    value: Expr;
+    arrow: Token;
+    constructor(target: Expr, value: Expr, arrow: Token) {
+        super();
+        this.target = target;
+        this.value = value;
+        this.arrow = arrow;
+    }
+    accept<R>(visitor: ExprVisitor<R>): R {
+        return visitor.visitPointExpr(this);
     }
 }
 

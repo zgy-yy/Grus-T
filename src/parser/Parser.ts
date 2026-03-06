@@ -1,7 +1,7 @@
 import { Token } from "@/ast/Token";
 import { ParserErrorHandler } from "./ErrorHandler";
 import { TokenType } from "@/ast/TokenType";
-import { AssignExpr, BinaryExpr, CallExpr, CastExpr, Expr, LambdaExpr, LiteralExpr, PostfixExpr, PrefixExpr, ThisExpr, UnaryExpr, VariableExpr } from "@/ast/Expr";
+import { AssignExpr, BinaryExpr, CallExpr, CastExpr, Expr, LambdaExpr, LiteralExpr, PointExpr, PostfixExpr, PrefixExpr, ThisExpr, UnaryExpr, VariableExpr } from "@/ast/Expr";
 import { BlockStmt, BreakStmt, ContinueStmt, DoWhileStmt, ExpressionStmt, ForStmt, FunctionStmt, GotoStmt, IfStmt, LabelStmt, LoopStmt, ReturnStmt, Stmt, GSymbol, VarStmt, WhileStmt, Variable, Parameter } from "@/ast/Stmt";
 import { FunctionType, GrusType, literalType, PointerType, SimpleType } from "@/ast/GrusTypes";
 
@@ -20,7 +20,7 @@ class SyntaxError extends Error {
 enum Precedence {
     NONE,
     COMMA,       // ","
-    ASSIGNMENT,  // "=" , "+=", "-=", "*=", "/=", "%=", "^=", "&=", "|=", ">>=", "<<="
+    ASSIGNMENT,  // "=" ,"=>", "+=", "-=", "*=", "/=", "%=", "^=", "&=", "|=", ">>=", "<<="
     OR,          // "||"
     AND,         // "&&"
     BIT_OR,      // "|"
@@ -65,6 +65,7 @@ export class Parser {
         [TokenType.MinusMinus]: [this.prefix.bind(this), this.postfix.bind(this), Precedence.UNARY],//--
         [TokenType.New]: [null, null, Precedence.NONE],//new
         [TokenType.Tilde]: [this.unary.bind(this), null, Precedence.NONE],//~
+        [TokenType.At]: [null, null, Precedence.NONE],//@
 
         [TokenType.Star]: [null, this.binary.bind(this), Precedence.FACTOR],//*
         [TokenType.Slash]: [null, this.binary.bind(this), Precedence.FACTOR],// /
@@ -90,6 +91,7 @@ export class Parser {
         [TokenType.Or]: [null, this.binary.bind(this), Precedence.OR],// ||
 
         [TokenType.Equal]: [null, this.binary.bind(this), Precedence.ASSIGNMENT],// =
+        [TokenType.AArrow]: [null, this.binary.bind(this), Precedence.ASSIGNMENT],// =>
         [TokenType.PlusEqual]: [null, this.binary.bind(this), Precedence.ASSIGNMENT],// +=
         [TokenType.MinusEqual]: [null, this.binary.bind(this), Precedence.ASSIGNMENT],// -=
         [TokenType.StarEqual]: [null, this.binary.bind(this), Precedence.ASSIGNMENT],// *=
@@ -210,20 +212,29 @@ export class Parser {
                     const initializer = this.expression(Precedence.ASSIGNMENT);
                     vars.push(new Variable(name, decType, initializer));
                     continue;
+                } else if (this.match(TokenType.AArrow)) {
+                    const initializer = this.expression(Precedence.ASSIGNMENT);
+                    vars.push(new Variable(name, new PointerType(decType), initializer));
+                    continue;
                 } else {
                     this.back();
                 }
             }
             decType = this.type();
             const name = this.consume(TokenType.Identifier, "Expect variable name.");
-            if (this.match(TokenType.Equal)) {
+            if (decType instanceof PointerType) {
+                if (this.match(TokenType.AArrow)) {
+                    const initializer = this.expression(Precedence.ASSIGNMENT);
+                    vars.push(new Variable(name, decType, initializer));
+                } else {
+                    this.error(name, "Expect '=>' after variable name.");
+                }
+            } else if (this.match(TokenType.Equal)) {
                 const initializer = this.expression(Precedence.ASSIGNMENT);
                 vars.push(new Variable(name, decType, initializer));
-
             } else {
                 this.error(name, "Expect '=' after variable name.");
             }
-
         } while (this.match(TokenType.Comma));
         this.consume(TokenType.Semicolon, "Expect ';' after variable declaration.");
         return new VarStmt(vars);
@@ -456,6 +467,13 @@ export class Parser {
             }
             this.error(operator, "Invalid assignment target.");
         }
+        if (operator.type === TokenType.AArrow) {
+            if (left instanceof VariableExpr) {
+                const right = this.parsePrecedence(precedence);
+                return new PointExpr(left, right, operator);
+            }
+            this.error(operator, "Invalid pointer target.");
+        }
         const right = this.parsePrecedence(precedence + 1);
         return new BinaryExpr(left, operator, right);
     }
@@ -548,7 +566,7 @@ export class Parser {
         if (this.match(TokenType.Identifier)) {
             const name = this.previous();
             return new SimpleType(name.lexeme as literalType);
-        } else if (this.match(TokenType.Star)) {
+        } else if (this.match(TokenType.At)) {
             return new PointerType(this.type());
         } else if (this.match(TokenType.LeftParen)) {
             const declTypes: GrusType[] = [];

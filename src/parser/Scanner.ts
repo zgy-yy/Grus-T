@@ -108,11 +108,14 @@ export class Scanner {
       case '*':
         this.addToken(TokenType.Star);
         break;
+      case '@':
+        this.addToken(TokenType.At);
+        break;
       case '!':
         this.addToken(this.match('=') ? TokenType.BangEqual : TokenType.Bang);
         break;
       case '=':
-        this.addToken(this.match('=') ? TokenType.EqualEqual : TokenType.Equal);
+        this.addToken(this.match('=') ? TokenType.EqualEqual : this.match('>') ? TokenType.AArrow : TokenType.Equal);
         break;
       case '<':
         this.addToken(this.match('=') ? TokenType.LessEqual : this.match('<') ? TokenType.LessLess : TokenType.Less);
