@@ -8,10 +8,10 @@ export class AstPrinter implements ExprVisitor<string> {
         return expr.accept(this);
     }
     visitAssignExpr(expr: AssignExpr): string {
-        return this.parenthesize("=", expr.target.accept(this), expr.value.accept(this));
+        return this.parenthesize("=", expr.name.lexeme, expr.value.accept(this));
     }
     visitPointExpr(expr: PointExpr): string {
-        return this.parenthesize("=>", expr.target.accept(this), expr.value.accept(this));
+        return this.parenthesize("=>", expr.name.lexeme, expr.value.accept(this));
     }
     visitConditionalExpr(expr: ConditionalExpr): string {
         return this.parenthesize("?", expr.condition, expr.trueExpr, expr.falseExpr);
@@ -29,10 +29,10 @@ export class AstPrinter implements ExprVisitor<string> {
     }
 
     visitPostfixExpr(expr: PostfixExpr): string {
-        return this.parenthesize(expr.target.accept(this), expr.operator.lexeme);
+        return this.parenthesize(expr.name.lexeme, expr.operator.lexeme);
     }
     visitPrefixExpr(expr: PrefixExpr): string {
-        return this.parenthesize(expr.operator.lexeme, expr.target);
+        return this.parenthesize(expr.operator.lexeme, expr.name.lexeme);
     }
     visitCallExpr(expr: CallExpr): string {
         return this.parenthesize("call", expr.callee, ...expr.arguments);
@@ -50,7 +50,7 @@ export class AstPrinter implements ExprVisitor<string> {
         return ""
     }
     visitCastExpr(expr: CastExpr): string {
-        return this.parenthesize("cast", expr.type.toString(), expr.target.accept(this));
+        return this.parenthesize("cast", expr.type.toString(), expr.source.accept(this));
     }
 
 

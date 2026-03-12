@@ -463,14 +463,14 @@ export class Parser {
             //todo 赋值运算符需要检查左值是否可赋值
             if (left instanceof VariableExpr) {
                 const right = this.parsePrecedence(precedence);
-                return new AssignExpr(left, right, operator);
+                return new AssignExpr(left.name, right, operator);
             }
             this.error(operator, "Invalid assignment target.");
         }
         if (operator.type === TokenType.AArrow) {
             if (left instanceof VariableExpr) {
                 const right = this.parsePrecedence(precedence);
-                return new PointExpr(left, right, operator);
+                return new PointExpr(left.name, right, operator);
             }
             this.error(operator, "Invalid pointer target.");
         }
@@ -485,7 +485,7 @@ export class Parser {
     private postfix(left: Expr, operator: Token): Expr {
         //todo 赋值运算符需要检查左值是否可赋值 移到 resolve 中检查
         if (left instanceof VariableExpr) {
-            return new PostfixExpr(left, operator);
+            return new PostfixExpr(left.name, operator);
         }
         this.error(operator, "Invalid assignment target.");
         return left;
@@ -495,7 +495,7 @@ export class Parser {
         const right = this.parsePrecedence(Precedence.UNARY);
         //todo 赋值运算符需要检查左值是否可赋值
         if (right instanceof VariableExpr) {
-            return new PrefixExpr(right, operator);
+            return new PrefixExpr(right.name, operator);
         }
         throw this.error(operator, "Invalid assignment target.");
     }
@@ -542,7 +542,7 @@ export class Parser {
     }
 
     private lambda(): Expr {
-        const params: GSymbol[] = [];
+        const params: Parameter[] = [];
         if (!this.check(TokenType.RightParen)) {
             do {
                 const param = this.parameter();
@@ -579,7 +579,7 @@ export class Parser {
             this.consume(TokenType.RightParen, "Expect ')' after parameters.");
             this.consume(TokenType.Arrow, "Expect '->' after parameters.");
             const returnType = this.type();
-            return new FunctionType(returnType, declTypes);
+            return new FunctionType(returnType, declTypes, false);
         }
         throw this.error(this.peek(), "Expect type.");
     }

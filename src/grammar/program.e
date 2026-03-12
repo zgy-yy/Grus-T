@@ -1,17 +1,8 @@
-
-fun foo() ()->i32 {
-  let i32 a=23;
-  let @i32 pt =>a;
-  let bar =()->i32{
-    return pt;
-  };
-  printf("%d,",pt);
-  return bar;
-}
-
 fun main() i32 {
- let c= foo();
- let num =c();
-   printf("%d,",num);
+  let (i32) -> bool isEven = (i32 n) -> bool {
+    return n % 2 == 0;
+  };
+  let bool result = isEven(4);
+  printf("%d\\n", result);
   return 0;
 }

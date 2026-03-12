@@ -1,11 +1,12 @@
-import { AssignExpr, BinaryExpr, CallExpr, CastExpr, ConditionalExpr, ExprVisitor, GetExpr, LambdaExpr, LiteralExpr, LogicalExpr, PointExpr, PostfixExpr, PrefixExpr, SetExpr, ThisExpr, UnaryExpr, VariableExpr } from "@/ast/Expr";
-import { BlockStmt, BreakStmt, ClassStmt, ContinueStmt, DoWhileStmt, ExpressionStmt, ForStmt, FunctionStmt, GotoStmt, GSymbol, IfStmt, LabelStmt, LoopStmt, ReturnStmt, StmtVisitor, VarStmt, WhileStmt } from "@/ast/Stmt";
+import { AssignExpr, BinaryExpr, CallExpr, CastExpr, ConditionalExpr, Expr, ExprVisitor, GetExpr, LambdaExpr, LiteralExpr, LogicalExpr, PointExpr, PostfixExpr, PrefixExpr, SetExpr, ThisExpr, UnaryExpr, VariableExpr } from "@/ast/Expr";
+import { BlockStmt, BreakStmt, ClassStmt, ContinueStmt, DoWhileStmt, ExpressionStmt, ForStmt, FunctionStmt, GotoStmt, GSymbol, IfStmt, LabelStmt, LoopStmt, Parameter, ReturnStmt, StmtVisitor, VarStmt, WhileStmt } from "@/ast/Stmt";
 import { Stmt } from "@/ast/Stmt";
 import { CompilerErrorHandler } from "@/parser/ErrorHandler";
 import { Token } from "@/ast/Token";
 import llvm from "@wangziwenhk/llvm-bindings";
 import { FunctionType, GrusType, PointerType, SimpleType, TempOmittedType } from "@/ast/GrusTypes";
 import { TokenType } from "@/ast/TokenType";
+import { Environment } from "./Environment";
 
 export class CompilerError extends Error {
     public token: Token;
@@ -16,33 +17,28 @@ export class CompilerError extends Error {
 }
 
 
-export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
+export class GValue {
+    val: llvm.Value;
+    gType: GrusType;
+    constructor(val: llvm.Value, type: GrusType) {
+        this.val = val;
+        this.gType = type;
+    }
+}
+
+export class Compiler implements ExprVisitor<GValue>, StmtVisitor<void> {
 
     private loopStack: {
         continueBb: llvm.BasicBlock,
         breakBb: llvm.BasicBlock,
     }[] = [];
     private labelMap: Map<string, llvm.BasicBlock> = new Map<string, llvm.BasicBlock>();
-    private scopes: Map<string, {
-        val: llvm.Value,
-        type: GrusType,
-    }>[] = []; // sourceName -> compiledName
-    private currentScope: Map<string, {
-        val: llvm.Value,
-        type: GrusType,
-    }> = new Map();
+    readonly globalEnv: Environment = new Environment(null);
+    private environment: Environment = this.globalEnv;
+    private readonly locals: Map<Expr, number> = new Map();
     private currentFunction: {
         returnType: llvm.Type,
     }
-    private currentVar: {
-        isAddr: boolean,
-    }
-
-    escaped: Set<GSymbol> = new Set(); // 缓存捕获的变量
-    currentClosure: {
-        captured: GSymbol[],
-        envType: llvm.Type,
-    } | null = null;
 
 
     private context: llvm.LLVMContext;
@@ -89,31 +85,30 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
         this.currentFunction = {
             returnType: llvm.Type.getVoidTy(this.context),
         };
-        this.currentVar = {
-            isAddr: false
-        };
         const mallocType = llvm.FunctionType.get(this.constantTypes.ptr, [this.constantTypes.i32], false);
         this.mallocFunc = this.module.getOrInsertFunction('malloc', mallocType);
 
     }
 
+    resolve(expr: Expr, depth: number): void {
+        this.locals.set(expr, depth);
+    }
+
     compileProgram(stmts: Stmt[]): string {
-        console.log("escaped", this.escaped);
-        this.beginScope();
         //默认声明printf
         const LType = llvm.FunctionType.get(this.constantTypes.i32, [this.constantTypes.ptr], true);
         const printf = llvm.Function.Create(LType, llvm.Function.LinkageTypes.ExternalLinkage, "printf", this.module);
-        this.define("printf", printf, new FunctionType(new SimpleType("i32"), [new SimpleType("string"), new TempOmittedType()]));
+        this.define("printf", printf, new FunctionType(new SimpleType("i32"), [new SimpleType("string"), new TempOmittedType()], true));
 
         // ========== 第一遍编译：声明所有函数 ==========
         // 目的：创建所有函数的签名（函数类型和名称），但不编译函数体
         for (const stmt of stmts) {
             if (stmt instanceof FunctionStmt) {
-                const funName = stmt.name.lexeme;
-                const retLType = this.llvmType(stmt.returnType);
+                const funName = stmt.func.name.lexeme;
+                const retLType = this.llvmType(stmt.func.type.returnType);
                 const paramLTypes = stmt.parameters.map(param => this.llvmType(param.type));
-                const func = this.declareFunction(funName, retLType, paramLTypes);
-                this.define(funName, func, new FunctionType(stmt.returnType, stmt.parameters.map(param => param.type)));
+                const fun = this.declareFunction(funName, retLType, paramLTypes, false);
+                this.define(funName, fun, stmt.func.type);
             }
         }
 
@@ -143,38 +138,34 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
     }
     visitVarStmt(stmt: VarStmt): void {
         for (const variable of stmt.vars) {
-            const varLType = this.llvmType(variable.type);
+            const allocType = this.llvmType(variable.type);
             const varName = variable.name.lexeme;
 
-            if (this.escaped.has(variable)) {
+            if (variable.escaped) {
                 const dataLayout = this.module.getDataLayout();
-                const size = dataLayout.getTypeAllocSize(varLType);
+                const size = dataLayout.getTypeAllocSize(allocType);
                 // 将大小转换为 LLVM 的 ConstantInt
                 const sizeValue = llvm.ConstantInt.get(llvm.Type.getInt32Ty(this.context), size);
                 const val = this.builder.CreateCall(this.mallocFunc, [sizeValue]);
                 this.define(varName, val, variable.type);
                 if (variable.type instanceof PointerType) {
-                    this.currentVar.isAddr = true;
                     let varAddr = variable.defaultValue.accept(this);
-                    this.builder.CreateStore(varAddr, val);
-                    this.currentVar.isAddr = false;
+                    this.builder.CreateStore(varAddr.val, val);
                 } else {
-                    let defaultValue = variable.defaultValue.accept(this);
-                    defaultValue = this.promoteType(defaultValue, varLType);
-                    this.builder.CreateStore(defaultValue, val);
+                    const value = variable.defaultValue.accept(this);
+                    const lvalue = this.promoteType(value.val, allocType);
+                    this.builder.CreateStore(lvalue, val);
                 }
             } else {
-                const val = this.builder.CreateAlloca(varLType, null, varName);
-                this.define(varName, val, variable.type);
+                const allocAddr = this.builder.CreateAlloca(allocType, null, varName);
+                this.define(varName, allocAddr, variable.type);
                 if (variable.type instanceof PointerType) {
-                    this.currentVar.isAddr = true;
-                    let varAddr = variable.defaultValue.accept(this);
-                    this.builder.CreateStore(varAddr, val);
-                    this.currentVar.isAddr = false;
+                    let value = variable.defaultValue.accept(this);
+                    this.builder.CreateStore(value.val, allocAddr);
                 } else {
-                    let defaultValue = variable.defaultValue.accept(this);
-                    defaultValue = this.promoteType(defaultValue, varLType);
-                    this.builder.CreateStore(defaultValue, val);
+                    const value = variable.defaultValue.accept(this);
+                    const lvalue = this.promoteType(value.val, allocType);
+                    this.builder.CreateStore(lvalue, allocAddr);
                 }
 
             }
@@ -182,22 +173,22 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
         }
     }
     visitFunctionStmt(stmt: FunctionStmt): void {
-        const funName = stmt.name.lexeme;
+        const funName = stmt.func.name.lexeme;
         // 第二遍编译：获取已声明的函数（在第一遍中已创建）
-        let func = this.currentScope.get(funName)?.val as llvm.Function;
-        this.defineFunction(func, stmt.parameters, stmt.body, stmt.returnType);
+        let func = this.environment.get(funName).val as llvm.Function;
+        this.defineFunction(func, stmt.parameters, stmt.body, stmt.func.type.returnType, null);
         //生成胖函数
         const paramLTypes = stmt.parameters.map(param => this.llvmType(param.type));
         paramLTypes.unshift(llvm.PointerType.get(llvm.Type.getInt8PtrTy(this.context), 0));
 
-        const retType = this.llvmType(stmt.returnType);
+        const retType = this.llvmType(stmt.func.type.returnType);
         const funcType = llvm.FunctionType.get(retType, paramLTypes, false);
         const wfunc = llvm.Function.Create(funcType, llvm.Function.LinkageTypes.ExternalLinkage, `${funName}_wrapper`, this.module);
         const bb = llvm.BasicBlock.Create(this.context, 'entry', wfunc);  // 修复：应该为 wfunc 创建基本块，而不是 func
         this.builder.SetInsertPoint(bb);
         const args = stmt.parameters.map((param, ind) => wfunc.getArg(ind + 1));
         const result = this.builder.CreateCall(func, args);
-        if (stmt.returnType instanceof SimpleType && stmt.returnType.type === "void") {
+        if (stmt.func.type.returnType instanceof SimpleType && stmt.func.type.returnType.type === "void") {
             this.builder.CreateRetVoid();
         } else {
             this.builder.CreateRet(result);
@@ -221,7 +212,7 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
         const thenBb = llvm.BasicBlock.Create(this.context, 'then', parentFunc);
         const elseBb = llvm.BasicBlock.Create(this.context, 'else', parentFunc);
         const mergeBb = llvm.BasicBlock.Create(this.context, 'merge', parentFunc);
-        this.builder.CreateCondBr(condition, thenBb, elseBb);
+        this.builder.CreateCondBr(condition.val, thenBb, elseBb);
         this.builder.SetInsertPoint(thenBb);
         this.compileStmt(stmt.thenBranch);
         if (!this.hasRetTerminator(thenBb)) {
@@ -258,7 +249,7 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
         this.builder.CreateBr(condBb);
         this.builder.SetInsertPoint(condBb);
         const condition = stmt.condition.accept(this);
-        this.builder.CreateCondBr(condition, bodyBb, endBb);
+        this.builder.CreateCondBr(condition.val, bodyBb, endBb);
         // 进入循环体
         this.builder.SetInsertPoint(bodyBb);
         this.compileStmt(stmt.body);
@@ -289,7 +280,7 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
         // 进入条件块
         this.builder.SetInsertPoint(condBb);
         const condition = stmt.condition.accept(this);
-        this.builder.CreateCondBr(condition, bodyBb, endBb);
+        this.builder.CreateCondBr(condition.val, bodyBb, endBb);
         // 进入循环体
         this.builder.SetInsertPoint(bodyBb);
         this.compileStmt(stmt.body);
@@ -325,7 +316,7 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
         // 从body跳转到条件块
         this.builder.SetInsertPoint(condBb);
         const condition = stmt.condition.accept(this);
-        this.builder.CreateCondBr(condition, bodyBb, endBb);
+        this.builder.CreateCondBr(condition.val, bodyBb, endBb);
         // 从条件块跳转到结束块
         this.builder.SetInsertPoint(endBb);
         this.loopStack.pop();
@@ -366,8 +357,8 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
     visitReturnStmt(stmt: ReturnStmt): void {
         if (stmt.value) {
             let value = stmt.value.accept(this);
-            value = this.promoteType(value, this.currentFunction.returnType);
-            this.builder.CreateRet(value);
+            const lvalue = this.promoteType(value.val, this.currentFunction.returnType);
+            this.builder.CreateRet(lvalue);
 
         } else {
             this.builder.CreateRetVoid();
@@ -393,54 +384,41 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
     }
 
     // ExprVisitor methods
-    visitAssignExpr(expr: AssignExpr): llvm.Value {
-        if (expr.target instanceof VariableExpr) {
-            const variable = this.findVariable(expr.target.name.lexeme);
-            if (variable.type instanceof PointerType) {
-                this.currentVar.isAddr = true;
-                const val = expr.target.accept(this);
-                let targetType: llvm.Type = this.llvmType(variable.type.oriType);
-                this.currentVar.isAddr = false;
-                let rightValue = expr.value.accept(this);
-                rightValue = this.promoteType(rightValue, targetType);
-                this.builder.CreateStore(rightValue, val);
-                return rightValue;
-            } else {
-                let targetType: llvm.Type = this.llvmType(variable.type)
-                // 计算右值
-                let rightValue = expr.value.accept(this);
-                // 进行类型对齐：将右值转换为左值的原始类型
-                rightValue = this.promoteType(rightValue, targetType);
-
-                // 存储到左值
-                this.builder.CreateStore(rightValue, variable.val);
-
-                // 返回右值（赋值表达式的值）
-                return rightValue;
-            }
+    visitAssignExpr(expr: AssignExpr): GValue {
+        const value = expr.value.accept(this);
+        const distance = this.locals.get(expr);
+        const target = this.environment.getAt(distance!, expr.name.lexeme);
+        if (target.gType instanceof PointerType) {
+            const oriType = this.llvmType(target.gType.oriType);
+            const addr = this.builder.CreateLoad(oriType, target.val, "addr");
+            this.builder.CreateStore(value.val, addr);
+            return value;
         }
-        throw new Error(`Unsupported assign target: ${expr.target.accept(this).getType().toString()}. Expected Variable or Pointer.`);
+        this.builder.CreateStore(value.val, target.val);
+        return value;
     }
-    visitPointExpr(expr: PointExpr): llvm.Value {
-        if (expr.target instanceof VariableExpr) {
-            const ptrVariable = this.findVariable(expr.target.name.lexeme);
-            this.currentVar.isAddr = true;
-            let rightAddr = expr.value.accept(this);
-            this.currentVar.isAddr = false;
-            this.builder.CreateStore(rightAddr, ptrVariable.val);
-            return rightAddr;
-        }
-        throw new Error(`Unsupported point target: ${expr.target.accept(this).getType().toString()}. Expected Variable or Pointer.`);
+    visitPointExpr(expr: PointExpr): GValue {
+        const ptrDistance = this.locals.get(expr.value);
+        const ptr = this.environment.getAt(ptrDistance!, expr.name.lexeme);
 
+        if (expr.value instanceof VariableExpr) {
+            const valueDistance = this.locals.get(expr.value);
+            const value = this.environment.getAt(valueDistance!, expr.value.name.lexeme);
+            this.builder.CreateStore(value.val, ptr.val);
+            return value;
+        }
+        const value = expr.value.accept(this);
+        this.builder.CreateStore(value.val, ptr.val);
+        return value;
     }
-    visitConditionalExpr(expr: ConditionalExpr): llvm.Value {
+    visitConditionalExpr(expr: ConditionalExpr): GValue {
         throw new Error("Method not implemented.");
     }
-    visitLogicalExpr(expr: LogicalExpr): llvm.Value {
+    visitLogicalExpr(expr: LogicalExpr): GValue {
         throw new Error("Method not implemented.");
     }
 
-    visitBinaryExpr(expr: BinaryExpr): llvm.Value {
+    visitBinaryExpr(expr: BinaryExpr): GValue {
         const parentFunc = this.findParentFunction();
         switch (expr.operator.type) {
             case TokenType.And:
@@ -450,7 +428,7 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
                     const leftValue = expr.left.accept(this);
                     const startBb = this.builder.GetInsertBlock();
                     //短路跳转，真值跳转到rhsBb，假值跳转到mergeBb
-                    this.builder.CreateCondBr(leftValue, rhsBb, mergeBb);
+                    this.builder.CreateCondBr(leftValue.val, rhsBb, mergeBb);
                     //填充rhsBb
                     this.builder.SetInsertPoint(rhsBb);
                     const rightValue = expr.right.accept(this);
@@ -460,8 +438,8 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
                     this.builder.SetInsertPoint(mergeBb);
                     const phi = this.builder.CreatePHI(this.builder.getInt1Ty(), 2, "and_res");
                     phi.addIncoming(this.builder.getInt1(false), startBb!); // 来自 LHS 的假
-                    phi.addIncoming(rightValue, rhsActualBb!);                 // 来自 RHS 的结果
-                    return phi;
+                    phi.addIncoming(rightValue.val, rhsActualBb!);                 // 来自 RHS 的结果
+                    return new GValue(phi, new SimpleType("bool"));
                 }
             case TokenType.Or:
                 {
@@ -470,7 +448,7 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
                     const leftValue = expr.left.accept(this);
                     const startBb = this.builder.GetInsertBlock();
                     //短路跳转，真值跳转到mergeBb,假值跳转到rhsBb
-                    this.builder.CreateCondBr(leftValue, mergeBb, rhsBb);
+                    this.builder.CreateCondBr(leftValue.val, mergeBb, rhsBb);
                     //填充rhsBb
                     this.builder.SetInsertPoint(rhsBb);
                     const rightValue = expr.right.accept(this);
@@ -479,9 +457,9 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
                     //填充mergeBb，合并lhs和rhs的值
                     this.builder.SetInsertPoint(mergeBb);
                     const phi = this.builder.CreatePHI(this.builder.getInt1Ty(), 2, "or_res");
-                    phi.addIncoming(leftValue, startBb!); // 来自 LHS 的结果
-                    phi.addIncoming(rightValue, rhsActualBb!);                 // 来自 RHS 的结果
-                    return phi;
+                    phi.addIncoming(leftValue.val, startBb!); // 来自 LHS 的结果
+                    phi.addIncoming(rightValue.val, rhsActualBb!);                 // 来自 RHS 的结果
+                    return new GValue(phi, new SimpleType("bool"));
                 }
         }
 
@@ -489,224 +467,288 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
 
         let left = expr.left.accept(this);
         let right = expr.right.accept(this);
-
-        // 进行类型对齐
-        [left, right] = this.upgradeType(left, right);
-        // 使用类型对象比较方式检查是否为浮点类型（避免方法调用丢失上下文）
-        const leftType = left.getType();
-        const rightType = right.getType();
-        const isFloat = this.isFloatType(leftType) || this.isFloatType(rightType);
+        const isFloat = this.isFloatType(left.gType) || this.isFloatType(right.gType);
         if (isFloat) {
+            let res = new GValue(left.val, left.gType);
             switch (expr.operator.type) {
                 case TokenType.Plus:
-                    return this.builder.CreateFAdd(left, right);
+                    res.val = this.builder.CreateFAdd(left.val, right.val);
+                    return res;
                 case TokenType.Minus:
-                    return this.builder.CreateFSub(left, right);
+                    res.val = this.builder.CreateFSub(left.val, right.val);
+                    return res;
                 case TokenType.Star:
-                    return this.builder.CreateFMul(left, right);
+                    res.val = this.builder.CreateFMul(left.val, right.val);
+                    return res;
                 case TokenType.Slash:
-                    return this.builder.CreateFDiv(left, right);
+                    res.val = this.builder.CreateFDiv(left.val, right.val);
+                    return res;
                 case TokenType.Percent:
-                    return this.builder.CreateFRem(left, right);
+                    res.val = this.builder.CreateFRem(left.val, right.val);
+                    return res;
                 case TokenType.EqualEqual:
-                    return this.builder.CreateFCmpOEQ(left, right);
+                    res.val = this.builder.CreateFCmpOEQ(left.val, right.val);
+                    return res;
                 case TokenType.BangEqual:
-                    return this.builder.CreateFCmpUNE(left, right);
+                    res.val = this.builder.CreateFCmpUNE(left.val, right.val);
+                    return res;
                 case TokenType.Greater:
-                    return this.builder.CreateFCmpOGT(left, right);
+                    res.val = this.builder.CreateFCmpOGT(left.val, right.val);
+                    return res;
                 case TokenType.GreaterEqual:
-                    return this.builder.CreateFCmpOGE(left, right);
+                    res.val = this.builder.CreateFCmpOGE(left.val, right.val);
+                    return res;
                 case TokenType.Less:
-                    return this.builder.CreateFCmpOLT(left, right);
+                    res.val = this.builder.CreateFCmpOLT(left.val, right.val);
+                    return res;
                 case TokenType.LessEqual:
-                    return this.builder.CreateFCmpOLE(left, right);
+                    res.val = this.builder.CreateFCmpOLE(left.val, right.val);
+                    return res;
+                default:
+                    throw new Error(`Unsupported binary operator: ${expr.operator.type}`);
             }
+            return res;
         } else {
+            let res = new GValue(left.val, left.gType);
             switch (expr.operator.type) {
                 case TokenType.Plus:
-                    return this.builder.CreateAdd(left, right);
+                    res.val = this.builder.CreateAdd(left.val, right.val);
+                    return res;
                 case TokenType.Minus:
-                    return this.builder.CreateSub(left, right);
+                    res.val = this.builder.CreateSub(left.val, right.val);
+                    return res;
                 case TokenType.Star:
-                    return this.builder.CreateMul(left, right);
+                    res.val = this.builder.CreateMul(left.val, right.val);
+                    return res;
                 case TokenType.Slash:
-                    return this.builder.CreateSDiv(left, right);
+                    res.val = this.builder.CreateSDiv(left.val, right.val);
+                    return res;
                 case TokenType.Percent:
-                    return this.builder.CreateSRem(left, right);
+                    res.val = this.builder.CreateSRem(left.val, right.val);
+                    return res;
                 case TokenType.Less:
-                    return this.builder.CreateICmpSLT(left, right);
+                    res.val = this.builder.CreateICmpSLT(left.val, right.val);
+                    return res;
                 case TokenType.Greater:
-                    return this.builder.CreateICmpSGT(left, right);
+                    res.val = this.builder.CreateICmpSGT(left.val, right.val);
+                    return res;
                 case TokenType.LessEqual:
-                    return this.builder.CreateICmpSLE(left, right);
+                    res.val = this.builder.CreateICmpSLE(left.val, right.val);
+                    return res;
                 case TokenType.GreaterEqual:
-                    return this.builder.CreateICmpSGE(left, right);
+                    res.val = this.builder.CreateICmpSGE(left.val, right.val);
+                    return res;
                 case TokenType.EqualEqual:
-                    return this.builder.CreateICmpEQ(left, right);
+                    res.val = this.builder.CreateICmpEQ(left.val, right.val);
+                    return res;
                 case TokenType.BangEqual:
-                    return this.builder.CreateICmpNE(left, right);
+                    res.val = this.builder.CreateICmpNE(left.val, right.val);
+                    return res;
                 case TokenType.BitAnd:
-                    return this.builder.CreateAnd(left, right);
+                    res.val = this.builder.CreateAnd(left.val, right.val);
+                    return res;
                 case TokenType.BitOr:
-                    return this.builder.CreateOr(left, right);
+                    res.val = this.builder.CreateOr(left.val, right.val);
+                    return res;
                 case TokenType.Caret:
-                    return this.builder.CreateXor(left, right);
+                    res.val = this.builder.CreateXor(left.val, right.val);
+                    return res;
                 case TokenType.LessLess:
-                    return this.builder.CreateShl(left, right);
+                    res.val = this.builder.CreateShl(left.val, right.val);
+                    return res;
                 case TokenType.GreaterGreater:
-                    return this.builder.CreateAShr(left, right);
+                    res.val = this.builder.CreateAShr(left.val, right.val);
+                    return res;
             }
         }
 
         throw new Error(`Unsupported binary operator: ${expr.operator.type}`);
     }
-    visitUnaryExpr(expr: UnaryExpr): llvm.Value {
+    visitUnaryExpr(expr: UnaryExpr): GValue {
         const operator = expr.operator
         switch (operator.type) {
             case TokenType.Minus:
                 const operand = expr.right.accept(this);
-                const isFloat = this.isFloatType(operand.getType());
+                const isFloat = this.isFloatType(operand.gType);
                 if (isFloat) {
-                    return this.builder.CreateFNeg(operand);
+
+                    const val = this.builder.CreateFNeg(operand.val);
+                    return new GValue(val, operand.gType);
                 } else {
-                    return this.builder.CreateNeg(operand);
+                    const val = this.builder.CreateNeg(operand.val);
+                    return new GValue(val, operand.gType);
                 }
             case TokenType.Tilde:
-                return this.builder.CreateNot(expr.right.accept(this));
+                {
+                    const rv = expr.right.accept(this);
+                    const val = this.builder.CreateNot(rv.val);
+                    return new GValue(val, rv.gType);
+                }
             case TokenType.Bang:
-                return this.builder.CreateNot(expr.right.accept(this));
+                {
+                    const rv = expr.right.accept(this);
+                    const val = this.builder.CreateNot(rv.val);
+                    return new GValue(val, rv.gType);
+                }
         }
         throw new Error(`Unsupported unary operator: ${operator.type}`);
     }
-    visitLiteralExpr(expr: LiteralExpr): llvm.Value {
+    visitLiteralExpr(expr: LiteralExpr): GValue {
         switch (expr.literalType) {
             case 'string':
-                return this.builder.CreateGlobalStringPtr(expr.value);
+                {
+                    const val = this.builder.CreateGlobalStringPtr(expr.value);
+                    return new GValue(val, new SimpleType("string"));
+                }
             case 'bool':
-                return this.builder.getInt1(expr.value === 'true' ? true : false);
+                {
+                    const val = this.builder.getInt1(expr.value === 'true' ? true : false);
+                    return new GValue(val, new SimpleType("bool"));
+                }
             case 'i8':
-                return this.builder.getInt8(Number(expr.value));
+                {
+                    const val = this.builder.getInt8(Number(expr.value));
+                    return new GValue(val, new SimpleType("i8"));
+                }
             case 'i16':
-                return this.builder.getInt16(Number(expr.value));
+                {
+                    const val = this.builder.getInt16(Number(expr.value));
+                    return new GValue(val, new SimpleType("i16"));
+                }
             case 'i32':
-                return this.builder.getInt32(Number(expr.value));
+                {
+                    const val = this.builder.getInt32(Number(expr.value));
+                    return new GValue(val, new SimpleType("i32"));
+                }
             case 'i64':
-                return this.builder.getInt64(Number(expr.value));
+                {
+                    const val = this.builder.getInt64(Number(expr.value));
+                    return new GValue(val, new SimpleType("i64"));
+                }
             case 'float':
-                const floatTy = llvm.Type.getFloatTy(this.context);
-                return llvm.ConstantFP.get(floatTy, Number(expr.value));
+                {
+                    const floatTy = llvm.Type.getFloatTy(this.context);
+                    const val = llvm.ConstantFP.get(floatTy, Number(expr.value));
+                    return new GValue(val, new SimpleType("float"));
+                }
             case 'double':
-                const doubleTy = llvm.Type.getDoubleTy(this.context);
-                return llvm.ConstantFP.get(doubleTy, Number(expr.value));
+                {
+                    const doubleTy = llvm.Type.getDoubleTy(this.context);
+                    const val = llvm.ConstantFP.get(doubleTy, Number(expr.value));
+                    return new GValue(val, new SimpleType("double"));
+                }
         }
-        return this.builder.getInt32(0);
+        const val = this.builder.getInt32(0);
+        return new GValue(val, new SimpleType("i32"));
     }
-    visitPostfixExpr(expr: PostfixExpr): llvm.Value {
-        this.currentVar.isAddr = true;
-        const target = expr.target.accept(this);
-        this.currentVar.isAddr = false;
-        let oldValue = expr.target.accept(this);
+    visitPostfixExpr(expr: PostfixExpr): GValue {
+        const variable = this.lookupVariable(expr.name, expr);
+        let oldValue = this.builder.CreateLoad(this.llvmType(variable.gType), variable.val, expr.name.lexeme);
         switch (expr.operator.type) {
             case TokenType.PlusPlus:
                 {
                     const newValue = this.builder.CreateAdd(oldValue, this.builder.getInt32(1));
-                    this.builder.CreateStore(newValue, target);
-                    return oldValue;
+                    this.builder.CreateStore(newValue, variable.val);
+                    return new GValue(oldValue, variable.gType);
                 }
             case TokenType.MinusMinus:
                 {
                     const newValue = this.builder.CreateSub(oldValue, this.builder.getInt32(1));
-                    this.builder.CreateStore(newValue, target);
-                    return oldValue;
+                    this.builder.CreateStore(newValue, variable.val);
+                    return new GValue(oldValue, variable.gType);
                 }
                 break;
         }
         throw new Error(`Unsupported postfix operator: ${expr.operator.type}`);
     }
-    visitPrefixExpr(expr: PrefixExpr): llvm.Value {
-        this.currentVar.isAddr = true;
-        const target = expr.target.accept(this);
-        this.currentVar.isAddr = false;
-        let oldValue = expr.target.accept(this);
+    visitPrefixExpr(expr: PrefixExpr): GValue {
+        const variable = this.lookupVariable(expr.name, expr);
+        let oldValue = this.builder.CreateLoad(this.llvmType(variable.gType), variable.val, expr.name.lexeme);
         switch (expr.operator.type) {
             case TokenType.PlusPlus:
                 {
                     const newValue = this.builder.CreateAdd(oldValue, this.builder.getInt32(1));
-                    this.builder.CreateStore(newValue, target);
-                    return newValue;
+                    this.builder.CreateStore(newValue, variable.val);
+                    return new GValue(newValue, variable.gType);
                 }
                 break;
             case TokenType.MinusMinus:
                 {
                     const newValue = this.builder.CreateSub(oldValue, this.builder.getInt32(1));
-                    this.builder.CreateStore(newValue, target);
-                    return newValue;
+                    this.builder.CreateStore(newValue, variable.val);
+                    return new GValue(newValue, variable.gType);
                 }
                 break;
         }
         throw new Error(`Unsupported prefix operator: ${expr.operator.type}`);
     }
-    visitCallExpr(expr: CallExpr): llvm.Value {
-        const args = expr.arguments.map(arg => arg.accept(this));
-        if (expr.callee instanceof VariableExpr) {
-            const calleeVal = this.visitVariableExpr(expr.callee);
-            if (calleeVal instanceof llvm.Function) { //直接调用函数
-                return this.builder.CreateCall(calleeVal, args);
-            }
+    visitCallExpr(expr: CallExpr): GValue {
+        const args = expr.arguments.map(arg => arg.accept(this)).map(arg => arg.val);
 
-            //闭包
-            //提取函数指针
-            const funcPtr = this.builder.CreateExtractValue(calleeVal, [0], "closure.code");
-            const envPtr = this.builder.CreateExtractValue(calleeVal, [1], "closure.env");
-
-            const calleeType = this.findVariable(expr.callee.name.lexeme).type;
-            if (calleeType instanceof FunctionType) {
-                const retType = this.llvmType(calleeType.returnType);
-                const paramTypes = calleeType.paramTypes.map(param => this.llvmType(param));
-                const funcType = llvm.FunctionType.get(retType, paramTypes, false);
-                return this.builder.CreateCall(funcType, funcPtr, [envPtr, ...args]);
+        const callee = expr.callee.accept(this);
+        if (callee.gType instanceof FunctionType) {
+            if (!callee.gType.isLocal) {
+                // closure 结构体：索引0是函数指针，索引1是环境指针
+                const closureFuncPtr = this.builder.CreateExtractValue(callee.val, [0], "closure.funcPtr");
+                const closureEnvPtr = this.builder.CreateExtractValue(callee.val, [1], "closure.envPtr");
+                args.unshift(closureEnvPtr);
+                callee.val = closureFuncPtr;
             }
-        }
-        throw new Error(`Unsupported callee type: ${expr.callee.accept(this).getType().toString()}. Expected Function or closure struct.`);
-    }
-    visitSetExpr(expr: SetExpr): llvm.Value {
-        throw new Error("Method not implemented.");
-    }
-    visitGetExpr(expr: GetExpr): llvm.Value {
-        throw new Error("Method not implemented.");
-    }
-    visitThisExpr(expr: ThisExpr): llvm.Value {
-        throw new Error("Method not implemented.");
-    }
-    visitVariableExpr(expr: VariableExpr): llvm.Value {
-        const variable = this.findVariable(expr.name.lexeme);
-        if (variable) {
-            const val = variable.val;
-            if (val instanceof llvm.Function) {
-                return val;
-            }
-            if (variable.type instanceof PointerType) {
-                const oriLType = this.llvmType(variable.type.oriType);
-                const ptr = this.builder.CreateLoad(llvm.PointerType.get(oriLType, 0), val, expr.name.lexeme);
-                if (this.currentVar.isAddr) {
-                    return ptr;
+            const returnLType = this.llvmType(callee.gType.returnType);
+            const lastParamType = callee.gType.paramTypes[callee.gType.paramTypes.length - 1];
+            const paramsLTypes = [];
+            let isVarArgs = false;
+            if (lastParamType instanceof TempOmittedType) {
+                const params = callee.gType.paramTypes.slice(0, -1);
+                paramsLTypes.push(...params.map(param => this.llvmType(param)));
+                if (!callee.gType.isLocal) {
+                    paramsLTypes.unshift(llvm.PointerType.get(llvm.Type.getInt8PtrTy(this.context), 0));
                 }
-                return this.builder.CreateLoad(oriLType, ptr, expr.name.lexeme);
+                isVarArgs = true;
+            } else {
+                paramsLTypes.push(...callee.gType.paramTypes.map(param => this.llvmType(param)));
+                if (!callee.gType.isLocal) {
+                    paramsLTypes.unshift(llvm.PointerType.get(llvm.Type.getInt8PtrTy(this.context), 0));
+                }
             }
-            const lType = this.llvmType(variable.type);
-            if (this.currentVar.isAddr) {
-                return variable.val;
-            }
-            return this.builder.CreateLoad(lType, val, expr.name.lexeme);
+            const funcType = llvm.FunctionType.get(returnLType, paramsLTypes, isVarArgs);
+
+            const data = this.builder.CreateCall(funcType, callee.val, args);
+            return new GValue(data, callee.gType.returnType);
         }
-        throw new Error(`Variable ${expr.name.lexeme} not found`);
+        throw new Error(`Unsupported callee type: ${callee.gType.toString()}. Expected Function or closure struct.`);
     }
-    visitLambdaExpr(expr: LambdaExpr): llvm.Value {
-        //创建闭包环境类型
-        const capturedTypes = expr.captured.map(captured =>
-            llvm.PointerType.get(this.llvmType(captured.type), 0)
-        );
-        const envType = llvm.StructType.create(this.context, capturedTypes, "closure.env");
+    visitSetExpr(expr: SetExpr): GValue {
+        throw new Error("Method not implemented.");
+    }
+    visitGetExpr(expr: GetExpr): GValue {
+        throw new Error("Method not implemented.");
+    }
+    visitThisExpr(expr: ThisExpr): GValue {
+        throw new Error("Method not implemented.");
+    }
+    visitVariableExpr(expr: VariableExpr): GValue {
+        const value = this.lookupVariable(expr.name, expr);
+        if (value.gType instanceof FunctionType) {
+            if (value.gType.isLocal) {
+                return value;
+            }
+        }
+        const lType = this.llvmType(value.gType);
+        const data = this.builder.CreateLoad(lType, value.val, expr.name.lexeme);
+        return new GValue(data, value.gType);
+    }
+
+    private lookupVariable(name: Token, expr: Expr): GValue {
+        const distance = this.locals.get(expr);
+        const variable = this.environment.getAt(distance!, name.lexeme);
+        return variable;
+    }
+    visitLambdaExpr(expr: LambdaExpr): GValue {
+        const captures = Array.from(expr.captured);
+        //创建闭包环境类型 结构体的每个元素都是指针类型，用于指向捕获的变量
+        const capturedStructType = captures.map(captured => this.constantTypes.ptr);
+        const envType = llvm.StructType.create(this.context, capturedStructType, "closure.env");
 
         //在堆上分配闭包环境
         const dataLayout = this.module.getDataLayout();
@@ -714,26 +756,26 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
         // 将大小转换为 LLVM 的 ConstantInt
         const sizeValue = llvm.ConstantInt.get(llvm.Type.getInt32Ty(this.context), size);
         const envVal = this.builder.CreateCall(this.mallocFunc, [sizeValue], "closure.envPtr");
-        for (let i = 0; i < expr.captured.length; i++) {
-            const captured = expr.captured[i];
-            const capturedVal = this.findVariable(captured.name.lexeme).val;
+
+        for (let i = 0; i < captures.length; i++) {
+            const captured = captures[i];
+            const capturedVal = this.environment.get(captured.name.lexeme);
             const capturedConst = llvm.ConstantInt.get(llvm.Type.getInt32Ty(this.context), i);
             const val = this.builder.CreateGEP(envType, envVal, capturedConst, "closure.env.memPtr");
-            this.builder.CreateStore(capturedVal, val);
+            this.builder.CreateStore(capturedVal.val, val);
         }
 
-        this.currentClosure = {
-            envType: envType,
-            captured: expr.captured,
-        }
         // 保存当前的插入点，以便编译完 lambda 函数后恢复
         const savedInsertBlock = this.builder.GetInsertBlock();
         //创建函数
         const retLType = this.llvmType(expr.returnType);
 
         const paramLTypes = expr.parameters.map(param => this.llvmType(param.type));
-        const func = this.declareFunction("lambda", retLType, paramLTypes);
-        this.defineFunction(func, expr.parameters, expr.body, expr.returnType);
+        const func = this.declareFunction("lambda", retLType, paramLTypes, true);
+        this.defineFunction(func, expr.parameters, expr.body, expr.returnType, {
+            captures: captures,
+            type: envType,
+        });
 
         // 恢复原来的插入点，确保后续代码编译到正确的函数中
         if (savedInsertBlock) {
@@ -747,19 +789,19 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
         //填充env ptr const envType
         val = this.builder.CreateInsertValue(val, envVal, [1], "closure.env");
 
-        this.currentClosure = null;
-        return val;
+        return new GValue(val, new FunctionType(expr.returnType, expr.parameters.map(param => param.type), false));
     }
 
-    visitCastExpr(expr: CastExpr): llvm.Value {
-        const target = expr.target.accept(this);
+    visitCastExpr(expr: CastExpr): GValue {
+        const sourceValue = expr.source.accept(this);
         const targetType = this.llvmType(expr.type)
-        return this.promoteType(target, targetType);
+        const targetValue = this.promoteType(sourceValue.val, targetType);
+        return new GValue(targetValue, expr.type);
     }
 
 
-    private declareFunction(funName: string, retType: llvm.Type, paramLTypes: llvm.Type[]): llvm.Function {
-        if (this.currentClosure) {
+    private declareFunction(funName: string, retType: llvm.Type, paramLTypes: llvm.Type[], isClosure: boolean): llvm.Function {
+        if (isClosure) {
             paramLTypes.unshift(llvm.PointerType.get(llvm.Type.getInt8PtrTy(this.context), 0));
         }
         const funcType = llvm.FunctionType.get(retType, paramLTypes, false);
@@ -767,7 +809,7 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
         return func;
     }
 
-    private defineFunction(func: llvm.Function, parameters: GSymbol[], body: Stmt[], retType: GrusType): void {
+    private defineFunction(func: llvm.Function, parameters: Parameter[], body: Stmt[], retType: GrusType, closureEnv: { captures: GSymbol[], type: llvm.Type } | null): void {
         // 保存旧的返回类型，设置新的返回类型
         const oldReturnType = this.currentFunction.returnType;
         this.currentFunction = {
@@ -779,15 +821,15 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
         this.builder.SetInsertPoint(bb);
 
         this.beginScope();
-        if (this.currentClosure) {
+        if (closureEnv) {
             const envPtr = func.getArg(0);
-            const envType = this.currentClosure.envType;
-            for (let i = 0; i < this.currentClosure.captured.length; i++) {
-                const captured = this.currentClosure.captured[i];
+            for (let i = 0; i < closureEnv.captures.length; i++) {
+                const captured = closureEnv.captures[i];
                 const capturedConst = llvm.ConstantInt.get(llvm.Type.getInt32Ty(this.context), i);
-                const memPtr = this.builder.CreateGEP(envType, envPtr, capturedConst, "closure.env.memPtr");
+                const memPtr = this.builder.CreateGEP(closureEnv.type, envPtr, capturedConst, "closure.env.memPtr");
                 const ptrType = llvm.PointerType.get(this.llvmType(captured.type), 0);
                 const memVal = this.builder.CreateLoad(ptrType, memPtr, "closure.env.memVal");
+
                 this.define(captured.name.lexeme, memVal, captured.type);
             }
         }
@@ -799,11 +841,11 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
             const param = parameters[i];
             const paramLType = this.llvmType(param.type);
 
-            const argInd = this.currentClosure ? i + 1 : i;
+            const argInd = closureEnv ? i + 1 : i;
             // 从函数参数中获取值（函数参数是 Value，不是指针）
             const funcArg = func.getArg(argInd);
 
-            if (this.escaped.has(param)) {
+            if (param.escaped) {
                 const dataLayout = this.module.getDataLayout();
                 const size = dataLayout.getTypeAllocSize(paramLType);
                 // 将大小转换为 LLVM 的 ConstantInt
@@ -852,24 +894,14 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
 
     //作用域
     beginScope(): void {
-        const scope = new Map<string, {
-            val: llvm.Value,
-            type: GrusType,
-        }>();
-        this.currentScope = scope;
-        this.scopes.push(scope);
-
+        this.environment = new Environment(this.environment);
     }
     endScope(): void {
-        this.scopes.pop();
-        this.currentScope = this.scopes[this.scopes.length - 1];
+        this.environment = this.environment.enclosing!;
     }
 
     define(name: string, val: llvm.Value, type: GrusType): void {
-        this.currentScope.set(name, {
-            val: val,
-            type: type,
-        });
+        this.environment.define(name, new GValue(val, type));
     }
 
     getLabelBlock(labelName: string): llvm.BasicBlock {
@@ -899,32 +931,8 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
         }
         return parentFunc;
     }
-    private upgradeType(left: llvm.Value, right: llvm.Value): [llvm.Value, llvm.Value] {
-        const leftType = left.getType();
-        const rightType = right.getType()
-        const leftBitWidth = this.getIntegerBitWidth(leftType);
-        const rightBitWidth = this.getIntegerBitWidth(rightType);
-        // 如果类型相同，不需要转换
-        if (leftBitWidth == rightBitWidth) {
-            return [left, right];
-        }
-
-        if (leftBitWidth == 0) {//左边是float或double
-            right = this.builder.CreateSIToFP(right, leftType);
-        } else if (rightBitWidth == 0) {//右边是float或double
-            left = this.builder.CreateSIToFP(left, rightType);
-        } else if (leftBitWidth < rightBitWidth) {
-            // 使用有符号扩展（SExt）而不是无符号扩展（ZExt）
-            left = this.builder.CreateSExt(left, rightType);
-        } else {
-            // 使用有符号扩展（SExt）而不是无符号扩展（ZExt）
-            right = this.builder.CreateSExt(right, leftType);
-        }
-        return [left, right];
-    }
     private promoteType(value: llvm.Value, targetType: llvm.Type): llvm.Value {
         const valueType = value.getType();
-        console.log("-----", value, valueType, targetType);
         // 如果类型相同，不需要转换
         if (valueType === targetType) {
             return value;
@@ -941,8 +949,8 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
             return val;
         }
 
-        const valueIsFloat = this.isFloatType(valueType);
-        const targetIsFloat = this.isFloatType(targetType);
+        const valueIsFloat = this.getIntegerBitWidth(valueType) == 0;
+        const targetIsFloat = this.getIntegerBitWidth(targetType) == 0;
 
         // 情况1: 整数转浮点
         if (!valueIsFloat && targetIsFloat) {
@@ -1004,12 +1012,11 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
         }
         return 0;
     }
-    private isFloatType(type: llvm.Type): boolean {
-        const w = this.getIntegerBitWidth(type)
-        if (w == 0) {
-            return true;
+    private isFloatType(type: GrusType): boolean {
+        if (type instanceof SimpleType) {
+            return ["float", "double"].includes(type.type);
         }
-        return false
+        return false;
     }
 
     /**
@@ -1020,17 +1027,6 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
         return terminator instanceof llvm.ReturnInst;
     }
 
-
-    private findVariable(name: string) {
-        for (let i = this.scopes.length - 1; i >= 0; i--) {
-            const scope = this.scopes[i];
-            const variable = scope.get(name)
-            if (variable) {
-                return variable;
-            }
-        }
-        throw new Error(`Variable ${name} not found`);
-    }
 
     llvmType(type: GrusType): llvm.Type {
         if (type instanceof SimpleType) {
@@ -1051,6 +1047,8 @@ export class Compiler implements ExprVisitor<llvm.Value>, StmtVisitor<void> {
                     return this.constantTypes.double;
                 case 'bool':
                     return this.constantTypes.bool;
+                case 'string':
+                    return this.constantTypes.ptr;
             }
         }
         //函数类型变量 转换为 闭包结构体

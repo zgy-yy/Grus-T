@@ -2,15 +2,15 @@
 
 
 export interface GrusType {
-    i: number;
+    isConst: boolean;
 }
 export type literalType = 'void' | 'float' | 'double' | 'i8' | 'i16' | 'i32' | 'i64' | 'string' | 'bool' | 'null';
 export class SimpleType implements GrusType {
     type: literalType;
-    i: number;
+    isConst: boolean;
     constructor(type: literalType) {
         this.type = type;
-        this.i = 0
+        this.isConst = false;
     }
     toString(): string {
         return this.type;
@@ -20,10 +20,10 @@ export class SimpleType implements GrusType {
 
 export class PointerType implements GrusType {
     oriType: GrusType;
-    i: number;
+    isConst: boolean;
     constructor(type: GrusType) {
         this.oriType = type;
-        this.i = 1;
+        this.isConst = false;
     }
     toString(): string {
         return "@" + this.oriType.toString();
@@ -33,11 +33,13 @@ export class PointerType implements GrusType {
 export class FunctionType implements GrusType {
     returnType: GrusType;
     paramTypes: GrusType[];
-    i: number;
-    constructor(returnType: GrusType, paramTypes: GrusType[]) {
+    isConst: boolean;
+    isLocal: boolean;
+    constructor(returnType: GrusType, paramTypes: GrusType[], isLocal: boolean) {
         this.returnType = returnType;
         this.paramTypes = paramTypes;
-        this.i = 2;
+        this.isConst = false;
+        this.isLocal = isLocal;
     }
     toString(): string {
         return this.returnType.toString() + " -> " + this.paramTypes.map(param => param.toString()).join(", ");
@@ -48,10 +50,10 @@ export class FunctionType implements GrusType {
 
 export class TempOmittedType implements GrusType {
     name: string;
-    i: number;
+    isConst: boolean;
     constructor() {
         this.name = "...";
-        this.i = 3;
+        this.isConst = false;
     }
 
 }

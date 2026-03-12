@@ -1,5 +1,5 @@
 import { GrusType, literalType } from "./GrusTypes";
-import { GSymbol, Stmt } from "./Stmt";
+import { GSymbol, Parameter, Stmt } from "./Stmt";
 import { Token } from "./Token";
 export abstract class Expr {
     abstract accept<R>(visitor: ExprVisitor<R>): R;
@@ -30,13 +30,13 @@ export interface ExprVisitor<R> {
  * 赋值表达式
  */
 export class AssignExpr extends Expr {
-    target: Expr;
+    name: Token;
     value: Expr;
     equal: Token;
 
-    constructor(target: Expr, value: Expr, equal: Token) {
+    constructor(name: Token, value: Expr, equal: Token) {
         super();
-        this.target = target;
+        this.name = name;
         this.value = value;
         this.equal = equal;
     }
@@ -46,12 +46,12 @@ export class AssignExpr extends Expr {
 }
 //指向表达式
 export class PointExpr extends Expr {
-    target: Expr;
+    name: Token;
     value: Expr;
     arrow: Token;
-    constructor(target: Expr, value: Expr, arrow: Token) {
+    constructor(name: Token, value: Expr, arrow: Token) {
         super();
-        this.target = target;
+        this.name = name;
         this.value = value;
         this.arrow = arrow;
     }
@@ -142,11 +142,11 @@ export class UnaryExpr extends Expr {
  * 后缀表达式
  */
 export class PostfixExpr extends Expr {
-    target: Expr;
+    name: Token;
     operator: Token;
-    constructor(target: Expr, operator: Token) {
+    constructor(name: Token, operator: Token) {
         super();
-        this.target = target;
+        this.name = name;
         this.operator = operator;
     }
     accept<R>(visitor: ExprVisitor<R>): R {
@@ -155,11 +155,11 @@ export class PostfixExpr extends Expr {
 }
 
 export class PrefixExpr extends Expr {
-    target: Expr;
+    name: Token;
     operator: Token;
-    constructor(target: Expr, operator: Token) {
+    constructor(name: Token, operator: Token) {
         super();
-        this.target = target;
+        this.name = name;
         this.operator = operator;
     }
     accept<R>(visitor: ExprVisitor<R>): R {
@@ -281,11 +281,11 @@ export class VariableExpr extends Expr {
 
 export class CastExpr extends Expr {
     type: GrusType;
-    target: Expr;
-    constructor(type: GrusType, target: Expr) {
+    source: Expr;
+    constructor(type: GrusType, source: Expr) {
         super();
         this.type = type;
-        this.target = target;
+        this.source = source;
     }
     accept<R>(visitor: ExprVisitor<R>): R {
         return visitor.visitCastExpr(this);
@@ -294,17 +294,17 @@ export class CastExpr extends Expr {
 
 export class LambdaExpr extends Expr {
     paren: Token;
-    parameters: GSymbol[];
+    parameters: Parameter[];
     returnType: GrusType;
     body: Stmt[];
-    captured: GSymbol[];
-    constructor(paren: Token, parameters: GSymbol[], returnType: GrusType, body: Stmt[]) {
+    captured: Set<GSymbol>;
+    constructor(paren: Token, parameters: Parameter[], returnType: GrusType, body: Stmt[]) {
         super();
         this.paren = paren;
         this.parameters = parameters;
         this.returnType = returnType;
         this.body = body;
-        this.captured = [];
+        this.captured = new Set<GSymbol>();
     }
     accept<R>(visitor: ExprVisitor<R>): R {
         return visitor.visitLambdaExpr(this);

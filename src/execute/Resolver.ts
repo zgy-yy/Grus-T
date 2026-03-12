@@ -1,82 +1,17 @@
 import { AssignExpr, BinaryExpr, CallExpr, CastExpr, ConditionalExpr, Expr, ExprVisitor, GetExpr, LambdaExpr, LiteralExpr, LogicalExpr, PointExpr, PostfixExpr, PrefixExpr, SetExpr, ThisExpr, UnaryExpr, VariableExpr } from "@/ast/Expr";
-import { BlockStmt, BreakStmt, ClassStmt, ContinueStmt, DoWhileStmt, ExpressionStmt, ForStmt, FunctionStmt, GotoStmt, GSymbol, IfStmt, LabelStmt, LoopStmt, ReturnStmt, Stmt, StmtVisitor, Variable, VarStmt, WhileStmt } from "@/ast/Stmt";
+import { BlockStmt, BreakStmt, ClassStmt, ContinueStmt, DoWhileStmt, ExpressionStmt, ForStmt, Func, FunctionStmt, GotoStmt, GSymbol, IfStmt, LabelStmt, LoopStmt, Parameter, ReturnStmt, Stmt, StmtVisitor, Variable, VarStmt, WhileStmt } from "@/ast/Stmt";
 import { Token } from "@/ast/Token";
 import { ParserErrorHandler } from "@/parser/ErrorHandler";
 import { TokenType } from "@/ast/TokenType";
-import { GrusType, SimpleType, FunctionType, TempOmittedType, PointerType } from "../ast/GrusTypes";
+import { GrusType, SimpleType, FunctionType, TempOmittedType, PointerType, literalType } from "../ast/GrusTypes";
 import { Compiler } from "./compiler";
 
-
-//指针映射，用于记录指针的指向关系,便于逃逸分析
-
-class PointersMap {
-    private pointers: Map<string, {
-        isCapture: boolean,
-        values: Set<Expr>
-    }>[] = []
-    private escaped: Set<GSymbol>;
-    private scopes: Map<string, Member>[];
-    constructor(scopes: Map<string, Member>[], escaped: Set<GSymbol>) {
-        this.scopes = scopes;
-        this.escaped = escaped;
-    }
-    beginScope(): void {
-        this.pointers.push(new Map<string, {
-            isCapture: boolean,
-            values: Set<Expr>
-        }>());
-    }
-    endScope(): void {
-        const pointer = this.pointers[this.pointers.length - 1];
-        const scope = this.scopes[this.scopes.length - 1];
-        for (const po of pointer.values()) {
-            if (po.isCapture) {
-                for (const target of po.values) {
-                    if (target instanceof VariableExpr) {
-                        const var_ = scope.get(target.name.lexeme);
-                        if (var_ && !(var_.symbol.type instanceof PointerType)) {
-                            this.escaped.add(var_.symbol);
-                        }
-                    }
-                }
-            }
-        }
-        this.pointers.pop();
-    }
-    add(name: string, value: Expr): void {
-        let found = false;
-        for (let i = this.pointers.length - 1; i >= 0; i--) {
-            const pointer = this.pointers[i];
-            if (pointer.has(name)) {
-                pointer.get(name)!.values.add(value);
-                return;
-            }
-        }
-        if (!found) {
-            this.pointers[this.pointers.length - 1].set(name, {
-                isCapture: false,
-                values: new Set<Expr>([value])
-            });
-        }
-
-    }
-    setCapture(name: string, isCapture: boolean): void {
-        for (const pointer of this.pointers) {
-            const values = pointer.get(name);
-            if (values) {
-                values.isCapture = isCapture;
-            }
-        }
-    }
-
-}
 class FunEnv {
     returnType: GrusType;
     rightReturned: boolean;
     labels: Map<string, boolean>;
     loopDepth: number;
     ifStack: ('if' | 'else')[];
-    captured: Set<GSymbol>; // 捕获的变量
     private shallowIfReturned: boolean;
     constructor(returnType: GrusType) {
         this.returnType = returnType;
@@ -85,7 +20,6 @@ class FunEnv {
         this.loopDepth = 0; //函数内的循环深度
         this.ifStack = []; //函数内的if栈
         this.shallowIfReturned = false;
-        this.captured = new Set<GSymbol>();
     }
     funReturn() {
         if (this.loopDepth === 0) {
@@ -125,14 +59,15 @@ type ClassType = "NONE" | "CLASS";
 export class Resolver implements ExprVisitor<GrusType>, StmtVisitor<void> {
 
     private compiler: Compiler | null = null;
-
     //循环深度，用于判断break和continue是否合法
     private scopes: Map<string, Member>[] = [];
     private currentScope: Map<string, Member> = new Map<string, Member>();
-    private pointersMap: PointersMap
     private funEnvs: FunEnv[] = [];
     private currentFun: FunEnv = this.funEnvs[this.funEnvs.length - 1];
-    private closureDeep: number = 0;//闭包所在的作用域深度，用于判断变量是否被捕获
+    private currentLambda: {
+        lambda: LambdaExpr,
+        deep: number
+    } | null = null;
 
     private errorHandler: ParserErrorHandler;
     private currentClass: ClassType = "NONE";
@@ -140,24 +75,20 @@ export class Resolver implements ExprVisitor<GrusType>, StmtVisitor<void> {
     constructor(errorHandler: ParserErrorHandler, compiler?: Compiler) {
         this.errorHandler = errorHandler;
         this.compiler = compiler ?? null;
-        this.pointersMap = new PointersMap(this.scopes, this.compiler?.escaped ?? this.escaped);
 
     }
 
     resolveProgram(stmts: Stmt[]): void {
         try {
             this.beginScope();
-            this.currentScope.set("printf", new Member(new Variable(
+            this.currentScope.set("printf", new Member(new Func(
                 new Token(TokenType.Identifier, "printf", "", 0, 0),
-                new FunctionType(new SimpleType("i32"), [new SimpleType("string"), new TempOmittedType()]),
-                new LiteralExpr("0")
+                new FunctionType(new SimpleType("i32"), [new SimpleType("string"), new TempOmittedType()], false)
             ), true));
             stmts.forEach(stmt => {
                 if (stmt instanceof FunctionStmt) {
-                    this.declare(stmt.name, new Variable(stmt.name,
-                        new FunctionType(stmt.returnType, stmt.parameters.map(param => param.type)),
-                        new LiteralExpr("0")));
-                    this.define(stmt.name);
+                    this.declare(stmt.func.name, stmt.func);
+                    this.define(stmt.func.name);
                 }
             });
             for (const stmt of stmts) {
@@ -187,7 +118,9 @@ export class Resolver implements ExprVisitor<GrusType>, StmtVisitor<void> {
                     _var.type = initType;
                 }
             } else if (_var.type instanceof PointerType) {
-                this.pointersMap.add(_var.name.lexeme, _var.defaultValue);
+                if (!this.canBeAddress(_var.defaultValue)) {
+                    throw this.error(_var.name, `Cannot take the address of a local function`);
+                }
                 if (_var.type.oriType === null) {
                     if (initType instanceof PointerType) {
                         _var.type.oriType = initType.oriType;
@@ -200,6 +133,7 @@ export class Resolver implements ExprVisitor<GrusType>, StmtVisitor<void> {
             } else if (!checkSameType(_var.type, initType)) {
                 throw this.error(_var.name, `Type mismatch:  ${_var.type} != ${initType} `);
             }
+            _var.defaultValue = this.implicitTypeConversion(_var.defaultValue, _var.type);
             this.define(_var.name);
         }
     }
@@ -349,21 +283,25 @@ export class Resolver implements ExprVisitor<GrusType>, StmtVisitor<void> {
                 }
             }
         }
-        const type = this.resolveLocal(expr.name);
+        const type = this.resolveLocal(expr, expr.name);
         return type;
     }
 
     visitAssignExpr(expr: AssignExpr): GrusType {
-        const leftType = this.resolveExpr(expr.target);
+        const leftType = this.resolveLocal(expr, expr.name);
+        if (leftType instanceof FunctionType && leftType.isLocal) {
+            throw this.error(expr.equal, `Cannot assign to a local function`);
+        }
         const rightType = this.resolveExpr(expr.value);
         if (!checkSameType(leftType, rightType)) {
+
             throw this.error(expr.equal, `Type mismatch: ${leftType} != ${rightType}`);
         }
+        expr.value = this.implicitTypeConversion(expr.value, leftType);
         return leftType;
     }
     visitPointExpr(expr: PointExpr): GrusType {
-        const target = expr.target as VariableExpr;
-        const targetType = this.resolveExpr(expr.target);
+        const targetType = this.findVariable(expr.name.lexeme)!.symbol.type;
         if (!(targetType instanceof PointerType)) {
             throw this.error(expr.arrow, `Type mismatch: ${targetType.toString()} != pointer type`);
         }
@@ -394,9 +332,15 @@ export class Resolver implements ExprVisitor<GrusType>, StmtVisitor<void> {
             if (!checkIntegerType(leftType) || !checkIntegerType(rightType)) {
                 throw this.error(expr.operator, `Type mismatch: ${leftType} != ${rightType}`);
             }
+            expr.left = this.implicitTypeConversion(expr.left, rightType);
+            expr.right = this.implicitTypeConversion(expr.right, leftType);
         } else if (['!=', '==', '>', '>=', '<', '<='].includes(expr.operator.lexeme)) {
             if (!checkSameType(leftType, rightType)) {
                 throw this.error(expr.operator, `Type mismatch: ${leftType} != ${rightType}`);
+            }
+            if (checkNumberType(leftType) && checkNumberType(rightType)) {
+                expr.left = this.implicitTypeConversion(expr.left, rightType);
+                expr.right = this.implicitTypeConversion(expr.right, leftType);
             }
             return new SimpleType("bool");
         } else if (['&&', '||'].includes(expr.operator.lexeme)) {
@@ -407,6 +351,8 @@ export class Resolver implements ExprVisitor<GrusType>, StmtVisitor<void> {
             return rightType;
         } else {
             if (checkNumberType(leftType) && checkNumberType(rightType)) {
+                expr.left = this.implicitTypeConversion(expr.left, rightType);
+                expr.right = this.implicitTypeConversion(expr.right, leftType);
                 // throw this.error(expr.operator, `Type mismatch: ${leftType} != ${rightType}`);
             } else {
                 throw this.error(expr.operator, `Type mismatch: ${leftType} != ${rightType}`);
@@ -441,7 +387,7 @@ export class Resolver implements ExprVisitor<GrusType>, StmtVisitor<void> {
         return new SimpleType(expr.literalType);
     }
     visitPostfixExpr(expr: PostfixExpr): GrusType {
-        const leftType = this.resolveExpr(expr.target);
+        const leftType = this.resolveLocal(expr, expr.name);
         if (expr.operator.type === TokenType.PlusPlus || expr.operator.type === TokenType.MinusMinus) {
             if (!checkIntegerType(leftType)) {
                 throw this.error(expr.operator, `Type mismatch: ${leftType} != integer type`);
@@ -450,7 +396,7 @@ export class Resolver implements ExprVisitor<GrusType>, StmtVisitor<void> {
         return leftType;
     }
     visitPrefixExpr(expr: PrefixExpr): GrusType {
-        const leftType = this.resolveExpr(expr.target);
+        const leftType = this.resolveLocal(expr, expr.name);
         if (expr.operator.type === TokenType.PlusPlus || expr.operator.type === TokenType.MinusMinus) {
             if (!checkIntegerType(leftType)) {
                 throw this.error(expr.operator, `Type mismatch: ${leftType} != integer type`);
@@ -501,12 +447,15 @@ export class Resolver implements ExprVisitor<GrusType>, StmtVisitor<void> {
     }
 
     visitCastExpr(expr: CastExpr): GrusType {
-        const targetType = this.resolveExpr(expr.target);
+        const targetType = this.resolveExpr(expr.source);
         return expr.type;
     }
 
     visitLambdaExpr(expr: LambdaExpr): GrusType {
-        this.closureDeep = this.scopes.length - 1;
+        this.currentLambda = {
+            lambda: expr,
+            deep: this.scopes.length
+        };
         this.beginFunction(expr.returnType);
         for (const param of expr.parameters) {
             this.declare(param.name, param);
@@ -515,18 +464,15 @@ export class Resolver implements ExprVisitor<GrusType>, StmtVisitor<void> {
         for (const bodyStmt of expr.body) {
             this.resolveStmt(bodyStmt);
         }
-        for (const captured of this.currentFun.captured) {
-            expr.captured.push(captured);
-        }
         this.endFunction(expr.paren);
         const paramTypes = expr.parameters.map(param => param.type);
-        this.closureDeep = -1;
-        return new FunctionType(expr.returnType, paramTypes);
+        this.currentLambda = null;
+        return new FunctionType(expr.returnType, paramTypes, false);
     }
 
 
     resolveFunction(stmt: FunctionStmt): void {
-        this.beginFunction(stmt.returnType);
+        this.beginFunction(stmt.func.type.returnType);
         for (const param of stmt.parameters) {
             this.declare(param.name, param);
             this.define(param.name);
@@ -535,7 +481,7 @@ export class Resolver implements ExprVisitor<GrusType>, StmtVisitor<void> {
             this.resolveStmt(bodyStmt);
         }
 
-        this.endFunction(stmt.name);
+        this.endFunction(stmt.func.name);
 
     }
 
@@ -544,10 +490,8 @@ export class Resolver implements ExprVisitor<GrusType>, StmtVisitor<void> {
         const scope = new Map<string, Member>();
         this.currentScope = scope;
         this.scopes.push(scope);
-        this.pointersMap.beginScope();
     }
     endScope(): void {
-        this.pointersMap.endScope();
         this.scopes.pop();
         this.currentScope = this.scopes[this.scopes.length - 1];
     }
@@ -597,36 +541,45 @@ export class Resolver implements ExprVisitor<GrusType>, StmtVisitor<void> {
     }
 
     //本地变量
-    resolveLocal(vname: Token): GrusType {
-        const name = vname.lexeme;
+    resolveLocal(expr: Expr, name: Token): GrusType {
+        const vname = name.lexeme;
         for (let i = this.scopes.length - 1; i >= 0; i--) {
             const scope = this.scopes[i];
-            const _var = scope.get(name);
+            const _var = scope.get(vname);
             if (_var) {
-                if (i <= this.closureDeep) {
-                    if (i !== 0) {//非全局变量
-                        this.compiler?.escaped.add(_var.symbol);
-                        this.currentFun.captured.add(_var.symbol);
-                        if (_var.symbol.type instanceof PointerType) {
-                            this.pointersMap.setCapture(_var.symbol.name.lexeme, true);
+                const distance = this.scopes.length - 1 - i;
+                this.compiler?.resolve(expr, distance);
+                if (this.currentLambda) {
+                    if (i < this.currentLambda.deep) {
+                        if (_var.symbol instanceof Parameter || _var.symbol instanceof Variable) {
+                            _var.symbol.escaped = true;
+                            this.currentLambda.lambda.captured.add(_var.symbol);
+                            //如果距离大于lambda的深度，则需要捕获变量
+                            if (distance > this.scopes.length - 1 - this.currentLambda.deep) {
+                                this.compiler?.resolve(expr, this.scopes.length - 1 - this.currentLambda.deep);
+                            }
                         }
                     }
                 }
                 if (!_var.symbol.type) {
-                    throw this.error(vname, `Variable ${name} type not defined`);
+                    throw this.error(name, `Variable ${name.lexeme} type not defined`);
                 }
                 return _var.symbol.type;
             }
         }
-        throw this.error(vname, `Variable ${name} not found in any scope`);
+        throw this.error(name, `Variable ${name.lexeme} not found in any scope`);
     }
 
     canBeAddress(expr: Expr): boolean {
         if (expr instanceof VariableExpr) {
+            const var_ = this.findVariable(expr.name.lexeme);
+            if (var_ && var_.symbol.type instanceof FunctionType && var_.symbol.type.isLocal) {
+                return false
+            }
             return true;
         }
         if (expr instanceof PointExpr) {
-            return this.canBeAddress(expr.target);
+            return this.canBeAddress(expr.value);
         }
         if (expr instanceof LiteralExpr) {
             if (expr.literalType === "i32") {
@@ -634,6 +587,27 @@ export class Resolver implements ExprVisitor<GrusType>, StmtVisitor<void> {
             }
         }
         return false;
+    }
+
+
+    findVariable(name: string): Member | undefined {
+        for (let i = this.scopes.length - 1; i >= 0; i--) {
+            const scope = this.scopes[i];
+            const _var = scope.get(name);
+            if (_var) {
+                return _var;
+            }
+        }
+    }
+
+    implicitTypeConversion(value: Expr, type: GrusType) {
+        const leftType = this.resolveExpr(value);
+        if (leftType instanceof SimpleType && type instanceof SimpleType) {
+            if (widthOf(leftType.type) < widthOf(type.type)) {
+                return new CastExpr(type, value);
+            }
+        }
+        return value;
     }
 
 
@@ -645,6 +619,26 @@ export class Resolver implements ExprVisitor<GrusType>, StmtVisitor<void> {
     }
 }
 
+
+
+function widthOf(t: literalType): number {
+    switch (t) {
+        case "i8":
+            return 8;
+        case "i16":
+            return 16;
+        case "i32":
+            return 32;
+        case "i64":
+            return 64;
+        case "float":
+            return 32 + 64;
+        case "double":
+            return 64 + 64;
+        default:
+            return 0;
+    }
+}
 
 function checkSameType(left: GrusType, right: GrusType): boolean {
     if (checkNumberType(left) && checkNumberType(right)) {

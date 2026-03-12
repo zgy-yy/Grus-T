@@ -175,19 +175,23 @@ export class Variable implements GSymbol {
     name: Token;
     type: GrusType;
     defaultValue: Expr
+    escaped: boolean;
     constructor(name: Token, type: GrusType, defaultValue: Expr) {
         this.name = name;
         this.type = type;
         this.defaultValue = defaultValue;
+        this.escaped = false;
     }
 }
 
 export class Parameter implements GSymbol {
     name: Token;
     type: GrusType;
+    escaped: boolean;
     constructor(name: Token, type: GrusType) {
         this.name = name;
         this.type = type;
+        this.escaped = false;
     }
 }
 
@@ -204,16 +208,24 @@ export class VarStmt extends Stmt {
     }
 }
 
-export class FunctionStmt extends Stmt {
+
+export class Func implements GSymbol {
     name: Token;
+    type: FunctionType;
+    constructor(name: Token, type: FunctionType) {
+        this.name = name;
+        this.type = type;
+    }
+}
+
+export class FunctionStmt extends Stmt {
+    func: Func;
     parameters: Parameter[];
-    returnType: GrusType;
     body: Stmt[];
     constructor(name: Token, parameters: Parameter[], returnType: GrusType, body: Stmt[]) {
         super();
-        this.name = name;
         this.parameters = parameters;
-        this.returnType = returnType;
+        this.func = new Func(name, new FunctionType(returnType, parameters.map(param => param.type), true));
         this.body = body;
     }
     accept<R>(visitor: StmtVisitor<R>): R {
