@@ -1,6 +1,7 @@
 import { GrusType, literalType } from "./GrusTypes";
 import { GSymbol, Parameter, Stmt } from "./Stmt";
 import { Token } from "./Token";
+import { TypeExpr } from "./TypeExpr";
 export abstract class Expr {
     abstract accept<R>(visitor: ExprVisitor<R>): R;
 }
@@ -22,6 +23,7 @@ export interface ExprVisitor<R> {
     visitVariableExpr(expr: VariableExpr): R;
     visitLambdaExpr(expr: LambdaExpr): R;
     visitCastExpr(expr: CastExpr): R;
+    visitImplicitCastExpr(expr: ImplicitCastExpr): R;
 }
 
 
@@ -280,11 +282,13 @@ export class VariableExpr extends Expr {
 }
 
 export class CastExpr extends Expr {
-    type: GrusType;
+    paren: Token;
+    targetType: TypeExpr;
     source: Expr;
-    constructor(type: GrusType, source: Expr) {
+    constructor(paren: Token, targetType: TypeExpr, source: Expr) {
         super();
-        this.type = type;
+        this.paren = paren;
+        this.targetType = targetType;
         this.source = source;
     }
     accept<R>(visitor: ExprVisitor<R>): R {
@@ -292,13 +296,27 @@ export class CastExpr extends Expr {
     }
 }
 
+export class ImplicitCastExpr extends Expr {
+    source: Expr;
+    targetType: GrusType;
+    constructor(source: Expr, targetType: GrusType) {
+        super();
+        this.source = source;
+        this.targetType = targetType;
+    }
+    accept<R>(visitor: ExprVisitor<R>): R {
+        return visitor.visitImplicitCastExpr(this);
+    }
+}
+
+
 export class LambdaExpr extends Expr {
     paren: Token;
     parameters: Parameter[];
-    returnType: GrusType;
+    returnType: TypeExpr;
     body: Stmt[];
     captured: Set<GSymbol>;
-    constructor(paren: Token, parameters: Parameter[], returnType: GrusType, body: Stmt[]) {
+    constructor(paren: Token, parameters: Parameter[], returnType: TypeExpr, body: Stmt[]) {
         super();
         this.paren = paren;
         this.parameters = parameters;
@@ -310,3 +328,4 @@ export class LambdaExpr extends Expr {
         return visitor.visitLambdaExpr(this);
     }
 }
+

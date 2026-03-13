@@ -2,8 +2,8 @@ import { Token } from "@/ast/Token";
 import { ParserErrorHandler } from "./ErrorHandler";
 import { TokenType } from "@/ast/TokenType";
 import { AssignExpr, BinaryExpr, CallExpr, CastExpr, Expr, LambdaExpr, LiteralExpr, PointExpr, PostfixExpr, PrefixExpr, ThisExpr, UnaryExpr, VariableExpr } from "@/ast/Expr";
-import { BlockStmt, BreakStmt, ContinueStmt, DoWhileStmt, ExpressionStmt, ForStmt, FunctionStmt, GotoStmt, IfStmt, LabelStmt, LoopStmt, ReturnStmt, Stmt, GSymbol, VarStmt, WhileStmt, Variable, Parameter } from "@/ast/Stmt";
-import { FunctionType, GrusType, literalType, PointerType, SimpleType } from "@/ast/GrusTypes";
+import { BlockStmt, BreakStmt, ContinueStmt, DoWhileStmt, ExpressionStmt, ForStmt, FunctionStmt, GotoStmt, IfStmt, LabelStmt, LoopStmt, ReturnStmt, Stmt, VarStmt, WhileStmt, Variable, Parameter, StructStmt, Field } from "@/ast/Stmt";
+import { FunctionTypeExpr, GeneralTypeExpr, PointerTypeExpr, TypeExpr } from "@/ast/TypeExpr";
 
 class SyntaxError extends Error {
     public token: Token;
@@ -178,6 +178,9 @@ export class Parser {
             if (this.match(TokenType.Class)) {
                 // return this.classDeclaration();
             }
+            if (this.match(TokenType.Struct)) {
+                return this.structDeclaration();
+            }
             if (program) {
                 if (this.match(TokenType.Fun)) {
                     return this.funDeclaration();
@@ -204,40 +207,53 @@ export class Parser {
      */
     private varDeclaration(): VarStmt {
         const vars: Variable[] = [];
-        let decType: GrusType = null as unknown as GrusType;
+        let decType: TypeExpr | null = null;
         do {
+            let name = null
             if (this.match(TokenType.Identifier)) {
-                const name = this.previous();
-                if (this.match(TokenType.Equal)) {
-                    const initializer = this.expression(Precedence.ASSIGNMENT);
-                    vars.push(new Variable(name, decType, initializer));
-                    continue;
-                } else if (this.match(TokenType.AArrow)) {
-                    const initializer = this.expression(Precedence.ASSIGNMENT);
-                    vars.push(new Variable(name, new PointerType(decType), initializer));
-                    continue;
-                } else {
+                name = this.previous();
+                if (!(this.peek().type === TokenType.Equal || this.peek().type === TokenType.AArrow)) {
+                    name = null;
                     this.back();
                 }
             }
-            decType = this.type();
-            const name = this.consume(TokenType.Identifier, "Expect variable name.");
-            if (decType instanceof PointerType) {
-                if (this.match(TokenType.AArrow)) {
-                    const initializer = this.expression(Precedence.ASSIGNMENT);
-                    vars.push(new Variable(name, decType, initializer));
-                } else {
-                    this.error(name, "Expect '=>' after variable name.");
-                }
-            } else if (this.match(TokenType.Equal)) {
-                const initializer = this.expression(Precedence.ASSIGNMENT);
-                vars.push(new Variable(name, decType, initializer));
-            } else {
-                this.error(name, "Expect '=' after variable name.");
+            if (!name) {
+                decType = this.typeExpr();
+                name = this.consume(TokenType.Identifier, "Expect variable name.");
             }
+            if (this.match(TokenType.Equal)) {
+                const operator = this.previous();
+                const initializer = this.expression(Precedence.ASSIGNMENT);
+                vars.push(new Variable(name, decType, initializer, operator));
+            } else if (this.match(TokenType.AArrow)) {
+                const operator = this.previous();
+                const initializer = this.expression(Precedence.ASSIGNMENT);
+                vars.push(new Variable(name, decType, initializer, operator));
+            }
+
         } while (this.match(TokenType.Comma));
         this.consume(TokenType.Semicolon, "Expect ';' after variable declaration.");
         return new VarStmt(vars);
+    }
+
+    private structDeclaration(): StructStmt {
+        const name = this.consume(TokenType.Identifier, "Expect struct name.");
+        this.consume(TokenType.LeftBrace, "Expect '{' after struct name.");
+        const fields: Field[] = [];
+        do {
+            if (!this.check(TokenType.RightBrace)) {
+                const type = this.typeExpr();
+                const name = this.consume(TokenType.Identifier, "Expect field name.");
+                fields.push(new Field(name, type));
+                while (this.match(TokenType.Comma)) {
+                    const name = this.consume(TokenType.Identifier, "Expect field name.");
+                    fields.push(new Field(name, type));
+                }
+            }
+        } while (this.match(TokenType.Semicolon));
+
+        this.consume(TokenType.RightBrace, "Expect '}' after struct fields.");
+        return new StructStmt(name, fields);
     }
 
 
@@ -253,11 +269,10 @@ export class Parser {
             parameters.push(...parameter);
         }
         this.consume(TokenType.RightParen, "Expect ')' after parameters.");
-        let returnType: GrusType
+        let returnType: TypeExpr | null = null;
         if (this.check(TokenType.LeftBrace)) {
-            returnType = new SimpleType("void");
         } else {
-            returnType = this.type();
+            returnType = this.typeExpr();
         }
         this.consume(TokenType.LeftBrace, "Expect '{' after parameters.");
         const body = this.block();
@@ -271,19 +286,19 @@ export class Parser {
     private parameter(): Parameter[] {
         const parameters: Parameter[] = [];
         do {
-            let type = this.type();
+            let type = this.typeExpr();
             const name = this.consume(TokenType.Identifier, "Expect parameter name.");
             parameters.push(new Parameter(name, type));
             while (this.match(TokenType.Comma)) {
                 if (this.match(TokenType.Identifier)) {
                     if (this.check(TokenType.Identifier)) {
                         this.back();
-                        type = this.type();
+                        type = this.typeExpr();
                     } else {
                         this.back();
                     }
                 } else {
-                    type = this.type();
+                    type = this.typeExpr();
                 }
                 const name = this.consume(TokenType.Identifier, "Expect parameter name.");
                 parameters.push(new Parameter(name, type));
@@ -532,10 +547,11 @@ export class Parser {
                 this.consume(TokenType.RightParen, "Expect ')' after expression.");
                 return expr;
             case TokenType.Less:
-                const type = this.type();
+                const type = this.typeExpr();
                 this.consume(TokenType.Greater, "Expect '>' after type.");
+                const paren = this.previous();
                 const target = this.expression(Precedence.UNARY);
-                return new CastExpr(type, target);
+                return new CastExpr(paren, type, target);
             default:
                 throw this.error(token, "Expect expression.");
         }
@@ -551,35 +567,34 @@ export class Parser {
         }
         this.consume(TokenType.RightParen, "Expect ')' after parameters.");
         this.consume(TokenType.Arrow, "Expect '->' after parameters.");
-        const returnType = this.type();
+        const returnType = this.typeExpr();
         this.consume(TokenType.LeftBrace, "Expect '{' after return type.");
 
         const body = this.block();
 
         return new LambdaExpr(this.previous(), params, returnType, body);
-
     }
 
 
 
-    private type(): GrusType {
+    private typeExpr(): TypeExpr {
         if (this.match(TokenType.Identifier)) {
             const name = this.previous();
-            return new SimpleType(name.lexeme as literalType);
+            return new GeneralTypeExpr(name, false);
         } else if (this.match(TokenType.At)) {
-            return new PointerType(this.type());
+            return new PointerTypeExpr(this.typeExpr());
         } else if (this.match(TokenType.LeftParen)) {
-            const declTypes: GrusType[] = [];
+            const declTypes: TypeExpr[] = [];
             if (!this.check(TokenType.RightParen)) {
                 do {
-                    const declType = this.type();
+                    const declType = this.typeExpr();
                     declTypes.push(declType);
                 } while (this.match(TokenType.Comma))
             }
             this.consume(TokenType.RightParen, "Expect ')' after parameters.");
             this.consume(TokenType.Arrow, "Expect '->' after parameters.");
-            const returnType = this.type();
-            return new FunctionType(returnType, declTypes, false);
+            const returnType = this.typeExpr();
+            return new FunctionTypeExpr(returnType, declTypes);
         }
         throw this.error(this.peek(), "Expect type.");
     }

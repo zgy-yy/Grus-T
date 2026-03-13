@@ -1,6 +1,6 @@
 import { Expr } from "@/ast/Expr";
 import { Token } from "@/ast/Token";
-import { FunctionType, GrusType } from "./GrusTypes";
+import { FunctionTypeExpr, TypeExpr } from "./TypeExpr";
 
 export abstract class Stmt {
     abstract accept<R>(visitor: StmtVisitor<R>): R;
@@ -22,6 +22,7 @@ export interface StmtVisitor<R> {
     visitClassStmt(stmt: ClassStmt): R;
     visitLabelStmt(stmt: LabelStmt): R;
     visitGotoStmt(stmt: GotoStmt): R;
+    visitStructStmt(stmt: StructStmt): R;
 
 }
 
@@ -168,32 +169,36 @@ export class ExpressionStmt extends Stmt {
 
 export interface GSymbol {
     name: Token;
-    type: GrusType;
+    escaped: boolean;
 }
 
 export class Variable implements GSymbol {
     name: Token;
-    type: GrusType;
+    type: TypeExpr|null;
+    operator: Token;
     defaultValue: Expr
     escaped: boolean;
-    constructor(name: Token, type: GrusType, defaultValue: Expr) {
+    constructor(name: Token, type: TypeExpr|null, defaultValue: Expr, operator: Token) {
         this.name = name;
         this.type = type;
         this.defaultValue = defaultValue;
         this.escaped = false;
+        this.operator = operator;
     }
 }
 
 export class Parameter implements GSymbol {
     name: Token;
-    type: GrusType;
+    type: TypeExpr;
     escaped: boolean;
-    constructor(name: Token, type: GrusType) {
+    constructor(name: Token, type: TypeExpr) {
         this.name = name;
         this.type = type;
         this.escaped = false;
     }
 }
+
+
 
 
 
@@ -209,24 +214,17 @@ export class VarStmt extends Stmt {
 }
 
 
-export class Func implements GSymbol {
-    name: Token;
-    type: FunctionType;
-    constructor(name: Token, type: FunctionType) {
-        this.name = name;
-        this.type = type;
-    }
-}
-
 export class FunctionStmt extends Stmt {
-    func: Func;
+    name: Token;
     parameters: Parameter[];
     body: Stmt[];
-    constructor(name: Token, parameters: Parameter[], returnType: GrusType, body: Stmt[]) {
+    returnType: TypeExpr|null;
+    constructor(name: Token, parameters: Parameter[], returnType: TypeExpr|null, body: Stmt[]) {
         super();
+        this.name = name;
         this.parameters = parameters;
-        this.func = new Func(name, new FunctionType(returnType, parameters.map(param => param.type), true));
         this.body = body;
+        this.returnType = returnType;
     }
     accept<R>(visitor: StmtVisitor<R>): R {
         return visitor.visitFunctionStmt(this);
@@ -246,11 +244,37 @@ export class ReturnStmt extends Stmt {
     }
 }
 
+
+export class Field {
+    name: Token;
+    type: TypeExpr;
+    escaped: boolean;
+    constructor(name: Token, type: TypeExpr) {
+        this.name = name;
+        this.type = type;
+        this.escaped = false;
+    }
+}
+
+
+export class StructStmt extends Stmt {
+    name: Token;
+    fields: Field[];
+    constructor(name: Token, fields: Field[]) {
+        super();
+        this.name = name;
+        this.fields = fields;
+    }
+    accept<R>(visitor: StmtVisitor<R>): R {
+        return visitor.visitStructStmt(this);
+    }
+}
+
 export class ClassStmt extends Stmt {
     name: Token;
     methods: FunctionStmt[];
-    fields: VarStmt[];
-    constructor(name: Token, fields: VarStmt[], methods: FunctionStmt[]) {
+    fields: Field[];
+    constructor(name: Token, fields: Field[], methods: FunctionStmt[]) {
         super();
         this.name = name;
         this.methods = methods;

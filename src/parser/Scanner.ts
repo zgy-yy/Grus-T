@@ -20,6 +20,7 @@ const keywords = new Map<string, TokenType>([
   ['fun', TokenType.Fun],
   ['return', TokenType.Return],
   ['goto', TokenType.Goto],
+  ['struct', TokenType.Struct],
 
   ['null', TokenType.Null],
 

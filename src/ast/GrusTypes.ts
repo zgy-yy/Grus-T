@@ -1,10 +1,11 @@
 
-
-
 export interface GrusType {
     isConst: boolean;
 }
 export type literalType = 'void' | 'float' | 'double' | 'i8' | 'i16' | 'i32' | 'i64' | 'string' | 'bool' | 'null';
+
+
+
 export class SimpleType implements GrusType {
     type: literalType;
     isConst: boolean;
@@ -58,3 +59,19 @@ export class TempOmittedType implements GrusType {
 
 }
 
+
+export class StructType implements GrusType {
+    fields: {
+        name: string;
+        type: GrusType;
+        isConst: boolean;
+    }[];
+    isConst: boolean;
+    constructor(fields: { name: string, type: GrusType, isConst: boolean }[]) {
+        this.fields = fields;
+        this.isConst = false;
+    }
+    toString(): string {
+        return "struct " + this.fields.map(field => field.name + " " + field.type.toString()).join(", ");
+    }
+}
