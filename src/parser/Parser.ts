@@ -475,19 +475,12 @@ export class Parser {
         const assignOperators = [TokenType.Equal, TokenType.PlusEqual, TokenType.MinusEqual, TokenType.StarEqual, TokenType.SlashEqual, TokenType.PercentEqual, TokenType.CaretEqual, TokenType.AndEqual, TokenType.OrEqual, TokenType.GreaterGreaterEqual, TokenType.LessLessEqual]
         //赋值运算符 右结合
         if (assignOperators.includes(operator.type)) {
-            //todo 赋值运算符需要检查左值是否可赋值
-            if (left instanceof VariableExpr) {
-                const right = this.parsePrecedence(precedence);
-                return new AssignExpr(left.name, right, operator);
-            }
-            this.error(operator, "Invalid assignment target.");
+            const right = this.parsePrecedence(precedence);
+            return new AssignExpr(left, right, operator);
         }
         if (operator.type === TokenType.AArrow) {
-            if (left instanceof VariableExpr) {
-                const right = this.parsePrecedence(precedence);
-                return new PointExpr(left.name, right, operator);
-            }
-            this.error(operator, "Invalid pointer target.");
+            const right = this.parsePrecedence(precedence);
+            return new PointExpr(left, right, operator);
         }
         const right = this.parsePrecedence(precedence + 1);
         return new BinaryExpr(left, operator, right);
@@ -500,8 +493,8 @@ export class Parser {
     private postfix(left: Expr, operator: Token): Expr {
         //todo 赋值运算符需要检查左值是否可赋值 移到 resolve 中检查
         if (left instanceof VariableExpr) {
-            return new PostfixExpr(left.name, operator);
-        }
+            return new PostfixExpr(left, operator);
+        }   
         this.error(operator, "Invalid assignment target.");
         return left;
     }
@@ -510,7 +503,7 @@ export class Parser {
         const right = this.parsePrecedence(Precedence.UNARY);
         //todo 赋值运算符需要检查左值是否可赋值
         if (right instanceof VariableExpr) {
-            return new PrefixExpr(right.name, operator);
+            return new PrefixExpr(right, operator);
         }
         throw this.error(operator, "Invalid assignment target.");
     }

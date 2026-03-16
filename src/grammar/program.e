@@ -1,8 +1,7 @@
 fun main() i32 {
-  let i8 a = 255;
-  let i8 b = 1;
-  let i8 c = a | b;
-  let i32 x = <i32>c;
-  printf("%d\\n", x);
+  let (i32) -> void print = (i32 x) -> void {
+    printf("%d\\n", x);
+  };
+  print(100);
   return 0;
 }

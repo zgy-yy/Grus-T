@@ -32,13 +32,13 @@ export interface ExprVisitor<R> {
  * 赋值表达式
  */
 export class AssignExpr extends Expr {
-    name: Token;
+    target: Expr;
     value: Expr;
     equal: Token;
 
-    constructor(name: Token, value: Expr, equal: Token) {
+    constructor(target: Expr, value: Expr, equal: Token) {
         super();
-        this.name = name;
+        this.target = target;
         this.value = value;
         this.equal = equal;
     }
@@ -48,12 +48,12 @@ export class AssignExpr extends Expr {
 }
 //指向表达式
 export class PointExpr extends Expr {
-    name: Token;
+    target: Expr;
     value: Expr;
     arrow: Token;
-    constructor(name: Token, value: Expr, arrow: Token) {
+    constructor(target: Expr, value: Expr, arrow: Token) {
         super();
-        this.name = name;
+        this.target = target;
         this.value = value;
         this.arrow = arrow;
     }
@@ -144,11 +144,11 @@ export class UnaryExpr extends Expr {
  * 后缀表达式
  */
 export class PostfixExpr extends Expr {
-    name: Token;
+    target: Expr;
     operator: Token;
-    constructor(name: Token, operator: Token) {
+    constructor(target: Expr, operator: Token) {
         super();
-        this.name = name;
+        this.target = target;
         this.operator = operator;
     }
     accept<R>(visitor: ExprVisitor<R>): R {
@@ -157,11 +157,11 @@ export class PostfixExpr extends Expr {
 }
 
 export class PrefixExpr extends Expr {
-    name: Token;
+    target: Expr;
     operator: Token;
-    constructor(name: Token, operator: Token) {
+    constructor(target: Expr, operator: Token) {
         super();
-        this.name = name;
+        this.target = target;
         this.operator = operator;
     }
     accept<R>(visitor: ExprVisitor<R>): R {
@@ -272,9 +272,11 @@ export class LiteralExpr extends Expr {
 
 export class VariableExpr extends Expr {
     name: Token;
+    addr:boolean
     constructor(name: Token) {
         super();
         this.name = name;
+        this.addr = false;
     }
     accept<R>(visitor: ExprVisitor<R>): R {
         return visitor.visitVariableExpr(this);
@@ -315,14 +317,14 @@ export class LambdaExpr extends Expr {
     parameters: Parameter[];
     returnType: TypeExpr;
     body: Stmt[];
-    captured: Set<GSymbol>;
+    captured: Map<string, GrusType>;
     constructor(paren: Token, parameters: Parameter[], returnType: TypeExpr, body: Stmt[]) {
         super();
         this.paren = paren;
         this.parameters = parameters;
         this.returnType = returnType;
         this.body = body;
-        this.captured = new Set<GSymbol>();
+        this.captured = new Map<string, GrusType>();
     }
     accept<R>(visitor: ExprVisitor<R>): R {
         return visitor.visitLambdaExpr(this);

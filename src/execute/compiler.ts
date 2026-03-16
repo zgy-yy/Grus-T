@@ -99,7 +99,6 @@ export class Compiler implements ExprVisitor<GValue>, StmtVisitor<void> {
     }
 
     compileProgram(stmts: Stmt[]): string {
-        // console.log("----IdentifierType",this.IdentifierType)
         //默认声明printf
         const LType = llvm.FunctionType.get(this.constantTypes.i32, [this.constantTypes.ptr], true);
         const printf = llvm.Function.Create(LType, llvm.Function.LinkageTypes.ExternalLinkage, "printf", this.module);
@@ -161,35 +160,11 @@ export class Compiler implements ExprVisitor<GValue>, StmtVisitor<void> {
             const allocType = this.llvmType(varType);
             const varName = variable.name.lexeme;
 
-            if (variable.escaped) {
-                const dataLayout = this.module.getDataLayout();
-                const size = dataLayout.getTypeAllocSize(allocType);
-                // 将大小转换为 LLVM 的 ConstantInt
-                const sizeValue = llvm.ConstantInt.get(llvm.Type.getInt32Ty(this.context), size);
-                const val = this.builder.CreateCall(this.mallocFunc, [sizeValue]);
-                this.define(varName, val, varType);
-                if (variable.type instanceof PointerType) {
-                    let varAddr = variable.defaultValue.accept(this);
-                    this.builder.CreateStore(varAddr.val, val);
-                } else {
-                    const value = variable.defaultValue.accept(this);
-                    const lvalue = this.promoteType(value.val, allocType);
-                    this.builder.CreateStore(lvalue, val);
-                }
-            } else {
-                const allocAddr = this.builder.CreateAlloca(allocType, null, varName);
-                this.define(varName, allocAddr, varType);
-                if (variable.type instanceof PointerType) {
-                    let value = variable.defaultValue.accept(this);
-                    this.builder.CreateStore(value.val, allocAddr);
-                } else {
-                    const value = variable.defaultValue.accept(this);
-                    const lvalue = this.promoteType(value.val, allocType);
-                    this.builder.CreateStore(lvalue, allocAddr);
-                }
-
-            }
-
+            const allocAddr = this.builder.CreateAlloca(allocType, null, varName);
+            this.define(varName, allocAddr, varType);
+            const value = variable.defaultValue.accept(this);
+            const lvalue = this.promoteType(value.val, allocType);
+            this.builder.CreateStore(lvalue, allocAddr);
         }
     }
     visitFunctionStmt(stmt: FunctionStmt): void {
@@ -379,12 +354,10 @@ export class Compiler implements ExprVisitor<GValue>, StmtVisitor<void> {
 
     }
     visitReturnStmt(stmt: ReturnStmt): void {
-        
         if (stmt.value) {
             let value = stmt.value.accept(this);
             const lvalue = this.promoteType(value.val, this.currentFunction.returnType);
             this.builder.CreateRet(lvalue);
-
         } else {
             this.builder.CreateRetVoid();
         }
@@ -411,29 +384,14 @@ export class Compiler implements ExprVisitor<GValue>, StmtVisitor<void> {
     // ExprVisitor methods
     visitAssignExpr(expr: AssignExpr): GValue {
         const value = expr.value.accept(this);
-        const distance = this.locals.get(expr);
-        const target = this.environment.getAt(distance!, expr.name.lexeme);
-        if (target.gType instanceof PointerType) {
-            const oriType = this.llvmType(target.gType.oriType);
-            const addr = this.builder.CreateLoad(oriType, target.val, "addr");
-            this.builder.CreateStore(value.val, addr);
-            return value;
-        }
+        const target = expr.target.accept(this);
         this.builder.CreateStore(value.val, target.val);
         return value;
     }
     visitPointExpr(expr: PointExpr): GValue {
-        const ptrDistance = this.locals.get(expr.value);
-        const ptr = this.environment.getAt(ptrDistance!, expr.name.lexeme);
-
-        if (expr.value instanceof VariableExpr) {
-            const valueDistance = this.locals.get(expr.value);
-            const value = this.environment.getAt(valueDistance!, expr.value.name.lexeme);
-            this.builder.CreateStore(value.val, ptr.val);
-            return value;
-        }
+        const target = expr.target.accept(this);
         const value = expr.value.accept(this);
-        this.builder.CreateStore(value.val, ptr.val);
+        this.builder.CreateStore(value.val, target.val);
         return value;
     }
     visitConditionalExpr(expr: ConditionalExpr): GValue {
@@ -667,51 +625,51 @@ export class Compiler implements ExprVisitor<GValue>, StmtVisitor<void> {
         return new GValue(val, new SimpleType("i32"));
     }
     visitPostfixExpr(expr: PostfixExpr): GValue {
-        const variable = this.lookupVariable(expr.name, expr);
-        let oldValue = this.builder.CreateLoad(this.llvmType(variable.gType), variable.val, expr.name.lexeme);
+        const target = expr.target.accept(this);
+        const oldValue = this.builder.CreateLoad(this.llvmType(target.gType), target.val);
         switch (expr.operator.type) {
             case TokenType.PlusPlus:
                 {
                     const newValue = this.builder.CreateAdd(oldValue, this.builder.getInt32(1));
-                    this.builder.CreateStore(newValue, variable.val);
-                    return new GValue(oldValue, variable.gType);
+                    this.builder.CreateStore(newValue, target.val);
+                    return new GValue(oldValue, target.gType);
                 }
             case TokenType.MinusMinus:
                 {
                     const newValue = this.builder.CreateSub(oldValue, this.builder.getInt32(1));
-                    this.builder.CreateStore(newValue, variable.val);
-                    return new GValue(oldValue, variable.gType);
+                    this.builder.CreateStore(newValue, target.val);
+                    return new GValue(oldValue, target.gType);
                 }
                 break;
         }
         throw new Error(`Unsupported postfix operator: ${expr.operator.type}`);
     }
     visitPrefixExpr(expr: PrefixExpr): GValue {
-        const variable = this.lookupVariable(expr.name, expr);
-        let oldValue = this.builder.CreateLoad(this.llvmType(variable.gType), variable.val, expr.name.lexeme);
+        const target = expr.target.accept(this);
+        const oldValue = this.builder.CreateLoad(this.llvmType(target.gType), target.val);
         switch (expr.operator.type) {
             case TokenType.PlusPlus:
                 {
                     const newValue = this.builder.CreateAdd(oldValue, this.builder.getInt32(1));
-                    this.builder.CreateStore(newValue, variable.val);
-                    return new GValue(newValue, variable.gType);
+                    this.builder.CreateStore(newValue, target.val);
+                    return new GValue(newValue, target.gType);
                 }
                 break;
             case TokenType.MinusMinus:
                 {
                     const newValue = this.builder.CreateSub(oldValue, this.builder.getInt32(1));
-                    this.builder.CreateStore(newValue, variable.val);
-                    return new GValue(newValue, variable.gType);
+                    this.builder.CreateStore(newValue, target.val);
+                    return new GValue(newValue, target.gType);
                 }
                 break;
         }
         throw new Error(`Unsupported prefix operator: ${expr.operator.type}`);
     }
     visitCallExpr(expr: CallExpr): GValue {
-        const args = expr.arguments.map(arg => arg.accept(this)).map(arg => arg.val);
-
+        const args = expr.arguments.map((arg) => arg.accept(this)).map(arg => arg.val);
         const callee = expr.callee.accept(this);
         if (callee.gType instanceof FunctionType) {
+
             if (!callee.gType.isLocal) {
                 // closure 结构体：索引0是函数指针，索引1是环境指针
                 const closureFuncPtr = this.builder.CreateExtractValue(callee.val, [0], "closure.funcPtr");
@@ -758,6 +716,18 @@ export class Compiler implements ExprVisitor<GValue>, StmtVisitor<void> {
             if (value.gType.isLocal) {
                 return value;
             }
+        } else if (value.gType instanceof PointerType) {
+            const ptrType = this.llvmType(value.gType);
+            const dataAddr = this.builder.CreateLoad(ptrType, value.val, expr.name.lexeme);
+            if (expr.addr) {
+                return new GValue(dataAddr, value.gType);
+            }
+            const dataType = this.llvmType(value.gType.oriType);
+            const data = this.builder.CreateLoad(dataType, dataAddr, expr.name.lexeme);
+            return new GValue(data, value.gType.oriType);
+        }
+        if (expr.addr) {
+            return value;
         }
         const lType = this.llvmType(value.gType);
         const data = this.builder.CreateLoad(lType, value.val, expr.name.lexeme);
@@ -770,7 +740,7 @@ export class Compiler implements ExprVisitor<GValue>, StmtVisitor<void> {
         return variable;
     }
     visitLambdaExpr(expr: LambdaExpr): GValue {
-        const captures = Array.from(expr.captured);
+        const captures = Array.from(expr.captured.entries()).map(i => ({ name: i[0], type: i[1] }));
         //创建闭包环境类型 结构体的每个元素都是指针类型，用于指向捕获的变量
         const capturedStructType = captures.map(captured => this.constantTypes.ptr);
         const envType = llvm.StructType.create(this.context, capturedStructType, "closure.env");
@@ -784,7 +754,7 @@ export class Compiler implements ExprVisitor<GValue>, StmtVisitor<void> {
 
         for (let i = 0; i < captures.length; i++) {
             const captured = captures[i];
-            const capturedVal = this.environment.get(captured.name.lexeme);
+            const capturedVal = this.environment.get(captured.name);
             const capturedConst = llvm.ConstantInt.get(llvm.Type.getInt32Ty(this.context), i);
             const val = this.builder.CreateGEP(envType, envVal, capturedConst, "closure.env.memPtr");
             this.builder.CreateStore(capturedVal.val, val);
@@ -801,10 +771,7 @@ export class Compiler implements ExprVisitor<GValue>, StmtVisitor<void> {
 
         const paramLTypes = funType.paramTypes.map(type => this.llvmType(type));
         const func = this.declareFunction("lambda", retLType, paramLTypes, true);
-        this.defineFunction(func, expr.parameters, expr.body, funType, {
-            captures: captures,
-            type: envType,
-        });
+        this.defineFunction(func, expr.parameters, expr.body, funType.returnType, captures);
 
         // 恢复原来的插入点，确保后续代码编译到正确的函数中
         if (savedInsertBlock) {
@@ -848,7 +815,10 @@ export class Compiler implements ExprVisitor<GValue>, StmtVisitor<void> {
         return func;
     }
 
-    private defineFunction(func: llvm.Function, parameters: Parameter[], body: Stmt[], retType: GrusType, closureEnv: { captures: GSymbol[], type: llvm.Type } | null): void {
+    private defineFunction(func: llvm.Function, parameters: Parameter[], body: Stmt[], retType: GrusType, closureEnv: {
+        name: string,
+        type: GrusType
+    }[]|null): void {
         // 保存旧的返回类型，设置新的返回类型
         const oldReturnType = this.currentFunction.returnType;
         this.currentFunction = {
@@ -860,23 +830,19 @@ export class Compiler implements ExprVisitor<GValue>, StmtVisitor<void> {
         this.builder.SetInsertPoint(bb);
 
         this.beginScope();
+       
         if (closureEnv) {
             const envPtr = func.getArg(0);
-            for (let i = 0; i < closureEnv.captures.length; i++) {
-                const captured = closureEnv.captures[i];
+            for (let i = 0; i < closureEnv.length; i++) {
+                const captured = closureEnv[i];
                 const capturedConst = llvm.ConstantInt.get(llvm.Type.getInt32Ty(this.context), i);
-                const memPtr = this.builder.CreateGEP(closureEnv.type, envPtr, capturedConst, "closure.env.memPtr");
-                const capturedType = this.IdentifierType.get(captured.name);
-                if (!capturedType) {
-                    throw new Error("Captured type not found");
-                }
-                const ptrType = llvm.PointerType.get(this.llvmType(capturedType), 0);
+                const capturedType = this.llvmType(captured.type);
+                const memPtr = this.builder.CreateGEP(capturedType, envPtr, capturedConst, "closure.env.memPtr");
+                const ptrType = llvm.PointerType.get(capturedType, 0);
                 const memVal = this.builder.CreateLoad(ptrType, memPtr, "closure.env.memVal");
-
-                this.define(captured.name.lexeme, memVal, capturedType);
+                this.define(captured.name, memVal, captured.type);
             }
         }
-
         // 处理函数参数：为每个参数创建 alloca，并从函数参数中加载值存储到 alloca
         for (let i = 0; i < parameters.length; i++) {
             const param = parameters[i];
@@ -889,7 +855,6 @@ export class Compiler implements ExprVisitor<GValue>, StmtVisitor<void> {
             const argInd = closureEnv ? i + 1 : i;
             // 从函数参数中获取值（函数参数是 Value，不是指针）
             const funcArg = func.getArg(argInd);
-
             if (param.escaped) {
                 const dataLayout = this.module.getDataLayout();
                 const size = dataLayout.getTypeAllocSize(paramLType);
@@ -904,9 +869,6 @@ export class Compiler implements ExprVisitor<GValue>, StmtVisitor<void> {
                 this.builder.CreateStore(funcArg, paramAlloca);
                 this.define(param.name.lexeme, paramAlloca, paramType);
             }
-
-
-
         }
 
 
