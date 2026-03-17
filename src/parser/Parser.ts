@@ -494,7 +494,7 @@ export class Parser {
         //todo 赋值运算符需要检查左值是否可赋值 移到 resolve 中检查
         if (left instanceof VariableExpr) {
             return new PostfixExpr(left, operator);
-        }   
+        }
         this.error(operator, "Invalid assignment target.");
         return left;
     }
@@ -525,20 +525,7 @@ export class Parser {
             case TokenType.Identifier:
                 return new VariableExpr(token);
             case TokenType.LeftParen:
-                if (this.check(TokenType.RightParen)) {
-                    return this.lambda();
-                }
-                if (this.match(TokenType.Identifier)) {
-                    if (this.check(TokenType.Identifier)) {
-                        this.back()
-                        return this.lambda()
-                    } else {
-                        this.back();
-                    }
-                }
-                const expr = this.expression();
-                this.consume(TokenType.RightParen, "Expect ')' after expression.");
-                return expr;
+                return this.bracket();
             case TokenType.Less:
                 const type = this.typeExpr();
                 this.consume(TokenType.Greater, "Expect '>' after type.");
@@ -548,6 +535,21 @@ export class Parser {
             default:
                 throw this.error(token, "Expect expression.");
         }
+    }
+
+    bracket(): Expr {
+        let now = this.current;
+        while (!this.check(TokenType.Semicolon)) {
+            if (this.check(TokenType.Arrow)) {
+                this.current = now;
+                return this.lambda()
+            }
+            this.advance();
+        }
+        this.current = now;
+        const expr = this.expression();
+        this.consume(TokenType.RightParen, "Expect ')' after expression.");
+        return expr;
     }
 
     private lambda(): Expr {
@@ -570,12 +572,15 @@ export class Parser {
 
 
 
-    private typeExpr(): TypeExpr {
+    private typeExpr(pNumber: number = 0): TypeExpr {
         if (this.match(TokenType.Identifier)) {
             const name = this.previous();
             return new GeneralTypeExpr(name, false);
         } else if (this.match(TokenType.At)) {
-            return new PointerTypeExpr(this.typeExpr());
+            if (pNumber > 0) {
+                throw this.error(this.peek(), "Pointer type can't be nested.");
+            }
+            return new PointerTypeExpr(this.typeExpr(pNumber + 1));
         } else if (this.match(TokenType.LeftParen)) {
             const declTypes: TypeExpr[] = [];
             if (!this.check(TokenType.RightParen)) {

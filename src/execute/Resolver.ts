@@ -160,14 +160,14 @@ export class Resolver implements ExprVisitor<GrusType>, TypeExprVisitor<GrusType
 
             }
             else if (_var.operator.type === TokenType.AArrow) {
+                const canAddress = this.canBeAddress(_var.defaultValue);
+                if (!canAddress) {
+                    throw this.error(_var.operator, `Type mismatch: ${initType} != address type`);
+                }
                 if (_var.type) {
                     let varType = _var.type.accept(this)
                     if (!(varType instanceof PointerType)) {
                         throw this.error(_var.operator, `Type mismatch: ${varType} != pointer type`);
-                    }
-                    const canBeAddress = this.canBeAddress(_var.defaultValue);
-                    if (!canBeAddress) {
-                        throw this.error(_var.operator, `Type mismatch: ${initType} != address type`);
                     }
                     if (!checkSameType(varType.oriType, initType)) {
                         throw this.error(_var.operator, `Type mismatch`)

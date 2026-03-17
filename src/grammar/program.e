@@ -1,7 +1,13 @@
+
+
+
 fun main() i32 {
-  let (i32) -> void print = (i32 x) -> void {
-    printf("%d\\n", x);
+  let foo=(@i32 a)->void{
+
   };
-  print(100);
+
+  let a=12;
+  (a);
+
   return 0;
 }

@@ -13,5 +13,3 @@ const grus = new Grus(source, (line, column) => {
 const irCode = grus.run();
 fs.writeFileSync(output, irCode);
 console.log(irCode);
-
-
