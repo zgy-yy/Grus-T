@@ -1,10 +1,10 @@
-import { AssignExpr, BinaryExpr, CallExpr, CastExpr, ConditionalExpr, Expr, ExprVisitor, GetExpr, ImplicitCastExpr, LambdaExpr, LiteralExpr, LogicalExpr, PointExpr, PostfixExpr, PrefixExpr, SetExpr, ThisExpr, UnaryExpr, VariableExpr } from "@/ast/Expr";
+import { ArrayExpr, AssignExpr, BinaryExpr, CallExpr, CastExpr, ConditionalExpr, Expr, ExprVisitor, GetExpr, ImplicitCastExpr, LambdaExpr, LiteralExpr, LogicalExpr, PointExpr, PostfixExpr, PrefixExpr, SetExpr, StructExpr, ThisExpr, UnaryExpr, VariableExpr } from "@/ast/Expr";
 import { BlockStmt, BreakStmt, ClassStmt, ContinueStmt, DoWhileStmt, ExpressionStmt, ForStmt, FunctionStmt, GotoStmt, GSymbol, IfStmt, LabelStmt, LoopStmt, Parameter, ReturnStmt, StmtVisitor, StructStmt, VarStmt, WhileStmt } from "@/ast/Stmt";
 import { Stmt } from "@/ast/Stmt";
 import { CompilerErrorHandler } from "@/parser/ErrorHandler";
 import { Token } from "@/ast/Token";
 import llvm from "@wangziwenhk/llvm-bindings";
-import { FunctionType, GrusType, PointerType, SimpleType, TempOmittedType } from "@/ast/GrusTypes";
+import { ArrayType, FunctionType, GrusType, PointerType, SimpleType, StructType, TempOmittedType } from "@/ast/GrusTypes";
 import { TokenType } from "@/ast/TokenType";
 import { Environment } from "./Environment";
 
@@ -33,7 +33,8 @@ export class Compiler implements ExprVisitor<GValue>, StmtVisitor<void> {
         breakBb: llvm.BasicBlock,
     }[] = [];
     private labelMap: Map<string, llvm.BasicBlock> = new Map<string, llvm.BasicBlock>();
-    private IdentifierType: Map<Token, GrusType> = new Map<Token, GrusType>();
+    private IdentifierType: Map<Token, GrusType> = new Map<Token, GrusType>()
+    private typeMap: Map<GrusType, llvm.Type> = new Map<GrusType, llvm.Type>()
     readonly globalEnv: Environment = new Environment(null);
     private environment: Environment = this.globalEnv;
     private readonly locals: Map<Expr, number> = new Map();
@@ -147,9 +148,13 @@ export class Compiler implements ExprVisitor<GValue>, StmtVisitor<void> {
         this.endScope();
     }
 
-
     visitStructStmt(stmt: StructStmt): void {
-        throw new Error("Method not implemented.");
+        const stuType = this.IdentifierType.get(stmt.name);
+        if (!stuType || !(stuType instanceof StructType)) {
+            throw new Error("Struct type not found");
+        }
+        this.llvmType(stuType);
+
     }
     visitVarStmt(stmt: VarStmt): void {
         for (const variable of stmt.vars) {
@@ -157,6 +162,7 @@ export class Compiler implements ExprVisitor<GValue>, StmtVisitor<void> {
             if (!varType) {
                 throw new Error("Variable type not found");
             }
+            console.log("---", varType);
             const allocType = this.llvmType(varType);
             const varName = variable.name.lexeme;
 
@@ -705,11 +711,53 @@ export class Compiler implements ExprVisitor<GValue>, StmtVisitor<void> {
         throw new Error("Method not implemented.");
     }
     visitGetExpr(expr: GetExpr): GValue {
-        throw new Error("Method not implemented.");
+        const object = expr.object.accept(this);
+        const name = expr.name.lexeme;
+        if (object.gType instanceof StructType) {
+            const index = object.gType.fields.findIndex(field => field.name === name);
+            const field = object.gType.fields.find(field => field.name === name);
+            if (field) {
+                if (expr.addr) {
+                    const llvmStructType = this.llvmType(object.gType) as llvm.StructType;
+                    const zero = this.builder.getInt32(0);
+                    const fieldIdx = this.builder.getInt32(index);
+                    const fieldAddr = this.builder.CreateGEP(llvmStructType, object.val, [zero, fieldIdx], `struct.${name}.addr`);
+                    return new GValue(fieldAddr, new PointerType(field.type));
+                }
+                const fieldVal = this.builder.CreateExtractValue(object.val, [index], `struct.${name}`);
+                return new GValue(fieldVal, field.type);
+            }
+        }
+        throw new Error(`Field ${name} not found in struct ${object.gType.toString()}`);
     }
     visitThisExpr(expr: ThisExpr): GValue {
         throw new Error("Method not implemented.");
     }
+
+    visitStructExpr(expr: StructExpr): GValue {
+        const fields = expr.fields.map(field => {
+            const value = field.value.accept(this);
+            return {
+                name: field.name.lexeme,
+                value: value.val,
+                type: this.llvmType(value.gType)
+            }
+        });
+        const fieldTypes = expr.fields.map(field => ({ name: field.name.lexeme, type: field.value.accept(this).gType, isConst: false }));
+        const structType = llvm.StructType.create(this.context, fields.map(field => field.type), "struct");
+        let structVal: llvm.Value = llvm.UndefValue.get(structType);
+        for (let i = 0; i < fields.length; i++) {
+            const field = fields[i];
+            structVal = this.builder.CreateInsertValue(structVal, field.value, [i], `struct.${field.name}`);
+        }
+        return new GValue(structVal, new StructType(fieldTypes));
+    }
+
+    visitArrayExpr(expr: ArrayExpr): GValue {
+        throw new Error("Method not implemented.");
+    }
+
+
     visitVariableExpr(expr: VariableExpr): GValue {
         const value = this.lookupVariable(expr.name, expr);
         if (value.gType instanceof FunctionType) {
@@ -739,6 +787,9 @@ export class Compiler implements ExprVisitor<GValue>, StmtVisitor<void> {
         const variable = this.environment.getAt(distance!, name.lexeme);
         return variable;
     }
+
+
+
     visitLambdaExpr(expr: LambdaExpr): GValue {
         const captures = Array.from(expr.captured.entries()).map(i => ({ name: i[0], type: i[1] }));
         //创建闭包环境类型 结构体的每个元素都是指针类型，用于指向捕获的变量
@@ -755,8 +806,9 @@ export class Compiler implements ExprVisitor<GValue>, StmtVisitor<void> {
         for (let i = 0; i < captures.length; i++) {
             const captured = captures[i];
             const capturedVal = this.environment.get(captured.name);
-            const capturedConst = llvm.ConstantInt.get(llvm.Type.getInt32Ty(this.context), i);
-            const val = this.builder.CreateGEP(envType, envVal, capturedConst, "closure.env.memPtr");
+            const zero = this.builder.getInt32(0);
+            const fieldIdx = this.builder.getInt32(i);
+            const val = this.builder.CreateGEP(envType, envVal, [zero, fieldIdx], "closure.env.memPtr");
             this.builder.CreateStore(capturedVal.val, val);
         }
 
@@ -818,7 +870,7 @@ export class Compiler implements ExprVisitor<GValue>, StmtVisitor<void> {
     private defineFunction(func: llvm.Function, parameters: Parameter[], body: Stmt[], retType: GrusType, closureEnv: {
         name: string,
         type: GrusType
-    }[]|null): void {
+    }[] | null): void {
         // 保存旧的返回类型，设置新的返回类型
         const oldReturnType = this.currentFunction.returnType;
         this.currentFunction = {
@@ -830,14 +882,16 @@ export class Compiler implements ExprVisitor<GValue>, StmtVisitor<void> {
         this.builder.SetInsertPoint(bb);
 
         this.beginScope();
-       
+
         if (closureEnv) {
             const envPtr = func.getArg(0);
+            const envStructType = llvm.StructType.create(this.context, closureEnv.map(() => this.constantTypes.ptr), "closure.env");
             for (let i = 0; i < closureEnv.length; i++) {
                 const captured = closureEnv[i];
-                const capturedConst = llvm.ConstantInt.get(llvm.Type.getInt32Ty(this.context), i);
+                const zero = this.builder.getInt32(0);
+                const fieldIdx = this.builder.getInt32(i);
+                const memPtr = this.builder.CreateGEP(envStructType, envPtr, [zero, fieldIdx], "closure.env.memPtr");
                 const capturedType = this.llvmType(captured.type);
-                const memPtr = this.builder.CreateGEP(capturedType, envPtr, capturedConst, "closure.env.memPtr");
                 const ptrType = llvm.PointerType.get(capturedType, 0);
                 const memVal = this.builder.CreateLoad(ptrType, memPtr, "closure.env.memVal");
                 this.define(captured.name, memVal, captured.type);
@@ -1065,7 +1119,17 @@ export class Compiler implements ExprVisitor<GValue>, StmtVisitor<void> {
         if (type instanceof PointerType) {
             return llvm.PointerType.get(this.llvmType(type.oriType), 0);
         }
+        if (type instanceof StructType) {
+            const lStructType = this.typeMap.get(type);
+            if (lStructType) {
+                return lStructType;
+            }
+            const llvmStructType = llvm.StructType.create(this.context, type.fields.map(field => this.llvmType(field.type)), "struct");
+            this.typeMap.set(type, llvmStructType);
+            return llvmStructType;
+        }
         throw new Error(`Unsupported type: ${type}`);
     }
+
 
 }

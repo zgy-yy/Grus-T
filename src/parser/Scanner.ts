@@ -70,6 +70,12 @@ export class Scanner {
       case '}':
         this.addToken(TokenType.RightBrace);
         break;
+      case '[':
+        this.addToken(TokenType.LeftBracket);
+        break;
+      case ']':
+        this.addToken(TokenType.RightBracket);
+        break;
       case ',':
         this.addToken(TokenType.Comma);
         break;

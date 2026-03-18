@@ -1,4 +1,4 @@
-import { AssignExpr, BinaryExpr, CallExpr, CastExpr, ConditionalExpr, Expr, ExprVisitor, GetExpr, LambdaExpr, LiteralExpr, LogicalExpr, PointExpr, PostfixExpr, PrefixExpr, SetExpr, ThisExpr, UnaryExpr, VariableExpr } from "@/ast/Expr";
+import { ArrayExpr, AssignExpr, BinaryExpr, CallExpr, CastExpr, Expr, ExprVisitor, GetExpr, ImplicitCastExpr, LambdaExpr, LiteralExpr, LogicalExpr, PointExpr, PostfixExpr, PrefixExpr, SetExpr, StructExpr, ThisExpr, UnaryExpr, VariableExpr } from "@/ast/Expr";
 
 
 
@@ -61,6 +61,17 @@ export class AstPrinter implements ExprVisitor<string> {
 
     visitVariableExpr(expr: VariableExpr): string {
         return expr.name.lexeme;
+    }
+    visitStructExpr(expr: StructExpr): string {
+        const fields = expr.fields.map(f => `${f.name.lexeme}: ${f.value.accept(this)}`).join(", ");
+        return `${expr.typeName.lexeme} { ${fields} }`;
+    }
+    visitArrayExpr(expr: ArrayExpr): string {
+        const elts = expr.elements.map(e => e.accept(this)).join(", ");
+        return `[ ${elts} ]`;
+    }
+    visitImplicitCastExpr(expr: ImplicitCastExpr): string {
+        return expr.source.accept(this);
     }
 
     private parenthesize(name: string, ...exprs: (Expr | string)[]): string {

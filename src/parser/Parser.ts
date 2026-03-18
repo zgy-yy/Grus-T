@@ -1,7 +1,7 @@
 import { Token } from "@/ast/Token";
 import { ParserErrorHandler } from "./ErrorHandler";
 import { TokenType } from "@/ast/TokenType";
-import { AssignExpr, BinaryExpr, CallExpr, CastExpr, Expr, LambdaExpr, LiteralExpr, PointExpr, PostfixExpr, PrefixExpr, ThisExpr, UnaryExpr, VariableExpr } from "@/ast/Expr";
+import { ArrayExpr, AssignExpr, BinaryExpr, CallExpr, CastExpr, Expr, GetExpr, LambdaExpr, LiteralExpr, PointExpr, PostfixExpr, PrefixExpr, StructExpr, ThisExpr, UnaryExpr, VariableExpr } from "@/ast/Expr";
 import { BlockStmt, BreakStmt, ContinueStmt, DoWhileStmt, ExpressionStmt, ForStmt, FunctionStmt, GotoStmt, IfStmt, LabelStmt, LoopStmt, ReturnStmt, Stmt, VarStmt, WhileStmt, Variable, Parameter, StructStmt, Field } from "@/ast/Stmt";
 import { FunctionTypeExpr, GeneralTypeExpr, PointerTypeExpr, TypeExpr } from "@/ast/TypeExpr";
 
@@ -15,7 +15,8 @@ class SyntaxError extends Error {
 }
 
 /**
- * 运算符优先级
+ * 运算符优先级（从低到高）
+ * 结构体表达式、数组表达式：主表达式，在 primary 中解析，不占优先级档位（视为高于 CALL）。
  */
 enum Precedence {
     NONE,
@@ -29,11 +30,10 @@ enum Precedence {
     EQUALITY,    // "==", "!="
     COMPARISON,  // "<", ">", "<=", ">="
     SHIFT,       // ">>", "<<"
-    TERM,        // "+", "-", 
+    TERM,        // "+", "-",
     FACTOR,      // "*", "/", "%",
     UNARY,       // "!", "-" , "++", "--", "new", '~'
     CALL,        // ".", "()"
-
 }
 
 
@@ -56,7 +56,7 @@ export class Parser {
     private PARSE_ERROR: boolean = false;
 
     private rules: Record<TokenType, ParseRule> = {
-        [TokenType.Dot]: [null, null, Precedence.NONE],//.
+        [TokenType.Dot]: [null, this.get.bind(this), Precedence.CALL],//.
         [TokenType.LeftParen]: [this.primary.bind(this), this.call.bind(this), Precedence.CALL],//(
 
         [TokenType.Bang]: [this.unary.bind(this), null, Precedence.NONE],//!
@@ -105,6 +105,10 @@ export class Parser {
         [TokenType.Comma]: [null, this.binary.bind(this), Precedence.COMMA],//,
 
 
+        [TokenType.LeftBrace]: [this.primary.bind(this), null, Precedence.NONE],// {
+        [TokenType.RightBrace]: [null, null, Precedence.NONE],// }
+        [TokenType.LeftBracket]: [this.primary.bind(this), null, Precedence.NONE],// [ 数组字面量，主表达式
+        [TokenType.RightBracket]: [null, null, Precedence.NONE],// ]
         [TokenType.True]: [this.primary.bind(this), null, Precedence.NONE],// true
         [TokenType.False]: [this.primary.bind(this), null, Precedence.NONE],// false
         [TokenType.Number]: [this.primary.bind(this), null, Precedence.NONE],// number
@@ -114,8 +118,6 @@ export class Parser {
         [TokenType.Arrow]: [null, null, Precedence.NONE],// ->
 
         [TokenType.RightParen]: [null, null, Precedence.NONE],//)
-        [TokenType.LeftBrace]: [null, null, Precedence.NONE],//{
-        [TokenType.RightBrace]: [null, null, Precedence.NONE],//}
         [TokenType.Question]: [null, null, Precedence.NONE],// ?
 
         [TokenType.This]: [null, null, Precedence.NONE],// this
@@ -458,7 +460,10 @@ export class Parser {
         return expr;
     }
 
-
+    private get(object: Expr, paren: Token): Expr {
+        const name = this.consume(TokenType.Identifier, "Expect field name.");
+        return new GetExpr(object, name);
+    }
     private call(callee: Expr, paren: Token): Expr {
         const args: Expr[] = [];
         if (!this.check(TokenType.RightParen)) {
@@ -524,8 +529,13 @@ export class Parser {
                 return new ThisExpr(token);
             case TokenType.Identifier:
                 return new VariableExpr(token);
+            case TokenType.LeftBrace:
+                return this.structLiteral();
+            case TokenType.LeftBracket:
+                return this.arrayLiteral();
             case TokenType.LeftParen:
                 return this.bracket();
+
             case TokenType.Less:
                 const type = this.typeExpr();
                 this.consume(TokenType.Greater, "Expect '>' after type.");
@@ -598,6 +608,33 @@ export class Parser {
     }
 
 
+    private structLiteral(): Expr {
+        const fields: { name: Token; value: Expr }[] = [];
+        const brace = this.previous();
+        if (!this.check(TokenType.RightBrace)) {
+            do {
+                const name = this.consume(TokenType.Identifier, "Expect field name.");
+                this.consume(TokenType.Colon, "Expect ':' after field name.");
+                const value = this.expression(Precedence.ASSIGNMENT);
+                fields.push({ name, value });
+            } while (this.match(TokenType.Comma));
+        }
+        this.consume(TokenType.RightBrace, "Expect '}' after struct literal.");
+        return new StructExpr(brace, fields);
+    }
+
+    /** 解析数组字面量 [ expr, ... ]，LeftBracket 已消费 */
+    private arrayLiteral(): Expr {
+        const bracket = this.previous();
+        const elements: Expr[] = [];
+        if (!this.check(TokenType.RightBracket)) {
+            do {
+                elements.push(this.expression(Precedence.ASSIGNMENT));
+            } while (this.match(TokenType.Comma));
+        }
+        this.consume(TokenType.RightBracket, "Expect ']' after array elements.");
+        return new ArrayExpr(bracket, elements);
+    }
     //辅助方法
     /**
  * 消费一个 token

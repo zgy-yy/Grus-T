@@ -75,3 +75,16 @@ export class StructType implements GrusType {
         return "struct " + this.fields.map(field => field.name + " " + field.type.toString()).join(", ");
     }
 }
+
+/** 数组类型：元素类型，长度可选（未指定则为动态数组） */
+export class ArrayType implements GrusType {
+    elementType: GrusType;
+    isConst: boolean;
+    constructor(elementType: GrusType) {
+        this.elementType = elementType;
+        this.isConst = false;
+    }
+    toString(): string {
+        return "[" + this.elementType.toString() + "]";
+    }
+}

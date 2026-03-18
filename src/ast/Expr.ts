@@ -24,6 +24,8 @@ export interface ExprVisitor<R> {
     visitLambdaExpr(expr: LambdaExpr): R;
     visitCastExpr(expr: CastExpr): R;
     visitImplicitCastExpr(expr: ImplicitCastExpr): R;
+    visitStructExpr(expr: StructExpr): R;
+    visitArrayExpr(expr: ArrayExpr): R;
 }
 
 
@@ -189,10 +191,18 @@ export class CallExpr extends Expr {
 export class GetExpr extends Expr {
     object: Expr;
     name: Token;
+    addr: boolean;
     constructor(object: Expr, name: Token) {
         super();
         this.object = object;
         this.name = name;
+        this.addr = false;
+    }
+    setAddr(addr: boolean): void {
+        this.addr = addr;
+        if (this.object instanceof GetExpr || this.object instanceof VariableExpr) {
+            this.object.setAddr(addr);
+        }
     }
     accept<R>(visitor: ExprVisitor<R>): R {
         return visitor.visitGetExpr(this);
@@ -272,11 +282,14 @@ export class LiteralExpr extends Expr {
 
 export class VariableExpr extends Expr {
     name: Token;
-    addr:boolean
+    addr: boolean
     constructor(name: Token) {
         super();
         this.name = name;
         this.addr = false;
+    }
+    setAddr(addr: boolean): void {
+        this.addr = addr;
     }
     accept<R>(visitor: ExprVisitor<R>): R {
         return visitor.visitVariableExpr(this);
@@ -328,6 +341,33 @@ export class LambdaExpr extends Expr {
     }
     accept<R>(visitor: ExprVisitor<R>): R {
         return visitor.visitLambdaExpr(this);
+    }
+}
+
+export class StructExpr extends Expr {
+    brace: Token;
+    fields: { name: Token; value: Expr }[];
+    constructor(brace: Token, fields: { name: Token; value: Expr }[]) {
+        super();
+        this.brace = brace;
+        this.fields = fields.sort((a, b) => a.name.lexeme.localeCompare(b.name.lexeme));
+    }
+    accept<R>(visitor: ExprVisitor<R>): R {
+        return visitor.visitStructExpr(this);
+    }
+}
+
+/** 数组字面量：[ expr, ... ]；resolvedType 由 Resolver 填充 */
+export class ArrayExpr extends Expr {
+    bracket: Token;
+    elements: Expr[];
+    constructor(bracket: Token, elements: Expr[]) {
+        super();
+        this.bracket = bracket;
+        this.elements = elements;
+    }
+    accept<R>(visitor: ExprVisitor<R>): R {
+        return visitor.visitArrayExpr(this);
     }
 }
 

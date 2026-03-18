@@ -9,6 +9,8 @@ export enum TokenType {
     RightParen = 'RIGHT_PAREN',// )
     LeftBrace = 'LEFT_BRACE',// {
     RightBrace = 'RIGHT_BRACE',// }
+    LeftBracket = 'LEFT_BRACKET',// [
+    RightBracket = 'RIGHT_BRACKET',// ]
     Comma = 'COMMA',// ,
     Dot = 'DOT',// .
     Minus = 'MINUS',// -
