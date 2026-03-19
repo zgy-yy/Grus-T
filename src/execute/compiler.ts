@@ -407,10 +407,6 @@ export class Compiler implements ExprVisitor<GValue>, StmtVisitor<void> {
         throw new Error("Method not implemented.");
     }
     visitLogicalExpr(expr: LogicalExpr): GValue {
-        throw new Error("Method not implemented.");
-    }
-
-    visitBinaryExpr(expr: BinaryExpr): GValue {
         const parentFunc = this.findParentFunction();
         switch (expr.operator.type) {
             case TokenType.And:
@@ -454,8 +450,10 @@ export class Compiler implements ExprVisitor<GValue>, StmtVisitor<void> {
                     return new GValue(phi, new SimpleType("bool"));
                 }
         }
+        throw new Error(`Unsupported logical operator: ${expr.operator.type}`);
+    }
 
-
+    visitBinaryExpr(expr: BinaryExpr): GValue {
 
         let left = expr.left.accept(this);
         let right = expr.right.accept(this);

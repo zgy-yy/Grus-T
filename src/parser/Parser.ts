@@ -1,7 +1,7 @@
 import { Token } from "@/ast/Token";
 import { ParserErrorHandler } from "./ErrorHandler";
 import { TokenType } from "@/ast/TokenType";
-import { ArrayExpr, AssignExpr, BinaryExpr, CallExpr, CastExpr, Expr, GetExpr, LambdaExpr, LiteralExpr, PointExpr, PostfixExpr, PrefixExpr, StructExpr, ThisExpr, UnaryExpr, VariableExpr } from "@/ast/Expr";
+import { ArrayExpr, AssignExpr, BinaryExpr, CallExpr, CastExpr, Expr, GetExpr, LambdaExpr, LiteralExpr, LogicalExpr, PointExpr, PostfixExpr, PrefixExpr, StructExpr, ThisExpr, UnaryExpr, VariableExpr } from "@/ast/Expr";
 import { BlockStmt, BreakStmt, ContinueStmt, DoWhileStmt, ExpressionStmt, ForStmt, FunctionStmt, GotoStmt, IfStmt, LabelStmt, LoopStmt, ReturnStmt, Stmt, VarStmt, WhileStmt, Variable, Parameter, StructStmt, Field } from "@/ast/Stmt";
 import { FunctionTypeExpr, GeneralTypeExpr, PointerTypeExpr, TypeExpr } from "@/ast/TypeExpr";
 
@@ -486,6 +486,10 @@ export class Parser {
         if (operator.type === TokenType.AArrow) {
             const right = this.parsePrecedence(precedence);
             return new PointExpr(left, right, operator);
+        }
+        if (operator.type === TokenType.And || operator.type === TokenType.Or) {
+            const right = this.parsePrecedence(precedence);
+            return new LogicalExpr(left, operator, right);
         }
         const right = this.parsePrecedence(precedence + 1);
         return new BinaryExpr(left, operator, right);

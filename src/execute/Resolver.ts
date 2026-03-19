@@ -221,7 +221,6 @@ export class Resolver implements ExprVisitor<GrusType>, TypeExprVisitor<GrusType
         const conditionType = this.resolveExpr(stmt.condition);
         if (!checkBooleanType(conditionType)) {
             throw new Error("Type mismatch: boolean type expected");
-            // throw this.error(stmt.condition.operator, "Type mismatch: boolean type expected");
         }
         this.resolveStmt(stmt.thenBranch);
         if (stmt.elseBranch) {
@@ -376,9 +375,20 @@ export class Resolver implements ExprVisitor<GrusType>, TypeExprVisitor<GrusType
         this.resolveExpr(expr.falseExpr);
     }
     visitLogicalExpr(expr: LogicalExpr): GrusType {
-        throw new Error("Method not implemented.");
-        this.resolveExpr(expr.left);
-        this.resolveExpr(expr.right);
+        let leftType = this.resolveExpr(expr.left);
+        if (leftType instanceof PointerType) {
+            expr.left = new DereferenceExpr(expr.operator, expr.left);
+            leftType = expr.left.accept(this);
+        }
+        let rightType = this.resolveExpr(expr.right);
+        if (rightType instanceof PointerType) {
+            expr.right = new DereferenceExpr(expr.operator, expr.right);
+            rightType = expr.right.accept(this);
+        }
+        if (!checkBooleanType(leftType) || !checkBooleanType(rightType)) {
+            throw this.error(expr.operator, "Type mismatch: boolean type expected");
+        }
+        return new SimpleType("bool");
     }
     visitBinaryExpr(expr: BinaryExpr): GrusType {
         let leftType = this.resolveExpr(expr.left);
@@ -406,10 +416,6 @@ export class Resolver implements ExprVisitor<GrusType>, TypeExprVisitor<GrusType
                 expr.right = this.implicitTypeConversion(expr.right, leftType);
             }
             return new SimpleType("bool");
-        } else if (['&&', '||'].includes(expr.operator.lexeme)) {
-            if (!checkBooleanType(leftType) || !checkBooleanType(rightType)) {
-                throw this.error(expr.operator, "Type mismatch: boolean type expected");
-            }
         } else if ([',', '='].includes(expr.operator.lexeme)) {
             return rightType;
         } else {
