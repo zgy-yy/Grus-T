@@ -9,6 +9,8 @@ export abstract class Expr {
 export interface ExprVisitor<R> {
     visitAssignExpr(expr: AssignExpr): R;
     visitPointExpr(expr: PointExpr): R;
+    visitDereferenceExpr(expr: DereferenceExpr): R;
+    visitAddressExpr(expr: AddressExpr): R;
     visitConditionalExpr(expr: ConditionalExpr): R;
     visitLogicalExpr(expr: LogicalExpr): R;
     visitBinaryExpr(expr: BinaryExpr): R;
@@ -17,7 +19,6 @@ export interface ExprVisitor<R> {
     visitPostfixExpr(expr: PostfixExpr): R;
     visitPrefixExpr(expr: PrefixExpr): R;
     visitCallExpr(expr: CallExpr): R;
-    visitSetExpr(expr: SetExpr): R;
     visitGetExpr(expr: GetExpr): R;
     visitThisExpr(expr: ThisExpr): R;
     visitVariableExpr(expr: VariableExpr): R;
@@ -27,7 +28,6 @@ export interface ExprVisitor<R> {
     visitStructExpr(expr: StructExpr): R;
     visitArrayExpr(expr: ArrayExpr): R;
 }
-
 
 
 /**
@@ -61,6 +61,34 @@ export class PointExpr extends Expr {
     }
     accept<R>(visitor: ExprVisitor<R>): R {
         return visitor.visitPointExpr(this);
+    }
+}
+
+
+//解引用
+export class DereferenceExpr extends Expr {
+    name: Token;
+    target: Expr;
+    constructor(name: Token, target: Expr) {
+        super();
+        this.name = name;
+        this.target = target;
+
+    }
+    accept<R>(visitor: ExprVisitor<R>): R {
+        return visitor.visitDereferenceExpr(this);
+    }
+}
+
+//取地址
+export class AddressExpr extends Expr {
+    target: Expr;
+    constructor(target: Expr) {
+        super();
+        this.target = target;
+    }
+    accept<R>(visitor: ExprVisitor<R>): R {
+        return visitor.visitAddressExpr(this);
     }
 }
 
@@ -191,41 +219,15 @@ export class CallExpr extends Expr {
 export class GetExpr extends Expr {
     object: Expr;
     name: Token;
-    addr: boolean;
     constructor(object: Expr, name: Token) {
         super();
         this.object = object;
         this.name = name;
-        this.addr = false;
-    }
-    setAddr(addr: boolean): void {
-        this.addr = addr;
-        if (this.object instanceof GetExpr || this.object instanceof VariableExpr) {
-            this.object.setAddr(addr);
-        }
     }
     accept<R>(visitor: ExprVisitor<R>): R {
         return visitor.visitGetExpr(this);
     }
 }
-
-
-export class SetExpr extends Expr {
-    object: Expr;
-    name: Token;
-    value: Expr;
-    constructor(object: Expr, name: Token, value: Expr) {
-        super();
-        this.object = object;
-        this.name = name;
-        this.value = value;
-    }
-
-    accept<R>(visitor: ExprVisitor<R>): R {
-        return visitor.visitSetExpr(this);
-    }
-}
-
 
 export class ThisExpr extends Expr {
     keyword: Token;
@@ -282,14 +284,9 @@ export class LiteralExpr extends Expr {
 
 export class VariableExpr extends Expr {
     name: Token;
-    addr: boolean
     constructor(name: Token) {
         super();
         this.name = name;
-        this.addr = false;
-    }
-    setAddr(addr: boolean): void {
-        this.addr = addr;
     }
     accept<R>(visitor: ExprVisitor<R>): R {
         return visitor.visitVariableExpr(this);
