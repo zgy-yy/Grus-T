@@ -127,7 +127,7 @@ export class Resolver implements ExprVisitor<GrusType>, TypeExprVisitor<GrusType
         }
         let fieldTypes: { name: string, type: GrusType, isConst: boolean }[] = [];
         fieldTypes = stmt.fields.map(field => {
-            const type = field.type.accept(this);
+            let type = field.type.accept(this);
             return { name: field.name.lexeme, type: type, isConst: false };
         }).sort((a, b) => a.name.localeCompare(b.name));
         const structType = new StructType(fieldTypes);
@@ -142,7 +142,7 @@ export class Resolver implements ExprVisitor<GrusType>, TypeExprVisitor<GrusType
             if (_var.operator.type === TokenType.Equal) {
                 let initType = _var.defaultValue.accept(this)
                 if ((initType instanceof PointerType)) {
-                    _var.defaultValue = new DereferenceExpr(_var.name, _var.defaultValue);
+                    _var.defaultValue = new DereferenceExpr(_var.defaultValue);
                     initType = _var.defaultValue.accept(this);
                 }
                 if (_var.type) {
@@ -174,8 +174,9 @@ export class Resolver implements ExprVisitor<GrusType>, TypeExprVisitor<GrusType
                         throw this.error(_var.operator, `Type mismatch`)
                     }
                     this.define(_var.name, varType);
+                    console.log("====varType",_var.name,varType);
                 } else {
-                    this.define(_var.name, new PointerType(initType));
+                    this.define(_var.name, initType);
                 }
             }
         }
@@ -218,7 +219,11 @@ export class Resolver implements ExprVisitor<GrusType>, TypeExprVisitor<GrusType
     }
     visitIfStmt(stmt: IfStmt): void {
         this.currentFun.ifStack.push('if');
-        const conditionType = this.resolveExpr(stmt.condition);
+        let conditionType = this.resolveExpr(stmt.condition);
+        if (conditionType instanceof PointerType) {
+            stmt.condition = new DereferenceExpr(stmt.condition);
+            conditionType = stmt.condition.accept(this);
+        }
         if (!checkBooleanType(conditionType)) {
             throw new Error("Type mismatch: boolean type expected");
         }
@@ -231,7 +236,11 @@ export class Resolver implements ExprVisitor<GrusType>, TypeExprVisitor<GrusType
         this.currentFun.ifStack.pop();
     }
     visitWhileStmt(stmt: WhileStmt): void {
-        const conditionType = this.resolveExpr(stmt.condition);
+        let conditionType = this.resolveExpr(stmt.condition);
+        if (conditionType instanceof PointerType) {
+            stmt.condition = new DereferenceExpr(stmt.condition);
+            conditionType = stmt.condition.accept(this);
+        }
         if (!checkBooleanType(conditionType)) {
             throw new Error("Type mismatch: boolean type expected");
         }
@@ -253,7 +262,11 @@ export class Resolver implements ExprVisitor<GrusType>, TypeExprVisitor<GrusType
         if (stmt.initializer) {
             this.resolveStmt(stmt.initializer);
         }
-        const conditionType = this.resolveExpr(stmt.condition);
+        let conditionType = this.resolveExpr(stmt.condition);
+        if (conditionType instanceof PointerType) {
+            stmt.condition = new DereferenceExpr(stmt.condition);
+            conditionType = stmt.condition.accept(this);
+        }
         if (!checkBooleanType(conditionType)) {
             throw new Error("Type mismatch: boolean type expected");
         }
@@ -337,10 +350,9 @@ export class Resolver implements ExprVisitor<GrusType>, TypeExprVisitor<GrusType
     visitAssignExpr(expr: AssignExpr): GrusType {
         let leftType = expr.target.accept(this);
         if (leftType instanceof PointerType) {
-            expr.target = new DereferenceExpr(expr.equal, expr.target);
+            expr.target = new DereferenceExpr(expr.target);
             leftType = expr.target.accept(this);
         }
-        console.log(leftType);
         const rightType = expr.value.accept(this);
         if (!checkSameType(leftType, rightType)) {
             throw this.error(expr.equal, `Type mismatch: ${leftType} != ${rightType}`);
@@ -350,7 +362,6 @@ export class Resolver implements ExprVisitor<GrusType>, TypeExprVisitor<GrusType
         return leftType;
     }
     visitPointExpr(expr: PointExpr): GrusType {
-
         if (expr.target instanceof VariableExpr) {
             const targetType = expr.target.accept(this);
             if (!(targetType instanceof PointerType)) {
@@ -377,12 +388,12 @@ export class Resolver implements ExprVisitor<GrusType>, TypeExprVisitor<GrusType
     visitLogicalExpr(expr: LogicalExpr): GrusType {
         let leftType = this.resolveExpr(expr.left);
         if (leftType instanceof PointerType) {
-            expr.left = new DereferenceExpr(expr.operator, expr.left);
+            expr.left = new DereferenceExpr(expr.left);
             leftType = expr.left.accept(this);
         }
         let rightType = this.resolveExpr(expr.right);
         if (rightType instanceof PointerType) {
-            expr.right = new DereferenceExpr(expr.operator, expr.right);
+            expr.right = new DereferenceExpr(expr.right);
             rightType = expr.right.accept(this);
         }
         if (!checkBooleanType(leftType) || !checkBooleanType(rightType)) {
@@ -393,12 +404,12 @@ export class Resolver implements ExprVisitor<GrusType>, TypeExprVisitor<GrusType
     visitBinaryExpr(expr: BinaryExpr): GrusType {
         let leftType = this.resolveExpr(expr.left);
         if (leftType instanceof PointerType) {
-            expr.left = new DereferenceExpr(expr.operator, expr.left);
+            expr.left = new DereferenceExpr(expr.left);
             leftType = expr.left.accept(this);
         }
         let rightType = this.resolveExpr(expr.right)
         if (rightType instanceof PointerType) {
-            expr.right = new DereferenceExpr(expr.operator, expr.right);
+            expr.right = new DereferenceExpr(expr.right);
             rightType = expr.right.accept(this);
         }
         if (['<<', '>>', '|', '&', '^'].includes(expr.operator.lexeme)) {
@@ -432,7 +443,7 @@ export class Resolver implements ExprVisitor<GrusType>, TypeExprVisitor<GrusType
     visitUnaryExpr(expr: UnaryExpr): GrusType {
         let type = this.resolveExpr(expr.right);
         if (type instanceof PointerType) {
-            expr.right = new DereferenceExpr(expr.operator, expr.right);
+            expr.right = new DereferenceExpr(expr.right);
             type = expr.right.accept(this);
         }
         switch (expr.operator.type) {
@@ -462,7 +473,7 @@ export class Resolver implements ExprVisitor<GrusType>, TypeExprVisitor<GrusType
     visitPostfixExpr(expr: PostfixExpr): GrusType {
         let leftType = expr.target.accept(this);
         if (leftType instanceof PointerType) {
-            expr.target = new DereferenceExpr(expr.operator, expr.target);
+            expr.target = new DereferenceExpr(expr.target);
             leftType = expr.target.accept(this);
         }
         if (expr.operator.type === TokenType.PlusPlus || expr.operator.type === TokenType.MinusMinus) {
@@ -475,7 +486,7 @@ export class Resolver implements ExprVisitor<GrusType>, TypeExprVisitor<GrusType
     visitPrefixExpr(expr: PrefixExpr): GrusType {
         let leftType = expr.target.accept(this);
         if (leftType instanceof PointerType) {
-            expr.target = new DereferenceExpr(expr.operator, expr.target);
+            expr.target = new DereferenceExpr(expr.target);
             leftType = expr.target.accept(this);
         }
         if (expr.operator.type === TokenType.PlusPlus || expr.operator.type === TokenType.MinusMinus) {
@@ -488,7 +499,7 @@ export class Resolver implements ExprVisitor<GrusType>, TypeExprVisitor<GrusType
     visitCallExpr(expr: CallExpr): GrusType {
         let calleeType = expr.callee.accept(this);
         if (calleeType instanceof PointerType) {
-            expr.callee = new DereferenceExpr(expr.paren, expr.callee);
+            expr.callee = new DereferenceExpr(expr.callee);
             calleeType = expr.callee.accept(this);
         }
         if (calleeType instanceof FunctionType) {
@@ -499,19 +510,19 @@ export class Resolver implements ExprVisitor<GrusType>, TypeExprVisitor<GrusType
                 let argType = expr.arguments[i].accept(this);//实参类型
                 if (paramType instanceof TempOmittedType) {
                     if (argType instanceof PointerType) {
-                        expr.arguments[i] = new DereferenceExpr(expr.paren, expr.arguments[i]);
+                        expr.arguments[i] = new DereferenceExpr(expr.arguments[i]);
                         argType = expr.arguments[i].accept(this);
                     }
                     continue;
                 }
                 if (paramType instanceof PointerType) {
                     if (!(argType instanceof PointerType)) {
-                        expr.arguments[i] = new AddressExpr(expr.arguments[i]);
+                        expr.arguments[i] = new DereferenceExpr(expr.arguments[i]);
                         argType = expr.arguments[i].accept(this);
                     }
                 } else {
                     if ((argType instanceof PointerType)) {
-                        expr.arguments[i] = new DereferenceExpr(expr.paren, expr.arguments[i]);
+                        expr.arguments[i] = new DereferenceExpr(expr.arguments[i]);
                         argType = expr.arguments[i].accept(this);
                     }
                 }
@@ -532,7 +543,7 @@ export class Resolver implements ExprVisitor<GrusType>, TypeExprVisitor<GrusType
     visitGetExpr(expr: GetExpr): GrusType {
         let objectType = expr.object.accept(this);
         if (objectType instanceof PointerType) {
-            expr.object = new DereferenceExpr(expr.name, expr.object);
+            expr.object = new DereferenceExpr(expr.object);
             objectType = expr.object.accept(this);
         }
         if (objectType instanceof StructType) {
@@ -552,7 +563,7 @@ export class Resolver implements ExprVisitor<GrusType>, TypeExprVisitor<GrusType
     visitCastExpr(expr: CastExpr): GrusType {
         let sourceType = expr.source.accept(this);
         if (sourceType instanceof PointerType) {
-            expr.source = new DereferenceExpr(expr.paren, expr.source);
+            expr.source = new DereferenceExpr(expr.source);
             sourceType = expr.source.accept(this);
         }
         let targetType = expr.targetType.accept(this);
@@ -566,18 +577,29 @@ export class Resolver implements ExprVisitor<GrusType>, TypeExprVisitor<GrusType
     visitDereferenceExpr(expr: DereferenceExpr): GrusType {
         const targetType = expr.target.accept(this);
         if (!(targetType instanceof PointerType)) {
-            throw this.error(expr.name, `Type mismatch: ${targetType} != pointer type`);
+            throw new Error(`Type mismatch: ${targetType} != pointer type`);
         }
         return targetType.oriType;
     }
     visitAddressExpr(expr: AddressExpr): GrusType {
-        return new PointerType(expr.target.accept(this));
+        const targetType = expr.target.accept(this);
+        if ((targetType instanceof PointerType)) {
+            throw new Error(`Type mismatch: ${targetType} == pointer type`);
+        }
+        return new PointerType(targetType);
     }
 
 
 
     visitStructExpr(expr: StructExpr): GrusType {
-        const fieldTypes = expr.fields.map(field => {
+        const fieldTypes = expr.fields.map((field, i) => {
+            let type = field.value.accept(this);
+            if (field.operator.type === TokenType.ColonArrow) {
+                if (!(type instanceof PointerType)) {
+                    field.value = new AddressExpr(field.value);
+                    type = field.value.accept(this);
+                }
+            }
             return {
                 name: field.name.lexeme,
                 type: field.value.accept(this),

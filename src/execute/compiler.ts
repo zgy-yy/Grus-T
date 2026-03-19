@@ -855,9 +855,17 @@ export class Compiler implements ExprVisitor<GValue>, StmtVisitor<void> {
 
     visitDereferenceExpr(expr: DereferenceExpr): GValue {
         const target = expr.target.accept(this);
-        const targetType = this.llvmType(target.gType);
+        if (!(target.gType instanceof PointerType)) {
+            throw new Error(`Type mismatch: ${target.gType} != pointer type`);
+        }
+        if (this.isLeft) {
+            const targetType = this.llvmType(target.gType)
+            const targetValue = this.builder.CreateLoad(targetType, target.val);
+            return new GValue(targetValue, target.gType);
+        }
+        const targetType = this.llvmType(target.gType.oriType)
         const targetValue = this.builder.CreateLoad(targetType, target.val);
-        return new GValue(targetValue, target.gType);
+        return new GValue(targetValue, target.gType.oriType);
     }
     visitAddressExpr(expr: AddressExpr): GValue {
         this.isLeft = true;

@@ -92,7 +92,7 @@ export class Scanner {
         this.addToken(TokenType.Question);
         break;
       case ':':
-        this.addToken(TokenType.Colon);
+        this.addToken(this.match('>') ? TokenType.ColonArrow : TokenType.Colon);
         break;
       case ';':
         this.addToken(TokenType.Semicolon);

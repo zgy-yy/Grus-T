@@ -131,6 +131,7 @@ export class Parser {
         [TokenType.Semicolon]: [null, null, Precedence.NONE],// ;
 
         [TokenType.Colon]: [null, null, Precedence.NONE],// :
+        [TokenType.ColonArrow]: [null, null, Precedence.NONE],// :>
         [TokenType.Class]: [null, null, Precedence.NONE],// class
         [TokenType.Struct]: [null, null, Precedence.NONE],// struct
         [TokenType.Else]: [null, null, Precedence.NONE],// else
@@ -613,14 +614,20 @@ export class Parser {
 
 
     private structLiteral(): Expr {
-        const fields: { name: Token; value: Expr }[] = [];
+        const fields: { name: Token; operator: Token; value: Expr }[] = [];
         const brace = this.previous();
         if (!this.check(TokenType.RightBrace)) {
             do {
                 const name = this.consume(TokenType.Identifier, "Expect field name.");
-                this.consume(TokenType.Colon, "Expect ':' after field name.");
+                let operator = null;
+                if (this.check(TokenType.ColonArrow)) {
+                    operator = this.consume(TokenType.ColonArrow, "Expect ':>' after field name.");
+
+                } else {
+                    operator = this.consume(TokenType.Colon, "Expect ':' after field name.");
+                }
                 const value = this.expression(Precedence.ASSIGNMENT);
-                fields.push({ name, value });
+                fields.push({ name, operator, value });
             } while (this.match(TokenType.Comma));
         }
         this.consume(TokenType.RightBrace, "Expect '}' after struct literal.");

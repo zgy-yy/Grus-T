@@ -67,11 +67,9 @@ export class PointExpr extends Expr {
 
 //解引用
 export class DereferenceExpr extends Expr {
-    name: Token;
     target: Expr;
-    constructor(name: Token, target: Expr) {
+    constructor(target: Expr) {
         super();
-        this.name = name;
         this.target = target;
 
     }
@@ -343,8 +341,12 @@ export class LambdaExpr extends Expr {
 
 export class StructExpr extends Expr {
     brace: Token;
-    fields: { name: Token; value: Expr }[];
-    constructor(brace: Token, fields: { name: Token; value: Expr }[]) {
+    fields: {
+        name: Token;
+        operator: Token;
+        value: Expr
+    }[];
+    constructor(brace: Token, fields: { name: Token; operator: Token; value: Expr }[]) {
         super();
         this.brace = brace;
         this.fields = fields.sort((a, b) => a.name.lexeme.localeCompare(b.name.lexeme));

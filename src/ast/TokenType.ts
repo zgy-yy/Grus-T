@@ -54,6 +54,7 @@ export enum TokenType {
     LessLessEqual = 'LESS_LESS_EQUAL',// <<=
     Arrow = 'ARROW',// ->
     AArrow = 'A_ARROW',// =>
+    ColonArrow = 'COLON_ARROW',// :>
     // 关键字
     Goto = 'GOTO',// goto
     Class = 'CLASS',// class
