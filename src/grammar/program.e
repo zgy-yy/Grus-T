@@ -1,18 +1,11 @@
 struct Point {
-  i32 x, y;
-  @i32 ap;
-}
-
-fun foo(@Point x)@Point{
-  return x;
+  i32 x;
+  i8 y;
 }
 
 fun main() i32 {
-  let x=12;
-  let b =89;
-  let Point p = { x: 1, y: 2 ,ap:>x};
-  let @Point rp => p;
-  foo(p).ap=>b;
-  printf("%d\\n", p.ap);
+  let Point p = { x: 11, y: <i8>1229 };
+  printf("%d\\n", p.x);
+  printf("%d\\n", p.y);
   return 0;
 }

@@ -579,49 +579,31 @@ export class Compiler implements ExprVisitor<GValue>, StmtVisitor<void> {
         throw new Error(`Unsupported unary operator: ${operator.type}`);
     }
     visitLiteralExpr(expr: LiteralExpr): GValue {
-        switch (expr.literalType) {
+        switch (typeof expr.value) {
             case 'string':
                 {
                     const val = this.builder.CreateGlobalStringPtr(expr.value);
                     return new GValue(val, new SimpleType("string"));
                 }
-            case 'bool':
+            case 'boolean':
                 {
-                    const val = this.builder.getInt1(expr.value === 'true' ? true : false);
+                    const val = this.builder.getInt1(expr.value);
                     return new GValue(val, new SimpleType("bool"));
                 }
-            case 'i8':
+
+            case 'number':
                 {
-                    const val = this.builder.getInt8(Number(expr.value));
-                    return new GValue(val, new SimpleType("i8"));
+                    if (Number.isInteger(expr.value)) {
+                        const val = this.builder.getInt32(expr.value);
+                        return new GValue(val, new SimpleType("i32"));
+                    }else{
+                        const floatTy = llvm.Type.getFloatTy(this.context);
+                        const val = llvm.ConstantFP.get(floatTy, expr.value);
+                        return new GValue(val, new SimpleType("float"));
+                    }
                 }
-            case 'i16':
-                {
-                    const val = this.builder.getInt16(Number(expr.value));
-                    return new GValue(val, new SimpleType("i16"));
-                }
-            case 'i32':
-                {
-                    const val = this.builder.getInt32(Number(expr.value));
-                    return new GValue(val, new SimpleType("i32"));
-                }
-            case 'i64':
-                {
-                    const val = this.builder.getInt64(Number(expr.value));
-                    return new GValue(val, new SimpleType("i64"));
-                }
-            case 'float':
-                {
-                    const floatTy = llvm.Type.getFloatTy(this.context);
-                    const val = llvm.ConstantFP.get(floatTy, Number(expr.value));
-                    return new GValue(val, new SimpleType("float"));
-                }
-            case 'double':
-                {
-                    const doubleTy = llvm.Type.getDoubleTy(this.context);
-                    const val = llvm.ConstantFP.get(doubleTy, Number(expr.value));
-                    return new GValue(val, new SimpleType("double"));
-                }
+
+
         }
         const val = this.builder.getInt32(0);
         return new GValue(val, new SimpleType("i32"));

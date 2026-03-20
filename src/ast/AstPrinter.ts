@@ -1,4 +1,4 @@
-import { ArrayExpr, AssignExpr, BinaryExpr, CallExpr, CastExpr, Expr, ExprVisitor, GetExpr, ImplicitCastExpr, LambdaExpr, LiteralExpr, LogicalExpr, PointExpr, PostfixExpr, PrefixExpr, SetExpr, StructExpr, ThisExpr, UnaryExpr, VariableExpr } from "@/ast/Expr";
+import { AddressExpr, ArrayExpr, AssignExpr, BinaryExpr, CallExpr, CastExpr, ConditionalExpr, DereferenceExpr, Expr, ExprVisitor, GetExpr, ImplicitCastExpr, LambdaExpr, LiteralExpr, LogicalExpr, PointExpr, PostfixExpr, PrefixExpr, StructExpr, ThisExpr, UnaryExpr, VariableExpr } from "@/ast/Expr";
 
 
 
@@ -8,13 +8,13 @@ export class AstPrinter implements ExprVisitor<string> {
         return expr.accept(this);
     }
     visitAssignExpr(expr: AssignExpr): string {
-        return this.parenthesize("=", expr.name.lexeme, expr.value.accept(this));
+        return this.parenthesize("=", expr.target.accept(this), expr.value.accept(this));
     }
     visitPointExpr(expr: PointExpr): string {
-        return this.parenthesize("=>", expr.name.lexeme, expr.value.accept(this));
+        return this.parenthesize("=>", expr.target.accept(this), expr.value.accept(this));
     }
     visitConditionalExpr(expr: ConditionalExpr): string {
-        return this.parenthesize("?", expr.condition, expr.trueExpr, expr.falseExpr);
+        return this.parenthesize("?", expr.condition.accept(this), expr.trueExpr.accept(this), expr.falseExpr.accept(this));
     }
     visitLogicalExpr(expr: LogicalExpr): string {
         return this.parenthesize(expr.operator.lexeme, expr.left, expr.right);
@@ -29,16 +29,13 @@ export class AstPrinter implements ExprVisitor<string> {
     }
 
     visitPostfixExpr(expr: PostfixExpr): string {
-        return this.parenthesize(expr.name.lexeme, expr.operator.lexeme);
+        return this.parenthesize(expr.target.accept(this), expr.operator.lexeme);
     }
     visitPrefixExpr(expr: PrefixExpr): string {
-        return this.parenthesize(expr.operator.lexeme, expr.name.lexeme);
+        return this.parenthesize(expr.operator.lexeme, expr.target.accept(this));
     }
     visitCallExpr(expr: CallExpr): string {
         return this.parenthesize("call", expr.callee, ...expr.arguments);
-    }
-    visitSetExpr(expr: SetExpr): string {
-        return this.parenthesize("set", expr.object, expr.name.lexeme, expr.value);
     }
     visitGetExpr(expr: GetExpr): string {
         return this.parenthesize("get", expr.object, expr.name.lexeme);
@@ -50,7 +47,7 @@ export class AstPrinter implements ExprVisitor<string> {
         return ""
     }
     visitCastExpr(expr: CastExpr): string {
-        return this.parenthesize("cast", expr.type.toString(), expr.source.accept(this));
+        return this.parenthesize("cast", expr.targetType.toString(), expr.source.accept(this));
     }
 
 
@@ -64,7 +61,7 @@ export class AstPrinter implements ExprVisitor<string> {
     }
     visitStructExpr(expr: StructExpr): string {
         const fields = expr.fields.map(f => `${f.name.lexeme}: ${f.value.accept(this)}`).join(", ");
-        return `${expr.typeName.lexeme} { ${fields} }`;
+        return `{ ${fields} }`;
     }
     visitArrayExpr(expr: ArrayExpr): string {
         const elts = expr.elements.map(e => e.accept(this)).join(", ");
@@ -72,6 +69,12 @@ export class AstPrinter implements ExprVisitor<string> {
     }
     visitImplicitCastExpr(expr: ImplicitCastExpr): string {
         return expr.source.accept(this);
+    }
+    visitDereferenceExpr(expr: DereferenceExpr): string {
+        return this.parenthesize("*", expr.target.accept(this));
+    }
+    visitAddressExpr(expr: AddressExpr): string {
+        return this.parenthesize("&", expr.target.accept(this));
     }
 
     private parenthesize(name: string, ...exprs: (Expr | string)[]): string {

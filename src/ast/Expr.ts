@@ -280,32 +280,26 @@ export class ThisExpr extends Expr {
  * 字面量表达式
  */
 export class LiteralExpr extends Expr {
-    literalType: literalType;
-    value: string;
+    value: string | boolean | null | number;
     constructor(value: string) {
         super();
         this.value = value;
         switch (value) {
             case 'true':
-                this.literalType = 'bool';
+                this.value = true;
                 break;
             case 'false':
-                this.literalType = 'bool';
+                this.value = false;
                 break;
             case 'null':
-                this.literalType = 'null';
-                break;
-            case 'void':
-                this.literalType = 'void';
+                this.value = null;
                 break;
             default:
                 const num = Number(value);
                 if (isNaN(num)) {
-                    this.literalType = 'string';
-                } else if (value.includes('.')) {
-                    this.literalType = 'float';
+                    this.value = value;
                 } else {
-                    this.literalType = 'i32';
+                    this.value = Number(value);
                 }
                 break;
         }

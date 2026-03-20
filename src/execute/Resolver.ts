@@ -476,7 +476,22 @@ export class Resolver implements ExprVisitor<GrusType>, TypeExprVisitor<GrusType
         return type;
     }
     visitLiteralExpr(expr: LiteralExpr): GrusType {
-        return new SimpleType(expr.literalType);
+        switch (typeof expr.value) {
+            case 'string':
+                return new SimpleType("string");
+            case 'boolean':
+                return new SimpleType("bool");
+            case 'number':
+                if (typeof expr.value === 'number') {
+                    if (Number.isInteger(expr.value)) {
+                        return new SimpleType("i32");
+                    } else {
+                        return new SimpleType("float");
+                    }
+                }
+                return new SimpleType("void");
+        }
+        return new SimpleType("void");
     }
     visitPostfixExpr(expr: PostfixExpr): GrusType {
         let leftType = expr.target.accept(this);
@@ -823,15 +838,17 @@ function widthOf(t: literalType): number {
     }
 }
 
-function checkSameType(left: GrusType, right: GrusType): boolean {
-    if (checkNumberType(left) && checkNumberType(right)) {
-        return true;
+function checkSameType(left: GrusType, right: GrusType, strict: boolean = false): boolean {
+    if (!strict) {
+        if (checkNumberType(left) && checkNumberType(right)) {
+            return true;
+        }
     }
     if (left instanceof SimpleType && right instanceof SimpleType) {
         return left.type === right.type;
     }
     if (left instanceof PointerType && right instanceof PointerType) {
-        return checkSameType(left.oriType, right.oriType);
+        return checkSameType(left.oriType, right.oriType, true);
     }
     if (left instanceof StructType && right instanceof StructType) {
         if (left.fields.length !== right.fields.length) {
@@ -843,7 +860,7 @@ function checkSameType(left: GrusType, right: GrusType): boolean {
             if (leftField.name !== rightField.name) {
                 return false;
             }
-            if (!checkSameType(leftField.type, rightField.type)) {
+            if (!checkSameType(leftField.type, rightField.type, true)) {
                 return false;
             }
         }
