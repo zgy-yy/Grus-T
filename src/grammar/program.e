@@ -1,8 +1,14 @@
-fun main() i32 {
-  let i32 a = 10;
-  let @i32 ptr1 => a;
+struct Point {
+  i32 x, y;
+  @i32 ap;
+}
 
-  ptr1 = 40;
-  printf("%d %d\\n", a,ptr1);
+fun main() i32 {
+  let x=12;
+  let Point p = { x: 1, y: 2 ,ap:>x};
+  let @Point rp => p;
+  rp.x = 50;
+  rp.ap = 8;
+  printf("%d\\n", x);
   return 0;
 }

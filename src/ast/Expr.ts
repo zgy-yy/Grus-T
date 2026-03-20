@@ -3,7 +3,10 @@ import { GSymbol, Parameter, Stmt } from "./Stmt";
 import { Token } from "./Token";
 import { TypeExpr } from "./TypeExpr";
 export abstract class Expr {
+    canAssign: boolean = false
+    lvalue: boolean = false;
     abstract accept<R>(visitor: ExprVisitor<R>): R;
+    abstract setLvalue(lvalue: boolean): void
 }
 
 export interface ExprVisitor<R> {
@@ -47,6 +50,8 @@ export class AssignExpr extends Expr {
     accept<R>(visitor: ExprVisitor<R>): R {
         return visitor.visitAssignExpr(this);
     }
+    setLvalue(lvalue: boolean): void {
+    }
 }
 //指向表达式
 export class PointExpr extends Expr {
@@ -62,19 +67,26 @@ export class PointExpr extends Expr {
     accept<R>(visitor: ExprVisitor<R>): R {
         return visitor.visitPointExpr(this);
     }
+    setLvalue(lvalue: boolean): void {
+    }
 }
 
 
 //解引用
 export class DereferenceExpr extends Expr {
+    canAssign: boolean = true;
     target: Expr;
     constructor(target: Expr) {
         super();
         this.target = target;
-
     }
     accept<R>(visitor: ExprVisitor<R>): R {
         return visitor.visitDereferenceExpr(this);
+    }
+    setLvalue(lvalue: boolean): void {
+        this.lvalue = lvalue;
+        this.target.setLvalue(lvalue);
+        this.canAssign = lvalue;
     }
 }
 
@@ -84,9 +96,12 @@ export class AddressExpr extends Expr {
     constructor(target: Expr) {
         super();
         this.target = target;
+        this.target.setLvalue(true);
     }
     accept<R>(visitor: ExprVisitor<R>): R {
         return visitor.visitAddressExpr(this);
+    }
+    setLvalue(lvalue: boolean): void {
     }
 }
 
@@ -107,6 +122,8 @@ export class ConditionalExpr extends Expr {
     accept<R>(visitor: ExprVisitor<R>): R {
         return visitor.visitConditionalExpr(this);
     }
+    setLvalue(lvalue: boolean): void {
+    }
 }
 
 
@@ -126,6 +143,8 @@ export class LogicalExpr extends Expr {
     }
     accept<R>(visitor: ExprVisitor<R>): R {
         return visitor.visitLogicalExpr(this);
+    }
+    setLvalue(lvalue: boolean): void {
     }
 }
 
@@ -148,6 +167,8 @@ export class BinaryExpr extends Expr {
     accept<R>(visitor: ExprVisitor<R>): R {
         return visitor.visitBinaryExpr(this);
     }
+    setLvalue(lvalue: boolean): void {
+    }
 }
 
 
@@ -164,6 +185,8 @@ export class UnaryExpr extends Expr {
     }
     accept<R>(visitor: ExprVisitor<R>): R {
         return visitor.visitUnaryExpr(this);
+    }
+    setLvalue(lvalue: boolean): void {
     }
 }
 
@@ -182,6 +205,8 @@ export class PostfixExpr extends Expr {
     accept<R>(visitor: ExprVisitor<R>): R {
         return visitor.visitPostfixExpr(this);
     }
+    setLvalue(lvalue: boolean): void {
+    }
 }
 
 export class PrefixExpr extends Expr {
@@ -194,6 +219,8 @@ export class PrefixExpr extends Expr {
     }
     accept<R>(visitor: ExprVisitor<R>): R {
         return visitor.visitPrefixExpr(this);
+    }
+    setLvalue(lvalue: boolean): void {
     }
 }
 
@@ -212,6 +239,8 @@ export class CallExpr extends Expr {
     accept<R>(visitor: ExprVisitor<R>): R {
         return visitor.visitCallExpr(this);
     }
+    setLvalue(lvalue: boolean): void {
+    }
 }
 
 export class GetExpr extends Expr {
@@ -225,9 +254,15 @@ export class GetExpr extends Expr {
     accept<R>(visitor: ExprVisitor<R>): R {
         return visitor.visitGetExpr(this);
     }
+    setLvalue(lvalue: boolean): void {
+        this.lvalue = lvalue;
+        this.object.setLvalue(lvalue);
+        this.canAssign = lvalue;
+    }
 }
 
 export class ThisExpr extends Expr {
+    canAssign: boolean = true;
     keyword: Token;
     constructor(keyword: Token) {
         super();
@@ -235,6 +270,8 @@ export class ThisExpr extends Expr {
     }
     accept<R>(visitor: ExprVisitor<R>): R {
         return visitor.visitThisExpr(this);
+    }
+    setLvalue(lvalue: boolean): void {
     }
 }
 
@@ -276,6 +313,8 @@ export class LiteralExpr extends Expr {
     accept<R>(visitor: ExprVisitor<R>): R {
         return visitor.visitLiteralExpr(this);
     }
+    setLvalue(lvalue: boolean): void {
+    }
 }
 
 
@@ -288,6 +327,10 @@ export class VariableExpr extends Expr {
     }
     accept<R>(visitor: ExprVisitor<R>): R {
         return visitor.visitVariableExpr(this);
+    }
+    setLvalue(lvalue: boolean): void {
+        this.lvalue = lvalue;
+        this.canAssign = lvalue;
     }
 }
 
@@ -304,6 +347,8 @@ export class CastExpr extends Expr {
     accept<R>(visitor: ExprVisitor<R>): R {
         return visitor.visitCastExpr(this);
     }
+    setLvalue(lvalue: boolean): void {
+    }
 }
 
 export class ImplicitCastExpr extends Expr {
@@ -316,6 +361,8 @@ export class ImplicitCastExpr extends Expr {
     }
     accept<R>(visitor: ExprVisitor<R>): R {
         return visitor.visitImplicitCastExpr(this);
+    }
+    setLvalue(lvalue: boolean): void {
     }
 }
 
@@ -337,6 +384,8 @@ export class LambdaExpr extends Expr {
     accept<R>(visitor: ExprVisitor<R>): R {
         return visitor.visitLambdaExpr(this);
     }
+    setLvalue(lvalue: boolean): void {
+    }
 }
 
 export class StructExpr extends Expr {
@@ -354,6 +403,8 @@ export class StructExpr extends Expr {
     accept<R>(visitor: ExprVisitor<R>): R {
         return visitor.visitStructExpr(this);
     }
+    setLvalue(lvalue: boolean): void {
+    }
 }
 
 /** 数组字面量：[ expr, ... ]；resolvedType 由 Resolver 填充 */
@@ -367,6 +418,8 @@ export class ArrayExpr extends Expr {
     }
     accept<R>(visitor: ExprVisitor<R>): R {
         return visitor.visitArrayExpr(this);
+    }
+    setLvalue(lvalue: boolean): void {
     }
 }
 

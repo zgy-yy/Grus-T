@@ -132,6 +132,68 @@ fun main() i32 {
     });
   });
 
+  describe('指针作为返回值', () => {
+    it('应该正确返回指针类型 @i32 并用于修改原变量', () => {
+      const source = `
+fun identityPtr(@i32 p) @i32 {
+  return p;
+}
+
+fun main() i32 {
+  let i32 x = 7;
+  let @i32 p => x;
+  let @i32 q => identityPtr(p);
+  q = 123;
+  printf("%d\\n", x);
+  return 0;
+}
+`;
+      const output = compileAndRun(source);
+      expect(output).toContain('123');
+    });
+
+    it('应该支持嵌套调用返回指针', () => {
+      const source = `
+fun pass(@i32 p) @i32 {
+  return p;
+}
+
+fun main() i32 {
+  let i32 n = 0;
+  let @i32 a => n;
+  let @i32 b => pass(pass(a));
+  b = 456;
+  printf("%d\\n", n);
+  return 0;
+}
+`;
+      const output = compileAndRun(source);
+      expect(output).toContain('456');
+    });
+
+    it('返回的指针与直接指针应指向同一存储', () => {
+      const source = `
+fun getPtr(@i32 p) @i32 {
+  return p;
+}
+
+fun main() i32 {
+  let i32 x = 1;
+  let @i32 direct => x;
+  let @i32 via => getPtr(direct);
+  direct = 10;
+  printf("%d\\n", x);
+  via = 20;
+  printf("%d\\n", x);
+  return 0;
+}
+`;
+      const output = compileAndRun(source);
+      expect(output).toContain('10');
+      expect(output).toContain('20');
+    });
+  });
+
   describe('函数参数', () => {
     it('应该正确处理整数参数', () => {
       const source = `

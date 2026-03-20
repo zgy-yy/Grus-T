@@ -42,9 +42,6 @@ export class Compiler implements ExprVisitor<GValue>, StmtVisitor<void> {
         returnType: llvm.Type,
     }
 
-    private isLeft: boolean = false;
-
-
     private context: llvm.LLVMContext;
     private module: llvm.Module;
     private builder: llvm.IRBuilder;
@@ -391,9 +388,7 @@ export class Compiler implements ExprVisitor<GValue>, StmtVisitor<void> {
     // ExprVisitor methods
     visitAssignExpr(expr: AssignExpr): GValue {
         const value = expr.value.accept(this);
-        this.isLeft = true;
         const target = expr.target.accept(this);
-        this.isLeft = false;
         this.builder.CreateStore(value.val, target.val);
         return value;
     }
@@ -632,9 +627,7 @@ export class Compiler implements ExprVisitor<GValue>, StmtVisitor<void> {
         return new GValue(val, new SimpleType("i32"));
     }
     visitPostfixExpr(expr: PostfixExpr): GValue {
-        this.isLeft = true;
         const target = expr.target.accept(this);
-        this.isLeft = false;
         const oldValue = this.builder.CreateLoad(this.llvmType(target.gType), target.val);
         switch (expr.operator.type) {
             case TokenType.PlusPlus:
@@ -654,9 +647,7 @@ export class Compiler implements ExprVisitor<GValue>, StmtVisitor<void> {
         throw new Error(`Unsupported postfix operator: ${expr.operator.type}`);
     }
     visitPrefixExpr(expr: PrefixExpr): GValue {
-        this.isLeft = true;
         const target = expr.target.accept(this);
-        this.isLeft = false;
         const oldValue = this.builder.CreateLoad(this.llvmType(target.gType), target.val);
         switch (expr.operator.type) {
             case TokenType.PlusPlus:
@@ -714,13 +705,18 @@ export class Compiler implements ExprVisitor<GValue>, StmtVisitor<void> {
     }
 
     visitGetExpr(expr: GetExpr): GValue {
-        const object = expr.object.accept(this);
+        let object = expr.object.accept(this);
         const name = expr.name.lexeme;
+
+        if (expr.lvalue && object.gType instanceof PointerType) {
+            object= new GValue(object.val, object.gType.oriType);
+        }
+
         if (object.gType instanceof StructType) {
             const index = object.gType.fields.findIndex(field => field.name === name);
             const field = object.gType.fields.find(field => field.name === name);
             if (field) {
-                if (this.isLeft) {
+                if (expr.lvalue) {
                     const llvmStructType = this.llvmType(object.gType) as llvm.StructType;
                     const zero = this.builder.getInt32(0);
                     const fieldIdx = this.builder.getInt32(index);
@@ -768,7 +764,7 @@ export class Compiler implements ExprVisitor<GValue>, StmtVisitor<void> {
                 return value;
             }
         }
-        if (this.isLeft) {
+        if (expr.lvalue) {
             return value;
         }
         const lType = this.llvmType(value.gType);
@@ -858,7 +854,13 @@ export class Compiler implements ExprVisitor<GValue>, StmtVisitor<void> {
         if (!(target.gType instanceof PointerType)) {
             throw new Error(`Type mismatch: ${target.gType} != pointer type`);
         }
-        if (this.isLeft) {
+        if (expr.target instanceof CallExpr) {
+            return target;
+        }
+
+        console.log("====target in dereference", expr.target);
+
+        if (expr.lvalue) {
             const targetType = this.llvmType(target.gType)
             const targetValue = this.builder.CreateLoad(targetType, target.val);
             return new GValue(targetValue, target.gType);
@@ -868,9 +870,7 @@ export class Compiler implements ExprVisitor<GValue>, StmtVisitor<void> {
         return new GValue(targetValue, target.gType.oriType);
     }
     visitAddressExpr(expr: AddressExpr): GValue {
-        this.isLeft = true;
         const target = expr.target.accept(this);
-        this.isLeft = false;
         return new GValue(target.val, new PointerType(target.gType));
     }
 

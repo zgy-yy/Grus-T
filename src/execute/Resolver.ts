@@ -174,7 +174,6 @@ export class Resolver implements ExprVisitor<GrusType>, TypeExprVisitor<GrusType
                         throw this.error(_var.operator, `Type mismatch`)
                     }
                     this.define(_var.name, varType);
-                    console.log("====varType",_var.name,varType);
                 } else {
                     this.define(_var.name, initType);
                 }
@@ -353,7 +352,15 @@ export class Resolver implements ExprVisitor<GrusType>, TypeExprVisitor<GrusType
             expr.target = new DereferenceExpr(expr.target);
             leftType = expr.target.accept(this);
         }
-        const rightType = expr.value.accept(this);
+        expr.target.setLvalue(true);
+        if (!expr.target.canAssign) {
+            throw this.error(expr.equal, `Cannot assign to a non-assignable expression.`);
+        }
+        let rightType = expr.value.accept(this);
+        if (rightType instanceof PointerType) {
+            expr.value = new DereferenceExpr(expr.value);
+            rightType = expr.value.accept(this);
+        }
         if (!checkSameType(leftType, rightType)) {
             throw this.error(expr.equal, `Type mismatch: ${leftType} != ${rightType}`);
         }
@@ -362,17 +369,18 @@ export class Resolver implements ExprVisitor<GrusType>, TypeExprVisitor<GrusType
         return leftType;
     }
     visitPointExpr(expr: PointExpr): GrusType {
-        if (expr.target instanceof VariableExpr) {
+        if (expr.target instanceof VariableExpr || expr.target instanceof GetExpr) {
             const targetType = expr.target.accept(this);
             if (!(targetType instanceof PointerType)) {
                 throw this.error(expr.arrow, `Type mismatch: ${targetType.toString()} != pointer type`);
             }
+            expr.target.setLvalue(true);
             let valueType = expr.value.accept(this);
             if (!(valueType instanceof PointerType)) {
                 expr.value = new AddressExpr(expr.value);
                 valueType = expr.value.accept(this);
             }
-            if (!checkSameType(targetType.oriType, valueType)) {
+            if (!checkSameType(targetType, valueType)) {
                 throw this.error(expr.arrow, `Type mismatch: ${targetType} != ${valueType}`);
             }
             return targetType;
@@ -476,6 +484,7 @@ export class Resolver implements ExprVisitor<GrusType>, TypeExprVisitor<GrusType
             expr.target = new DereferenceExpr(expr.target);
             leftType = expr.target.accept(this);
         }
+        expr.target.setLvalue(true);
         if (expr.operator.type === TokenType.PlusPlus || expr.operator.type === TokenType.MinusMinus) {
             if (!checkIntegerType(leftType)) {
                 throw this.error(expr.operator, `Type mismatch: ${leftType} != integer type`);
@@ -489,6 +498,7 @@ export class Resolver implements ExprVisitor<GrusType>, TypeExprVisitor<GrusType
             expr.target = new DereferenceExpr(expr.target);
             leftType = expr.target.accept(this);
         }
+        expr.target.setLvalue(true);
         if (expr.operator.type === TokenType.PlusPlus || expr.operator.type === TokenType.MinusMinus) {
             if (!checkIntegerType(leftType)) {
                 throw this.error(expr.operator, `Type mismatch: ${leftType} != integer type`);
@@ -517,7 +527,7 @@ export class Resolver implements ExprVisitor<GrusType>, TypeExprVisitor<GrusType
                 }
                 if (paramType instanceof PointerType) {
                     if (!(argType instanceof PointerType)) {
-                        expr.arguments[i] = new DereferenceExpr(expr.arguments[i]);
+                        expr.arguments[i] = new AddressExpr(expr.arguments[i]);
                         argType = expr.arguments[i].accept(this);
                     }
                 } else {
@@ -583,6 +593,7 @@ export class Resolver implements ExprVisitor<GrusType>, TypeExprVisitor<GrusType
     }
     visitAddressExpr(expr: AddressExpr): GrusType {
         const targetType = expr.target.accept(this);
+        expr.target.setLvalue(true);
         if ((targetType instanceof PointerType)) {
             throw new Error(`Type mismatch: ${targetType} == pointer type`);
         }
