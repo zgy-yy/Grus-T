@@ -708,8 +708,15 @@ export class Compiler implements ExprVisitor<GValue>, StmtVisitor<void> {
         let object = expr.object.accept(this);
         const name = expr.name.lexeme;
 
-        if (expr.lvalue && object.gType instanceof PointerType) {
-            object= new GValue(object.val, object.gType.oriType);
+        console.log("====object in getexpr", object);
+        if (object.gType instanceof PointerType) {
+            if (expr.lvalue) {
+                object = new GValue(object.val, object.gType.oriType);
+            } else {
+                const oriType = this.llvmType(object.gType.oriType)
+                const value = this.builder.CreateLoad(oriType, object.val);
+                object = new GValue(value, object.gType.oriType);
+            }
         }
 
         if (object.gType instanceof StructType) {
@@ -857,8 +864,6 @@ export class Compiler implements ExprVisitor<GValue>, StmtVisitor<void> {
         if (expr.target instanceof CallExpr) {
             return target;
         }
-
-        console.log("====target in dereference", expr.target);
 
         if (expr.lvalue) {
             const targetType = this.llvmType(target.gType)
