@@ -1,23 +1,19 @@
-import { GrusType, literalType } from "./GrusTypes";
-import { GSymbol, Parameter, Stmt } from "./Stmt";
+import { GrusType } from "./GrusTypes";
+import { Parameter, Stmt } from "./Stmt";
 import { Token } from "./Token";
 import { TypeExpr } from "./TypeExpr";
 export abstract class Expr {
-    canAssign: boolean = false
-    lvalue: boolean = false;
     abstract accept<R>(visitor: ExprVisitor<R>): R;
-    abstract setLvalue(lvalue: boolean): void
 }
 
 export interface ExprVisitor<R> {
     visitAssignExpr(expr: AssignExpr): R;
     visitPointExpr(expr: PointExpr): R;
-    visitDereferenceExpr(expr: DereferenceExpr): R;
-    visitAddressExpr(expr: AddressExpr): R;
     visitConditionalExpr(expr: ConditionalExpr): R;
     visitLogicalExpr(expr: LogicalExpr): R;
     visitBinaryExpr(expr: BinaryExpr): R;
     visitUnaryExpr(expr: UnaryExpr): R;
+    visitCommaExpr(expr: CommaExpr): R;
     visitLiteralExpr(expr: LiteralExpr): R;
     visitPostfixExpr(expr: PostfixExpr): R;
     visitPrefixExpr(expr: PrefixExpr): R;
@@ -29,7 +25,17 @@ export interface ExprVisitor<R> {
     visitCastExpr(expr: CastExpr): R;
     visitImplicitCastExpr(expr: ImplicitCastExpr): R;
     visitStructExpr(expr: StructExpr): R;
-    visitArrayExpr(expr: ArrayExpr): R;
+    visitArrayExpr(expr: ArrayExpr): R
+    visitIndexExpr(expr: IndexExpr): R
+}
+
+
+//左值表达式,可以赋值包括 变量,数组,结构体,指针,函数(返回值为指针)
+export abstract class LExpr extends Expr {
+    arrow: boolean = false;
+    isLeftValue: boolean = false;
+    abstract setIsLeftValue(isLeftValue: boolean): void;
+    abstract setArrow(arrow: boolean): void;
 }
 
 
@@ -37,71 +43,38 @@ export interface ExprVisitor<R> {
  * 赋值表达式
  */
 export class AssignExpr extends Expr {
-    target: Expr;
+    target: LExpr;
     value: Expr;
     equal: Token;
 
-    constructor(target: Expr, value: Expr, equal: Token) {
+    constructor(target: LExpr, value: Expr, equal: Token) {
         super();
         this.target = target;
         this.value = value;
         this.equal = equal;
+        this.target.setIsLeftValue(true);
     }
     accept<R>(visitor: ExprVisitor<R>): R {
         return visitor.visitAssignExpr(this);
     }
-    setLvalue(lvalue: boolean): void {
-    }
 }
 //指向表达式
 export class PointExpr extends Expr {
-    target: Expr;
-    value: Expr;
+    target: LExpr;
+    value: LExpr;
     arrow: Token;
-    constructor(target: Expr, value: Expr, arrow: Token) {
+    constructor(target: LExpr, value: LExpr, arrow: Token) {
         super();
         this.target = target;
         this.value = value;
         this.arrow = arrow;
+        target.setArrow(true);
+        target.setIsLeftValue(true);
+        value.setArrow(true);
+        value.setIsLeftValue(false);
     }
     accept<R>(visitor: ExprVisitor<R>): R {
         return visitor.visitPointExpr(this);
-    }
-    setLvalue(lvalue: boolean): void {
-    }
-}
-
-
-//解引用
-export class DereferenceExpr extends Expr {
-    canAssign: boolean = true;
-    target: Expr;
-    constructor(target: Expr) {
-        super();
-        this.target = target;
-    }
-    accept<R>(visitor: ExprVisitor<R>): R {
-        return visitor.visitDereferenceExpr(this);
-    }
-    setLvalue(lvalue: boolean): void {
-        this.lvalue = lvalue;
-        this.target.setLvalue(lvalue);
-        this.canAssign = lvalue;
-    }
-}
-
-//取地址
-export class AddressExpr extends Expr {
-    target: Expr;
-    constructor(target: Expr) {
-        super();
-        this.target = target;
-        this.target.setLvalue(true);
-    }
-    accept<R>(visitor: ExprVisitor<R>): R {
-        return visitor.visitAddressExpr(this);
-    }
-    setLvalue(lvalue: boolean): void {
     }
 }
 
@@ -122,8 +95,6 @@ export class ConditionalExpr extends Expr {
     accept<R>(visitor: ExprVisitor<R>): R {
         return visitor.visitConditionalExpr(this);
     }
-    setLvalue(lvalue: boolean): void {
-    }
 }
 
 
@@ -143,8 +114,6 @@ export class LogicalExpr extends Expr {
     }
     accept<R>(visitor: ExprVisitor<R>): R {
         return visitor.visitLogicalExpr(this);
-    }
-    setLvalue(lvalue: boolean): void {
     }
 }
 
@@ -167,8 +136,6 @@ export class BinaryExpr extends Expr {
     accept<R>(visitor: ExprVisitor<R>): R {
         return visitor.visitBinaryExpr(this);
     }
-    setLvalue(lvalue: boolean): void {
-    }
 }
 
 
@@ -186,8 +153,6 @@ export class UnaryExpr extends Expr {
     accept<R>(visitor: ExprVisitor<R>): R {
         return visitor.visitUnaryExpr(this);
     }
-    setLvalue(lvalue: boolean): void {
-    }
 }
 
 
@@ -195,37 +160,50 @@ export class UnaryExpr extends Expr {
  * 后缀表达式
  */
 export class PostfixExpr extends Expr {
-    target: Expr;
+    target: LExpr;
     operator: Token;
-    constructor(target: Expr, operator: Token) {
+    constructor(target: LExpr, operator: Token) {
         super();
         this.target = target;
         this.operator = operator;
+        this.target.setArrow(true);
     }
     accept<R>(visitor: ExprVisitor<R>): R {
         return visitor.visitPostfixExpr(this);
     }
-    setLvalue(lvalue: boolean): void {
-    }
 }
 
 export class PrefixExpr extends Expr {
-    target: Expr;
+    target: LExpr;
     operator: Token;
-    constructor(target: Expr, operator: Token) {
+    constructor(target: LExpr, operator: Token) {
         super();
         this.target = target;
         this.operator = operator;
+        this.target.setArrow(true);
     }
     accept<R>(visitor: ExprVisitor<R>): R {
         return visitor.visitPrefixExpr(this);
     }
-    setLvalue(lvalue: boolean): void {
+}
+
+export class CommaExpr extends Expr {
+    left: Expr;
+    comma: Token;
+    right: Expr;
+    constructor(left: Expr, comma: Token, right: Expr) {
+        super();
+        this.left = left;
+        this.comma = comma;
+        this.right = right;
+    }
+    accept<R>(visitor: ExprVisitor<R>): R {
+        return visitor.visitCommaExpr(this);
     }
 }
 
 
-export class CallExpr extends Expr {
+export class CallExpr extends LExpr {
     callee: Expr;
     paren: Token;
     arguments: Expr[];
@@ -239,14 +217,18 @@ export class CallExpr extends Expr {
     accept<R>(visitor: ExprVisitor<R>): R {
         return visitor.visitCallExpr(this);
     }
-    setLvalue(lvalue: boolean): void {
+    setIsLeftValue(isLeftValue: boolean): void {
+        this.isLeftValue = isLeftValue;
+    }
+    setArrow(arrow: boolean): void {
+        this.arrow = arrow;
     }
 }
 
-export class GetExpr extends Expr {
-    object: Expr;
+export class GetExpr extends LExpr {
+    object: LExpr;
     name: Token;
-    constructor(object: Expr, name: Token) {
+    constructor(object: LExpr, name: Token) {
         super();
         this.object = object;
         this.name = name;
@@ -254,10 +236,13 @@ export class GetExpr extends Expr {
     accept<R>(visitor: ExprVisitor<R>): R {
         return visitor.visitGetExpr(this);
     }
-    setLvalue(lvalue: boolean): void {
-        this.lvalue = lvalue;
-        this.object.setLvalue(lvalue);
-        this.canAssign = lvalue;
+    setIsLeftValue(isLeftValue: boolean): void {
+        this.isLeftValue = isLeftValue;
+        this.object.setIsLeftValue(isLeftValue);
+    }
+    setArrow(arrow: boolean): void {
+        this.arrow = arrow;
+        this.object.setArrow(arrow);
     }
 }
 
@@ -270,8 +255,6 @@ export class ThisExpr extends Expr {
     }
     accept<R>(visitor: ExprVisitor<R>): R {
         return visitor.visitThisExpr(this);
-    }
-    setLvalue(lvalue: boolean): void {
     }
 }
 
@@ -307,13 +290,11 @@ export class LiteralExpr extends Expr {
     accept<R>(visitor: ExprVisitor<R>): R {
         return visitor.visitLiteralExpr(this);
     }
-    setLvalue(lvalue: boolean): void {
-    }
 }
 
 
 
-export class VariableExpr extends Expr {
+export class VariableExpr extends LExpr {
     name: Token;
     constructor(name: Token) {
         super();
@@ -322,9 +303,11 @@ export class VariableExpr extends Expr {
     accept<R>(visitor: ExprVisitor<R>): R {
         return visitor.visitVariableExpr(this);
     }
-    setLvalue(lvalue: boolean): void {
-        this.lvalue = lvalue;
-        this.canAssign = lvalue;
+    setIsLeftValue(isLeftValue: boolean): void {
+        this.isLeftValue = isLeftValue;
+    }
+    setArrow(arrow: boolean): void {
+        this.arrow = arrow;
     }
 }
 
@@ -341,8 +324,6 @@ export class CastExpr extends Expr {
     accept<R>(visitor: ExprVisitor<R>): R {
         return visitor.visitCastExpr(this);
     }
-    setLvalue(lvalue: boolean): void {
-    }
 }
 
 export class ImplicitCastExpr extends Expr {
@@ -355,8 +336,6 @@ export class ImplicitCastExpr extends Expr {
     }
     accept<R>(visitor: ExprVisitor<R>): R {
         return visitor.visitImplicitCastExpr(this);
-    }
-    setLvalue(lvalue: boolean): void {
     }
 }
 
@@ -378,8 +357,7 @@ export class LambdaExpr extends Expr {
     accept<R>(visitor: ExprVisitor<R>): R {
         return visitor.visitLambdaExpr(this);
     }
-    setLvalue(lvalue: boolean): void {
-    }
+
 }
 
 export class StructExpr extends Expr {
@@ -397,8 +375,6 @@ export class StructExpr extends Expr {
     accept<R>(visitor: ExprVisitor<R>): R {
         return visitor.visitStructExpr(this);
     }
-    setLvalue(lvalue: boolean): void {
-    }
 }
 
 /** 数组字面量：[ expr, ... ]；resolvedType 由 Resolver 填充 */
@@ -413,7 +389,27 @@ export class ArrayExpr extends Expr {
     accept<R>(visitor: ExprVisitor<R>): R {
         return visitor.visitArrayExpr(this);
     }
-    setLvalue(lvalue: boolean): void {
-    }
 }
 
+export class IndexExpr extends LExpr {
+    array: LExpr;
+    bracket: Token;
+    index: Expr;
+    constructor(array: LExpr, bracket: Token, index: Expr) {
+        super();
+        this.array = array;
+        this.bracket = bracket;
+        this.index = index;
+    }
+    accept<R>(visitor: ExprVisitor<R>): R {
+        return visitor.visitIndexExpr(this);
+    }
+    setIsLeftValue(isLeftValue: boolean): void {
+        this.isLeftValue = isLeftValue;
+        this.array.setIsLeftValue(isLeftValue);
+    }
+    setArrow(arrow: boolean): void {
+        this.arrow = arrow;
+        this.array.setArrow(arrow);
+    }
+}

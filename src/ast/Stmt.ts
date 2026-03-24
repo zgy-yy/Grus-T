@@ -174,13 +174,13 @@ export interface GSymbol {
 
 export class Variable implements GSymbol {
     name: Token;
-    type: TypeExpr|null;
+    typeExpr: TypeExpr|null;
     operator: Token;
     defaultValue: Expr
     escaped: boolean;
-    constructor(name: Token, type: TypeExpr|null, defaultValue: Expr, operator: Token) {
+    constructor(name: Token, typeExpr: TypeExpr|null, defaultValue: Expr, operator: Token) {
         this.name = name;
-        this.type = type;
+        this.typeExpr = typeExpr;
         this.defaultValue = defaultValue;
         this.escaped = false;
         this.operator = operator;
@@ -189,11 +189,11 @@ export class Variable implements GSymbol {
 
 export class Parameter implements GSymbol {
     name: Token;
-    type: TypeExpr;
+    typeExpr: TypeExpr;
     escaped: boolean;
-    constructor(name: Token, type: TypeExpr) {
+    constructor(name: Token, typeExpr: TypeExpr) {
         this.name = name;
-        this.type = type;
+        this.typeExpr = typeExpr;
         this.escaped = false;
     }
 }
@@ -247,11 +247,11 @@ export class ReturnStmt extends Stmt {
 
 export class Field {
     name: Token;
-    type: TypeExpr;
+    typeExpr: TypeExpr;
     escaped: boolean;
-    constructor(name: Token, type: TypeExpr) {
+    constructor(name: Token, typeExpr: TypeExpr) {
         this.name = name;
-        this.type = type;
+        this.typeExpr = typeExpr;
         this.escaped = false;
     }
 }

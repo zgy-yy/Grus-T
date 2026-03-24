@@ -1,4 +1,4 @@
-import { AddressExpr, ArrayExpr, AssignExpr, BinaryExpr, CallExpr, CastExpr, ConditionalExpr, DereferenceExpr, Expr, ExprVisitor, GetExpr, ImplicitCastExpr, LambdaExpr, LiteralExpr, LogicalExpr, PointExpr, PostfixExpr, PrefixExpr, StructExpr, ThisExpr, UnaryExpr, VariableExpr } from "@/ast/Expr";
+import { ArrayExpr, AssignExpr, BinaryExpr, CallExpr, CastExpr, CommaExpr, ConditionalExpr, Expr, ExprVisitor, GetExpr, ImplicitCastExpr, IndexExpr, LambdaExpr, LiteralExpr, LogicalExpr, PointExpr, PostfixExpr, PrefixExpr, StructExpr, ThisExpr, UnaryExpr, VariableExpr } from "@/ast/Expr";
 import { BlockStmt, BreakStmt, ClassStmt, ContinueStmt, DoWhileStmt, ExpressionStmt, ForStmt, FunctionStmt, GotoStmt, GSymbol, IfStmt, LabelStmt, LoopStmt, Parameter, ReturnStmt, StmtVisitor, StructStmt, VarStmt, WhileStmt } from "@/ast/Stmt";
 import { Stmt } from "@/ast/Stmt";
 import { CompilerErrorHandler } from "@/parser/ErrorHandler";
@@ -99,6 +99,7 @@ export class Compiler implements ExprVisitor<GValue>, StmtVisitor<void> {
     }
 
     compileProgram(stmts: Stmt[]): string {
+        console.log("====stmts in compileProgram", this.IdentifierType);
         //默认声明printf
         const LType = llvm.FunctionType.get(this.constantTypes.i32, [this.constantTypes.ptr], true);
         const printf = llvm.Function.Create(LType, llvm.Function.LinkageTypes.ExternalLinkage, "printf", this.module);
@@ -149,6 +150,7 @@ export class Compiler implements ExprVisitor<GValue>, StmtVisitor<void> {
 
     visitStructStmt(stmt: StructStmt): void {
         const stuType = this.IdentifierType.get(stmt.name);
+        console.log("====structStmt in compileStmt", stuType);
         if (!stuType || !(stuType instanceof StructType)) {
             throw new Error("Struct type not found");
         }
@@ -549,6 +551,13 @@ export class Compiler implements ExprVisitor<GValue>, StmtVisitor<void> {
 
         throw new Error(`Unsupported binary operator: ${expr.operator.type}`);
     }
+
+    visitCommaExpr(expr: CommaExpr): GValue {
+        const left = expr.left.accept(this);
+        const right = expr.right.accept(this);
+        return right;
+    }
+
     visitUnaryExpr(expr: UnaryExpr): GValue {
         const operator = expr.operator
         switch (operator.type) {
@@ -596,7 +605,7 @@ export class Compiler implements ExprVisitor<GValue>, StmtVisitor<void> {
                     if (Number.isInteger(expr.value)) {
                         const val = this.builder.getInt32(expr.value);
                         return new GValue(val, new SimpleType("i32"));
-                    }else{
+                    } else {
                         const floatTy = llvm.Type.getFloatTy(this.context);
                         const val = llvm.ConstantFP.get(floatTy, expr.value);
                         return new GValue(val, new SimpleType("float"));
@@ -630,6 +639,7 @@ export class Compiler implements ExprVisitor<GValue>, StmtVisitor<void> {
     }
     visitPrefixExpr(expr: PrefixExpr): GValue {
         const target = expr.target.accept(this);
+
         const oldValue = this.builder.CreateLoad(this.llvmType(target.gType), target.val);
         switch (expr.operator.type) {
             case TokenType.PlusPlus:
@@ -688,31 +698,28 @@ export class Compiler implements ExprVisitor<GValue>, StmtVisitor<void> {
 
     visitGetExpr(expr: GetExpr): GValue {
         let object = expr.object.accept(this);
-        const name = expr.name.lexeme;
-
-        console.log("====object in getexpr", object);
-        if (object.gType instanceof PointerType) {
-            if (expr.lvalue) {
-                object = new GValue(object.val, object.gType.oriType);
-            } else {
-                const oriType = this.llvmType(object.gType.oriType)
-                const value = this.builder.CreateLoad(oriType, object.val);
-                object = new GValue(value, object.gType.oriType);
-            }
+        if(object.gType instanceof PointerType) {
+            object.gType = object.gType.oriType;
         }
-
+        const name = expr.name.lexeme;
         if (object.gType instanceof StructType) {
             const index = object.gType.fields.findIndex(field => field.name === name);
             const field = object.gType.fields.find(field => field.name === name);
             if (field) {
-                if (expr.lvalue) {
+                if (expr.isLeftValue) {
                     const llvmStructType = this.llvmType(object.gType) as llvm.StructType;
                     const zero = this.builder.getInt32(0);
                     const fieldIdx = this.builder.getInt32(index);
-                    const fieldAddr = this.builder.CreateGEP(llvmStructType, object.val, [zero, fieldIdx], `struct.${name}.addr`);
+                    let fieldAddr = this.builder.CreateGEP(llvmStructType, object.val, [zero, fieldIdx], `struct.${name}.addr`);
+                    if (field.type instanceof PointerType) {
+                        fieldAddr = this.builder.CreateLoad(this.llvmType(field.type), fieldAddr, `struct.${name}.addr`);
+                    }
                     return new GValue(fieldAddr, new PointerType(field.type));
                 }
-                const fieldVal = this.builder.CreateExtractValue(object.val, [index], `struct.${name}`);
+                let fieldVal = this.builder.CreateExtractValue(object.val, [index], `struct.${name}`);
+                if (field.type instanceof PointerType) {
+                    fieldVal = this.builder.CreateLoad(this.llvmType(field.type.oriType), fieldVal, `struct.${name}`);
+                }
                 return new GValue(fieldVal, field.type);
             }
         }
@@ -723,6 +730,18 @@ export class Compiler implements ExprVisitor<GValue>, StmtVisitor<void> {
     }
 
     visitStructExpr(expr: StructExpr): GValue {
+
+        const field = expr.fields.map(field => {
+            let value = field.value.accept(this);
+            if (field.operator.type === TokenType.ColonArrow) {
+                value.gType = new PointerType(value.gType);
+            }
+            return {
+                name: field.name.lexeme,
+                value: value,
+                isConst: false
+            }
+        });
         const fields = expr.fields.map(field => {
             const value = field.value.accept(this);
             return {
@@ -731,20 +750,52 @@ export class Compiler implements ExprVisitor<GValue>, StmtVisitor<void> {
                 type: this.llvmType(value.gType)
             }
         });
-        const fieldTypes = expr.fields.map(field => ({ name: field.name.lexeme, type: field.value.accept(this).gType, isConst: false }));
         const structType = llvm.StructType.create(this.context, fields.map(field => field.type), "struct");
         let structVal: llvm.Value = llvm.UndefValue.get(structType);
         for (let i = 0; i < fields.length; i++) {
             const field = fields[i];
             structVal = this.builder.CreateInsertValue(structVal, field.value, [i], `struct.${field.name}`);
         }
+        const fieldTypes = field.map(field => {
+            return {
+                name: field.name,
+                type: field.value.gType,
+                isConst: false
+            }
+        });
         return new GValue(structVal, new StructType(fieldTypes));
     }
 
     visitArrayExpr(expr: ArrayExpr): GValue {
-        throw new Error("Method not implemented.");
+        const eleType = expr.elements[0].accept(this);
+        const exprType = new ArrayType(eleType.gType, expr.elements.length);
+        const ArrayLType = this.llvmType(exprType);
+        // 固定长度数组：alloca [N x T]，不要传 arraySize，否则会变成 alloca [N x T], i32 N（分配 N 份整块数组）
+        let arrayVal: llvm.Value = llvm.UndefValue.get(ArrayLType);
+        for (let i = 0; i < expr.elements.length; i++) {
+            const elementValue = expr.elements[i].accept(this);
+            arrayVal = this.builder.CreateInsertValue(arrayVal, elementValue.val, [i], `array.element`);
+        }
+        return new GValue(arrayVal, exprType);
     }
 
+    visitIndexExpr(expr: IndexExpr): GValue {
+        const array = expr.array.accept(this);
+        const index = expr.index.accept(this);
+        const arrayLType = this.llvmType(array.gType);
+        if (!(array.gType instanceof ArrayType)) {
+            throw new Error(`Type mismatch: ${array.gType} != array type`);
+        }
+        const elementType = this.llvmType(array.gType.elementType);
+        // ptr 指向 [N x T] 时 GEP 必须为 [0, i]：第一个下标选数组，第二个选元素；单下标 [i] 会按「跳过 i 个数组」越界
+        const zero = this.builder.getInt32(0);
+        const elementPtr = this.builder.CreateGEP(arrayLType, array.val, [zero, index.val], "array.element");
+        if (expr.isLeftValue) {
+            return new GValue(elementPtr, new PointerType(array.gType.elementType));
+        }
+        const elementVal = this.builder.CreateLoad(elementType, elementPtr, "array.element");
+        return new GValue(elementVal, array.gType.elementType);
+    }
 
     visitVariableExpr(expr: VariableExpr): GValue {
         const value = this.lookupVariable(expr.name, expr);
@@ -752,8 +803,26 @@ export class Compiler implements ExprVisitor<GValue>, StmtVisitor<void> {
             if (value.gType.isLocal) {
                 return value;
             }
+        } else if (value.gType instanceof PointerType) {
+            if (expr.isLeftValue && expr.arrow) {
+                return value;
+            }
+            const ptrType = this.llvmType(value.gType)
+            const ptrValue = this.builder.CreateLoad(ptrType, value.val);
+            const pValue = new GValue(ptrValue, value.gType);
+            if (expr.isLeftValue && !expr.arrow) {
+                return pValue;
+            }
+            if (!expr.isLeftValue && expr.arrow) {
+                return pValue;
+            }
+            if (!expr.isLeftValue && !expr.arrow) {
+                const oriType = this.llvmType(value.gType.oriType)
+                const oriValue = this.builder.CreateLoad(oriType, pValue.val);
+                return new GValue(oriValue, value.gType.oriType);
+            }
         }
-        if (expr.lvalue) {
+        if (expr.isLeftValue || expr.arrow) {
             return value;
         }
         const lType = this.llvmType(value.gType);
@@ -835,30 +904,6 @@ export class Compiler implements ExprVisitor<GValue>, StmtVisitor<void> {
         const targetType = this.llvmType(expr.targetType);
         const targetValue = this.promoteType(sourceValue.val, targetType);
         return new GValue(targetValue, expr.targetType);
-    }
-
-
-    visitDereferenceExpr(expr: DereferenceExpr): GValue {
-        const target = expr.target.accept(this);
-        if (!(target.gType instanceof PointerType)) {
-            throw new Error(`Type mismatch: ${target.gType} != pointer type`);
-        }
-        if (expr.target instanceof CallExpr) {
-            return target;
-        }
-
-        if (expr.lvalue) {
-            const targetType = this.llvmType(target.gType)
-            const targetValue = this.builder.CreateLoad(targetType, target.val);
-            return new GValue(targetValue, target.gType);
-        }
-        const targetType = this.llvmType(target.gType.oriType)
-        const targetValue = this.builder.CreateLoad(targetType, target.val);
-        return new GValue(targetValue, target.gType.oriType);
-    }
-    visitAddressExpr(expr: AddressExpr): GValue {
-        const target = expr.target.accept(this);
-        return new GValue(target.val, new PointerType(target.gType));
     }
 
     private declareFunction(funName: string, retType: llvm.Type, paramLTypes: llvm.Type[], isClosure: boolean): llvm.Function {
@@ -996,6 +1041,9 @@ export class Compiler implements ExprVisitor<GValue>, StmtVisitor<void> {
         return parentFunc;
     }
     private promoteType(value: llvm.Value, targetType: llvm.Type): llvm.Value {
+        if (targetType instanceof llvm.ArrayType) {
+            return value;
+        }
         const valueType = value.getType();
         // 如果类型相同，不需要转换
         if (valueType === targetType) {
@@ -1130,6 +1178,9 @@ export class Compiler implements ExprVisitor<GValue>, StmtVisitor<void> {
             const llvmStructType = llvm.StructType.create(this.context, type.fields.map(field => this.llvmType(field.type)), "struct");
             this.typeMap.set(type, llvmStructType);
             return llvmStructType;
+        }
+        if (type instanceof ArrayType) {
+            return llvm.ArrayType.get(this.llvmType(type.elementType), type.size);
         }
         throw new Error(`Unsupported type: ${type}`);
     }

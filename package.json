@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "c": "tsx src/main.ts",
-    "ir": "npm run c && lli src/llvmIr/ir.ll && echo"
+    "ir": "npm run c && lli src/llvmIr/ir.ll && echo",
+    "e": "lli src/llvmIr/ir.ll && echo"
   },
   "devDependencies": {
     "@types/node": "^24.10.1",

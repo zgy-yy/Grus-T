@@ -80,9 +80,11 @@ export class StructType implements GrusType {
 export class ArrayType implements GrusType {
     elementType: GrusType;
     isConst: boolean;
-    constructor(elementType: GrusType) {
+    size: number;
+    constructor(elementType: GrusType, size: number) {
         this.elementType = elementType;
         this.isConst = false;
+        this.size = size;
     }
     toString(): string {
         return "[" + this.elementType.toString() + "]";

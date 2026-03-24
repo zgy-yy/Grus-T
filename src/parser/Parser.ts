@@ -1,9 +1,9 @@
 import { Token } from "@/ast/Token";
 import { ParserErrorHandler } from "./ErrorHandler";
 import { TokenType } from "@/ast/TokenType";
-import { ArrayExpr, AssignExpr, BinaryExpr, CallExpr, CastExpr, Expr, GetExpr, LambdaExpr, LiteralExpr, LogicalExpr, PointExpr, PostfixExpr, PrefixExpr, StructExpr, ThisExpr, UnaryExpr, VariableExpr } from "@/ast/Expr";
+import { ArrayExpr, AssignExpr, BinaryExpr, CallExpr, CastExpr, CommaExpr, Expr, GetExpr, IndexExpr, LambdaExpr, LExpr, LiteralExpr, LogicalExpr, PointExpr, PostfixExpr, PrefixExpr, StructExpr, ThisExpr, UnaryExpr, VariableExpr } from "@/ast/Expr";
 import { BlockStmt, BreakStmt, ContinueStmt, DoWhileStmt, ExpressionStmt, ForStmt, FunctionStmt, GotoStmt, IfStmt, LabelStmt, LoopStmt, ReturnStmt, Stmt, VarStmt, WhileStmt, Variable, Parameter, StructStmt, Field } from "@/ast/Stmt";
-import { FunctionTypeExpr, GeneralTypeExpr, PointerTypeExpr, TypeExpr } from "@/ast/TypeExpr";
+import { ArrayTypeExpr, FunctionTypeExpr, GeneralTypeExpr, PointerTypeExpr, TypeExpr } from "@/ast/TypeExpr";
 
 class SyntaxError extends Error {
     public token: Token;
@@ -33,7 +33,7 @@ enum Precedence {
     TERM,        // "+", "-",
     FACTOR,      // "*", "/", "%",
     UNARY,       // "!", "-" , "++", "--", "new", '~'
-    CALL,        // ".", "()"
+    CALL,        // ".", "()","[]"
 }
 
 
@@ -102,12 +102,12 @@ export class Parser {
         [TokenType.OrEqual]: [null, this.binary.bind(this), Precedence.ASSIGNMENT],// |=    
         [TokenType.GreaterGreaterEqual]: [null, this.binary.bind(this), Precedence.ASSIGNMENT],// >>=
         [TokenType.LessLessEqual]: [null, this.binary.bind(this), Precedence.ASSIGNMENT],// <<=
-        [TokenType.Comma]: [null, this.binary.bind(this), Precedence.COMMA],//,
+        [TokenType.Comma]: [null, this.comma.bind(this), Precedence.COMMA],//,
 
 
         [TokenType.LeftBrace]: [this.primary.bind(this), null, Precedence.NONE],// {
         [TokenType.RightBrace]: [null, null, Precedence.NONE],// }
-        [TokenType.LeftBracket]: [this.primary.bind(this), null, Precedence.NONE],// [ 数组字面量，主表达式
+        [TokenType.LeftBracket]: [this.primary.bind(this), this.index.bind(this), Precedence.CALL],// [ 数组字面量，主表达式
         [TokenType.RightBracket]: [null, null, Precedence.NONE],// ]
         [TokenType.True]: [this.primary.bind(this), null, Precedence.NONE],// true
         [TokenType.False]: [this.primary.bind(this), null, Precedence.NONE],// false
@@ -463,8 +463,21 @@ export class Parser {
 
     private get(object: Expr, paren: Token): Expr {
         const name = this.consume(TokenType.Identifier, "Expect field name.");
+        if (!(object instanceof LExpr)) {
+            throw this.error(paren, "Invalid get target.");
+        }
         return new GetExpr(object, name);
     }
+
+    private index(array: Expr, bracket: Token): Expr {
+        const index = this.expression(Precedence.COMMA);
+        this.consume(TokenType.RightBracket, "Expect ']' after index.");
+        if (!(array instanceof LExpr)) {
+            throw this.error(bracket, "Invalid index target.");
+        }
+        return new IndexExpr(array, bracket, index);
+    }
+
     private call(callee: Expr, paren: Token): Expr {
         const args: Expr[] = [];
         if (!this.check(TokenType.RightParen)) {
@@ -482,10 +495,22 @@ export class Parser {
         //赋值运算符 右结合
         if (assignOperators.includes(operator.type)) {
             const right = this.parsePrecedence(precedence);
+            if (!(left instanceof LExpr)) {
+                throw this.error(operator, "Invalid assignment target.");
+            }
             return new AssignExpr(left, right, operator);
         }
         if (operator.type === TokenType.AArrow) {
             const right = this.parsePrecedence(precedence);
+            if (!(left instanceof LExpr)) {
+                throw this.error(operator, "Invalid arrow target.");
+            }
+            if (left instanceof CallExpr || left instanceof IndexExpr) {
+                throw this.error(operator, "Invalid arrow target.");
+            }
+            if (!(right instanceof LExpr)) {
+                throw this.error(operator, "Invalid arrow value.");
+            }
             return new PointExpr(left, right, operator);
         }
         if (operator.type === TokenType.And || operator.type === TokenType.Or) {
@@ -517,7 +542,10 @@ export class Parser {
         }
         throw this.error(operator, "Invalid assignment target.");
     }
-
+    private comma(left: Expr, comma: Token): Expr {
+        const right = this.parsePrecedence(Precedence.COMMA);
+        return new CommaExpr(left, comma, right);
+    }
     private primary(token: Token): Expr {
         switch (token.type) {
             case TokenType.True:
@@ -588,14 +616,15 @@ export class Parser {
 
 
     private typeExpr(pNumber: number = 0): TypeExpr {
+        pNumber++;
         if (this.match(TokenType.Identifier)) {
             const name = this.previous();
             return new GeneralTypeExpr(name, false);
         } else if (this.match(TokenType.At)) {
-            if (pNumber > 0) {
+            if (pNumber > 1) {
                 throw this.error(this.peek(), "Pointer type can't be nested.");
             }
-            return new PointerTypeExpr(this.typeExpr(pNumber + 1));
+            return new PointerTypeExpr(this.typeExpr(pNumber));
         } else if (this.match(TokenType.LeftParen)) {
             const declTypes: TypeExpr[] = [];
             if (!this.check(TokenType.RightParen)) {
@@ -608,6 +637,15 @@ export class Parser {
             this.consume(TokenType.Arrow, "Expect '->' after parameters.");
             const returnType = this.typeExpr();
             return new FunctionTypeExpr(returnType, declTypes);
+        } else if (this.match(TokenType.LeftBracket)) {
+            const size = this.consume(TokenType.Number, "Expect array size.");
+            const sizeNum = Number(size.literal);
+            if (isNaN(sizeNum) || !Number.isInteger(sizeNum) || sizeNum < 0) {
+                throw this.error(size, "Expect size number after '['.");
+            }
+            this.consume(TokenType.RightBracket, "Expect ']' after array size.");
+            const elementType = this.typeExpr();
+            return new ArrayTypeExpr(elementType, sizeNum);
         }
         throw this.error(this.peek(), "Expect type.");
     }
@@ -622,11 +660,17 @@ export class Parser {
                 let operator = null;
                 if (this.check(TokenType.ColonArrow)) {
                     operator = this.consume(TokenType.ColonArrow, "Expect ':>' after field name.");
-
                 } else {
                     operator = this.consume(TokenType.Colon, "Expect ':' after field name.");
                 }
                 const value = this.expression(Precedence.ASSIGNMENT);
+                if (operator.type === TokenType.ColonArrow) {
+                    if (value instanceof LExpr) {
+                        value.setArrow(true);
+                    } else {
+                        throw this.error(operator, "Invalid arrow value.");
+                    }
+                }
                 fields.push({ name, operator, value });
             } while (this.match(TokenType.Comma));
         }

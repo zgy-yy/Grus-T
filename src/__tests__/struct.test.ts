@@ -46,7 +46,7 @@ struct Data {
 }
 
 fun main() i32 {
-  let Data d = { n: 100, c: 9 };
+  let Data d = { n: 100, c: <i8>9 };
   printf("%d\\n", d.n);
   printf("%d\\n", d.c);
   return 0;
