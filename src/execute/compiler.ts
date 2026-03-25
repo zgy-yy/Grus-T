@@ -99,7 +99,7 @@ export class Compiler implements ExprVisitor<GValue>, StmtVisitor<void> {
     }
 
     compileProgram(stmts: Stmt[]): string {
-        console.log("====stmts in compileProgram", this.IdentifierType);
+
         //默认声明printf
         const LType = llvm.FunctionType.get(this.constantTypes.i32, [this.constantTypes.ptr], true);
         const printf = llvm.Function.Create(LType, llvm.Function.LinkageTypes.ExternalLinkage, "printf", this.module);
@@ -150,7 +150,6 @@ export class Compiler implements ExprVisitor<GValue>, StmtVisitor<void> {
 
     visitStructStmt(stmt: StructStmt): void {
         const stuType = this.IdentifierType.get(stmt.name);
-        console.log("====structStmt in compileStmt", stuType);
         if (!stuType || !(stuType instanceof StructType)) {
             throw new Error("Struct type not found");
         }
@@ -698,7 +697,7 @@ export class Compiler implements ExprVisitor<GValue>, StmtVisitor<void> {
 
     visitGetExpr(expr: GetExpr): GValue {
         let object = expr.object.accept(this);
-        if(object.gType instanceof PointerType) {
+        if (object.gType instanceof PointerType) {
             object.gType = object.gType.oriType;
         }
         const name = expr.name.lexeme;
@@ -769,29 +768,44 @@ export class Compiler implements ExprVisitor<GValue>, StmtVisitor<void> {
     visitArrayExpr(expr: ArrayExpr): GValue {
         const eleType = expr.elements[0].accept(this);
         const exprType = new ArrayType(eleType.gType, expr.elements.length);
-        const ArrayLType = this.llvmType(exprType);
+        const ArrayLType = llvm.ArrayType.get(this.llvmType(eleType.gType), expr.elements.length);
         // 固定长度数组：alloca [N x T]，不要传 arraySize，否则会变成 alloca [N x T], i32 N（分配 N 份整块数组）
-        let arrayVal: llvm.Value = llvm.UndefValue.get(ArrayLType);
+        const array = this.builder.CreateAlloca(ArrayLType, null, "array");
+        const zero = this.builder.getInt32(0);
         for (let i = 0; i < expr.elements.length; i++) {
             const elementValue = expr.elements[i].accept(this);
-            arrayVal = this.builder.CreateInsertValue(arrayVal, elementValue.val, [i], `array.element`);
+            const elementPtr = this.builder.CreateGEP(ArrayLType, array, [zero, this.builder.getInt32(i)], `array.element`);
+            this.builder.CreateStore(elementValue.val, elementPtr);
         }
-        return new GValue(arrayVal, exprType);
+        return new GValue(array, exprType);
     }
 
     visitIndexExpr(expr: IndexExpr): GValue {
-        const array = expr.array.accept(this);
+        let array = expr.array.accept(this);
+        if (array.gType instanceof PointerType) {
+            array.gType = array.gType.oriType;
+        }
         const index = expr.index.accept(this);
-        const arrayLType = this.llvmType(array.gType);
+        if (expr.isLeftValue) {
+            const targetType = this.llvmType(array.gType);
+            const value = this.builder.CreateLoad(targetType, array.val, "array=value");
+            array = {
+                val: value,
+                gType: array.gType,
+            }
+        }
+        if (!(array.gType instanceof ArrayType)) {
+            throw new Error(`Type mismatch: ${array.gType} != array type`);
+        }
+        const arrayLType = llvm.ArrayType.get(this.llvmType(array.gType.elementType), array.gType.size);
         if (!(array.gType instanceof ArrayType)) {
             throw new Error(`Type mismatch: ${array.gType} != array type`);
         }
         const elementType = this.llvmType(array.gType.elementType);
-        // ptr 指向 [N x T] 时 GEP 必须为 [0, i]：第一个下标选数组，第二个选元素；单下标 [i] 会按「跳过 i 个数组」越界
         const zero = this.builder.getInt32(0);
         const elementPtr = this.builder.CreateGEP(arrayLType, array.val, [zero, index.val], "array.element");
         if (expr.isLeftValue) {
-            return new GValue(elementPtr, new PointerType(array.gType.elementType));
+            return new GValue(elementPtr, array.gType.elementType);
         }
         const elementVal = this.builder.CreateLoad(elementType, elementPtr, "array.element");
         return new GValue(elementVal, array.gType.elementType);
@@ -818,7 +832,7 @@ export class Compiler implements ExprVisitor<GValue>, StmtVisitor<void> {
             }
             if (!expr.isLeftValue && !expr.arrow) {
                 const oriType = this.llvmType(value.gType.oriType)
-                const oriValue = this.builder.CreateLoad(oriType, pValue.val);
+                const oriValue = this.builder.CreateLoad(oriType, pValue.val, "var");
                 return new GValue(oriValue, value.gType.oriType);
             }
         }
@@ -1180,7 +1194,8 @@ export class Compiler implements ExprVisitor<GValue>, StmtVisitor<void> {
             return llvmStructType;
         }
         if (type instanceof ArrayType) {
-            return llvm.ArrayType.get(this.llvmType(type.elementType), type.size);
+            const arrayType = llvm.ArrayType.get(this.llvmType(type.elementType), type.size);
+            return llvm.PointerType.get(arrayType, 0);
         }
         throw new Error(`Unsupported type: ${type}`);
     }

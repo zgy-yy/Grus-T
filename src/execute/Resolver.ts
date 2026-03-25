@@ -559,6 +559,9 @@ export class Resolver implements ExprVisitor<GrusType>, TypeExprVisitor<GrusType
     visitIndexExpr(expr: IndexExpr): GrusType {
         let arrayType = expr.array.accept(this);
         let indexType = expr.index.accept(this);
+        if(arrayType instanceof PointerType){
+            arrayType = arrayType.oriType;
+        }
         if (!checkIntegerType(indexType)) {
             throw this.error(expr.bracket, `Type mismatch: ${indexType} != integer type`);
         }
