@@ -59,6 +59,10 @@ export class Compiler implements ExprVisitor<GValue>, StmtVisitor<void> {
     }
     private mallocFunc: llvm.FunctionCallee;
     private fatFuncs: Map<llvm.Function, llvm.Value>;
+    private globalVariables: Map<llvm.GlobalVariable, {
+        valueExpr: Expr,
+        allocType: llvm.Type,
+    }> = new Map();
 
     constructor(private readonly errorHandler: CompilerErrorHandler) {
         this.context = new llvm.LLVMContext();
@@ -164,12 +168,23 @@ export class Compiler implements ExprVisitor<GValue>, StmtVisitor<void> {
             }
             const allocType = this.llvmType(varType);
             const varName = variable.name.lexeme;
+            if (this.environment == this.globalEnv) {
+                const zero = llvm.ConstantInt.get(allocType, 0);
+                const allocAddr = new llvm.GlobalVariable(this.module, allocType,
+                    false, llvm.GlobalValue.LinkageTypes.InternalLinkage, zero, varName);
+                this.define(varName, allocAddr, varType);
+                this.globalVariables.set(allocAddr, {
+                    valueExpr: variable.defaultValue,
+                    allocType: allocType,
+                });
 
-            const allocAddr = this.builder.CreateAlloca(allocType, null, varName);
-            this.define(varName, allocAddr, varType);
-            const value = variable.defaultValue.accept(this);
-            const lvalue = this.promoteType(value.val, allocType);
-            this.builder.CreateStore(lvalue, allocAddr);
+            } else {
+                const allocAddr = this.builder.CreateAlloca(allocType, null, varName);
+                this.define(varName, allocAddr, varType);
+                const value = variable.defaultValue.accept(this);
+                const lvalue = this.promoteType(value.val, allocType);
+                this.builder.CreateStore(lvalue, allocAddr);
+            }
         }
     }
     visitFunctionStmt(stmt: FunctionStmt): void {
@@ -180,7 +195,7 @@ export class Compiler implements ExprVisitor<GValue>, StmtVisitor<void> {
         }
         // 第二遍编译：获取已声明的函数（在第一遍中已创建）
         let func = this.environment.get(funName).val as llvm.Function;
-        this.defineFunction(func, stmt.parameters, stmt.body, funType.returnType, null);
+        this.defineFunction(funName, func, stmt.parameters, stmt.body, funType.returnType, null);
         //生成胖函数
         const paramLTypes = funType.paramTypes.map(type => this.llvmType(type));
         paramLTypes.unshift(llvm.PointerType.get(llvm.Type.getInt8PtrTy(this.context), 0));
@@ -885,7 +900,7 @@ export class Compiler implements ExprVisitor<GValue>, StmtVisitor<void> {
 
         const paramLTypes = funType.paramTypes.map(type => this.llvmType(type));
         const func = this.declareFunction("lambda", retLType, paramLTypes, true);
-        this.defineFunction(func, expr.parameters, expr.body, funType.returnType, captures);
+        this.defineFunction("lambda", func, expr.parameters, expr.body, funType.returnType, captures);
 
         // 恢复原来的插入点，确保后续代码编译到正确的函数中
         if (savedInsertBlock) {
@@ -929,7 +944,7 @@ export class Compiler implements ExprVisitor<GValue>, StmtVisitor<void> {
         return func;
     }
 
-    private defineFunction(func: llvm.Function, parameters: Parameter[], body: Stmt[], retType: GrusType, closureEnv: {
+    private defineFunction(funName: string, func: llvm.Function, parameters: Parameter[], body: Stmt[], retType: GrusType, closureEnv: {
         name: string,
         type: GrusType
     }[] | null): void {
@@ -990,6 +1005,14 @@ export class Compiler implements ExprVisitor<GValue>, StmtVisitor<void> {
 
         // 编译函数体
         for (const bodyStmt of body) {
+            if (funName == "main") {
+                this.globalVariables.forEach((v, key) => {
+                    const value = v.valueExpr.accept(this);
+                    const allocType = v.allocType;
+                    const lvalue = this.promoteType(value.val, allocType);
+                    this.builder.CreateStore(lvalue, key);
+                });
+            }
             this.compileStmt(bodyStmt);
         }
 

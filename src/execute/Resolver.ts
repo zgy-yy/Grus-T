@@ -98,11 +98,14 @@ export class Resolver implements ExprVisitor<GrusType>, TypeExprVisitor<GrusType
             stmts.forEach(stmt => {
                 if (stmt instanceof FunctionStmt) {
                     this.declare('func', stmt.name);
-                    this.define(stmt.name);
+                } else {
+                    this.resolveStmt(stmt);
                 }
             });
             for (const stmt of stmts) {
-                this.resolveStmt(stmt);
+                if (stmt instanceof FunctionStmt) {
+                    this.resolveStmt(stmt);
+                }
             }
             this.endScope();
         } catch (error) {
@@ -559,7 +562,7 @@ export class Resolver implements ExprVisitor<GrusType>, TypeExprVisitor<GrusType
     visitIndexExpr(expr: IndexExpr): GrusType {
         let arrayType = expr.array.accept(this);
         let indexType = expr.index.accept(this);
-        if(arrayType instanceof PointerType){
+        if (arrayType instanceof PointerType) {
             arrayType = arrayType.oriType;
         }
         if (!checkIntegerType(indexType)) {
@@ -696,7 +699,12 @@ export class Resolver implements ExprVisitor<GrusType>, TypeExprVisitor<GrusType
             const identifier = scope.get(vname.lexeme);
             if (identifier) {
                 const distance = this.scopes.length - 1 - i;
-                this.compiler?.resolve(expr, distance);
+                if (i == 0) { // 全局变量，编译时在主函数进行赋值
+                    this.compiler?.resolve(expr, 1);
+                } else {
+                    this.compiler?.resolve(expr, distance);
+                }
+
                 if (this.currentLambda) {
                     if (i < this.currentLambda.deep) {
                         if (identifier.id == 'var' || identifier.id == 'param') {
