@@ -2,7 +2,7 @@ import { Token } from "@/ast/Token";
 import { ParserErrorHandler } from "./ErrorHandler";
 import { TokenType } from "@/ast/TokenType";
 import { ArrayExpr, AssignExpr, BinaryExpr, CallExpr, CastExpr, CommaExpr, Expr, GetExpr, IndexExpr, LambdaExpr, LExpr, LiteralExpr, LogicalExpr, PointExpr, PostfixExpr, PrefixExpr, StructExpr, ThisExpr, UnaryExpr, VariableExpr } from "@/ast/Expr";
-import { BlockStmt, BreakStmt, ContinueStmt, DoWhileStmt, ExpressionStmt, ForStmt, FunctionStmt, GotoStmt, IfStmt, LabelStmt, LoopStmt, ReturnStmt, Stmt, VarStmt, WhileStmt, Variable, Parameter, StructStmt, Field } from "@/ast/Stmt";
+import { BlockStmt, BreakStmt, ContinueStmt, DoWhileStmt, ExpressionStmt, ForStmt, FunctionStmt, GotoStmt, IfStmt, LabelStmt, LoopStmt, ReturnStmt, Stmt, VarStmt, WhileStmt, Variable, Parameter, StructStmt, Field, ImportStmt } from "@/ast/Stmt";
 import { ArrayTypeExpr, FunctionTypeExpr, GeneralTypeExpr, PointerTypeExpr, TypeExpr } from "@/ast/TypeExpr";
 
 class SyntaxError extends Error {
@@ -141,6 +141,9 @@ export class Parser {
         [TokenType.If]: [null, null, Precedence.NONE],// if
         [TokenType.Return]: [null, null, Precedence.NONE],// return
         [TokenType.Goto]: [null, null, Precedence.NONE],// goto
+        [TokenType.Expose]: [null, null, Precedence.NONE],// expose
+        [TokenType.Link]: [null, null, Precedence.NONE],// link
+        [TokenType.As]: [null, null, Precedence.NONE],// as
     };
 
     constructor(tokens: Token[], errorHandler: ParserErrorHandler) {
@@ -173,22 +176,37 @@ export class Parser {
      * declaration → varDecl | funDecl 
      * 声明由变量声明、函数声明和语句组成
      */
-    private declaration(program: boolean = false): Stmt | null {
+    private declaration(global: boolean = false): Stmt | null {
+        let expose: boolean = false;
+        if (global) {
+            if (this.match(TokenType.Expose)) {
+                expose = true;
+            }
+            if (this.match(TokenType.Link)) {
+                return this.importDeclaration();
+            }
+        }
         try {
             if (this.match(TokenType.Let)) {
-                return this.varDeclaration();
+                const stmt = this.varDeclaration();
+                stmt.expose = expose;
+                return stmt;
             }
             if (this.match(TokenType.Class)) {
                 // return this.classDeclaration();
             }
             if (this.match(TokenType.Struct)) {
-                return this.structDeclaration();
+                const stmt = this.structDeclaration();
+                stmt.expose = expose;
+                return stmt;
             }
-            if (program) {
+            if (global) {
                 if (this.match(TokenType.Fun)) {
-                    return this.funDeclaration();
+                    const stmt = this.funDeclaration();
+                    stmt.expose = expose;
+                    return stmt;
                 }
-                throw this.error(this.peek(), "Expect declaration.");
+                throw this.error(this.peek(), "Expect global declaration.");
             }
             return this.statement();
         }
@@ -203,6 +221,21 @@ export class Parser {
 
     }
 
+    private importDeclaration(): ImportStmt {
+        const path = this.consume(TokenType.String, "Expect import path.");
+        const imports: {
+            name: Token,
+            alias: Token,
+        }[] = [];
+        do {
+            const name = this.consume(TokenType.Identifier, "Expect import name.");
+            const alias = this.match(TokenType.As) ? this.consume(TokenType.As, "Expect 'as' after import name.") : name;
+            imports.push({ name, alias });
+        } while (this.match(TokenType.Comma));
+        this.consume(TokenType.Semicolon, "Expect ';' after import declaration.");
+
+        return new ImportStmt(path, imports);
+    }
 
     /**
      * 解析 let 变量声明
@@ -272,11 +305,8 @@ export class Parser {
             parameters.push(...parameter);
         }
         this.consume(TokenType.RightParen, "Expect ')' after parameters.");
-        let returnType: TypeExpr | null = null;
-        if (this.check(TokenType.LeftBrace)) {
-        } else {
-            returnType = this.typeExpr();
-        }
+        let returnType = this.typeExpr();
+    
         this.consume(TokenType.LeftBrace, "Expect '{' after parameters.");
         const body = this.block();
         return new FunctionStmt(name, parameters, returnType, body);

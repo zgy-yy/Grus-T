@@ -56,6 +56,9 @@ export enum TokenType {
     AArrow = 'A_ARROW',// =>
     ColonArrow = 'COLON_ARROW',// :>
     // 关键字
+    Expose = 'EXPOSE',// expose
+    Link = 'LINK',// link
+    As = 'AS',// as
     Goto = 'GOTO',// goto
     Class = 'CLASS',// class
     Struct = 'STRUCT',// struct

@@ -3,6 +3,9 @@ import { TokenType } from '@/ast/TokenType.ts';
 import { ScannerErrorHandler } from './ErrorHandler';
 // 关键字映射
 const keywords = new Map<string, TokenType>([
+  ['expose', TokenType.Expose],
+  ['link', TokenType.Link],
+  ['as', TokenType.As],
   ['new', TokenType.New],
   ['let', TokenType.Let],
   ['class', TokenType.Class],

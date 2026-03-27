@@ -23,10 +23,29 @@ export interface StmtVisitor<R> {
     visitLabelStmt(stmt: LabelStmt): R;
     visitGotoStmt(stmt: GotoStmt): R;
     visitStructStmt(stmt: StructStmt): R;
+    visitImportStmt(stmt: ImportStmt): R;
 
 }
 
 
+export class ImportStmt extends Stmt {
+    path: Token;
+    imports: {
+        name: Token,
+        alias: Token,
+    }[]
+    constructor(path: Token, imports: {
+        name: Token,
+        alias: Token,
+    }[]) {
+        super();
+        this.path = path;
+        this.imports = [];
+    }
+    accept<R>(visitor: StmtVisitor<R>): R {
+        return visitor.visitImportStmt(this);
+    }
+}
 
 export class WhileStmt extends Stmt {
     condition: Expr;
@@ -174,11 +193,11 @@ export interface GSymbol {
 
 export class Variable implements GSymbol {
     name: Token;
-    typeExpr: TypeExpr|null;
+    typeExpr: TypeExpr | null;
     operator: Token;
     defaultValue: Expr
     escaped: boolean;
-    constructor(name: Token, typeExpr: TypeExpr|null, defaultValue: Expr, operator: Token) {
+    constructor(name: Token, typeExpr: TypeExpr | null, defaultValue: Expr, operator: Token) {
         this.name = name;
         this.typeExpr = typeExpr;
         this.defaultValue = defaultValue;
@@ -203,9 +222,11 @@ export class Parameter implements GSymbol {
 
 
 export class VarStmt extends Stmt {
+    expose: boolean;
     vars: Variable[];
     constructor(vars: Variable[]) {
         super();
+        this.expose = false;
         this.vars = vars;
     }
     accept<R>(visitor: StmtVisitor<R>): R {
@@ -215,12 +236,14 @@ export class VarStmt extends Stmt {
 
 
 export class FunctionStmt extends Stmt {
+    expose: boolean;
     name: Token;
     parameters: Parameter[];
     body: Stmt[];
-    returnType: TypeExpr|null;
-    constructor(name: Token, parameters: Parameter[], returnType: TypeExpr|null, body: Stmt[]) {
+    returnType: TypeExpr ;
+    constructor(name: Token, parameters: Parameter[], returnType: TypeExpr, body: Stmt[]) {
         super();
+        this.expose = false;
         this.name = name;
         this.parameters = parameters;
         this.body = body;
@@ -258,10 +281,12 @@ export class Field {
 
 
 export class StructStmt extends Stmt {
+    expose: boolean;
     name: Token;
     fields: Field[];
     constructor(name: Token, fields: Field[]) {
         super();
+        this.expose = false;
         this.name = name;
         this.fields = fields;
     }
@@ -271,11 +296,13 @@ export class StructStmt extends Stmt {
 }
 
 export class ClassStmt extends Stmt {
+    expose: boolean;
     name: Token;
     methods: FunctionStmt[];
     fields: Field[];
     constructor(name: Token, fields: Field[], methods: FunctionStmt[]) {
         super();
+        this.expose = false;
         this.name = name;
         this.methods = methods;
         this.fields = fields;
@@ -283,4 +310,13 @@ export class ClassStmt extends Stmt {
     accept<R>(visitor: StmtVisitor<R>): R {
         return visitor.visitClassStmt(this);
     }
+}
+
+/** 顶层程序语句顺序：Import → Struct → Function → Var，其余类型排在最后 */
+export function programStmtSortKey(stmt: Stmt): number {
+    if (stmt instanceof ImportStmt) return 0;
+    if (stmt instanceof StructStmt) return 1;
+    if (stmt instanceof FunctionStmt) return 2;
+    if (stmt instanceof VarStmt) return 3;
+    return 4;
 }

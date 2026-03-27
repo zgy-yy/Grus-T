@@ -1,5 +1,5 @@
 import { ArrayExpr, AssignExpr, BinaryExpr, CallExpr, CastExpr, CommaExpr, ConditionalExpr, Expr, ExprVisitor, GetExpr, ImplicitCastExpr, IndexExpr, LambdaExpr, LiteralExpr, LogicalExpr, PointExpr, PostfixExpr, PrefixExpr, StructExpr, ThisExpr, UnaryExpr, VariableExpr } from "@/ast/Expr";
-import { BlockStmt, BreakStmt, ClassStmt, ContinueStmt, DoWhileStmt, ExpressionStmt, ForStmt, FunctionStmt, GotoStmt, GSymbol, IfStmt, LabelStmt, LoopStmt, Parameter, ReturnStmt, StmtVisitor, StructStmt, VarStmt, WhileStmt } from "@/ast/Stmt";
+import { BlockStmt, BreakStmt, ClassStmt, ContinueStmt, DoWhileStmt, ExpressionStmt, ForStmt, FunctionStmt, GotoStmt, GSymbol, IfStmt, ImportStmt, LabelStmt, LoopStmt, Parameter, ReturnStmt, StmtVisitor, StructStmt, VarStmt, WhileStmt } from "@/ast/Stmt";
 import { Stmt } from "@/ast/Stmt";
 import { CompilerErrorHandler } from "@/parser/ErrorHandler";
 import { Token } from "@/ast/Token";
@@ -103,7 +103,6 @@ export class Compiler implements ExprVisitor<GValue>, StmtVisitor<void> {
     }
 
     compileProgram(stmts: Stmt[]): string {
-
         //默认声明printf
         const LType = llvm.FunctionType.get(this.constantTypes.i32, [this.constantTypes.ptr], true);
         const printf = llvm.Function.Create(LType, llvm.Function.LinkageTypes.ExternalLinkage, "printf", this.module);
@@ -123,14 +122,17 @@ export class Compiler implements ExprVisitor<GValue>, StmtVisitor<void> {
                 } else {
                     throw new Error("Function type not found");
                 }
-
+            } else {
+                this.compileStmt(stmt);
             }
         }
 
         // ========== 第二遍编译：编译所有语句 ==========
         // 目的：编译所有语句，包括函数体、变量声明、表达式等
         for (const stmt of stmts) {
-            this.compileStmt(stmt);
+            if (stmt instanceof FunctionStmt) {
+                this.compileStmt(stmt);
+            }
         }
         const code = this.module.print();
         return code;
@@ -140,10 +142,10 @@ export class Compiler implements ExprVisitor<GValue>, StmtVisitor<void> {
         return stmt.accept(this);
     }
 
-
-
-
     // StmtVisitor methods
+    visitImportStmt(stmt: ImportStmt): void {
+        throw new Error("Method not implemented.");
+    }
     visitBlockStmt(stmt: BlockStmt): void {
         this.beginScope();
         for (const s of stmt.statements) {
@@ -168,16 +170,16 @@ export class Compiler implements ExprVisitor<GValue>, StmtVisitor<void> {
             }
             const allocType = this.llvmType(varType);
             const varName = variable.name.lexeme;
+            const linkage = llvm.GlobalValue.LinkageTypes.ExternalLinkage;
             if (this.environment == this.globalEnv) {
                 const zero = llvm.ConstantInt.get(allocType, 0);
                 const allocAddr = new llvm.GlobalVariable(this.module, allocType,
-                    false, llvm.GlobalValue.LinkageTypes.InternalLinkage, zero, varName);
+                    false, linkage, zero, varName);
                 this.define(varName, allocAddr, varType);
                 this.globalVariables.set(allocAddr, {
                     valueExpr: variable.defaultValue,
                     allocType: allocType,
                 });
-
             } else {
                 const allocAddr = this.builder.CreateAlloca(allocType, null, varName);
                 this.define(varName, allocAddr, varType);
@@ -202,7 +204,8 @@ export class Compiler implements ExprVisitor<GValue>, StmtVisitor<void> {
 
         const retType = this.llvmType(funType.returnType);
         const funcType = llvm.FunctionType.get(retType, paramLTypes, false);
-        const wfunc = llvm.Function.Create(funcType, llvm.Function.LinkageTypes.ExternalLinkage, `${funName}_wrapper`, this.module);
+        const linkage = stmt.expose ? llvm.GlobalValue.LinkageTypes.ExternalLinkage : llvm.GlobalValue.LinkageTypes.InternalLinkage;
+        const wfunc = llvm.Function.Create(funcType, linkage, `${funName}_wrapper`, this.module);
         const bb = llvm.BasicBlock.Create(this.context, 'entry', wfunc);  // 修复：应该为 wfunc 创建基本块，而不是 func
         this.builder.SetInsertPoint(bb);
         const args = stmt.parameters.map((param, ind) => wfunc.getArg(ind + 1));
@@ -828,6 +831,7 @@ export class Compiler implements ExprVisitor<GValue>, StmtVisitor<void> {
 
     visitVariableExpr(expr: VariableExpr): GValue {
         const value = this.lookupVariable(expr.name, expr);
+        console.log("visitVariableExpr", expr.name, value);
         if (value.gType instanceof FunctionType) {
             if (value.gType.isLocal) {
                 return value;
@@ -940,7 +944,8 @@ export class Compiler implements ExprVisitor<GValue>, StmtVisitor<void> {
             paramLTypes.unshift(llvm.PointerType.get(llvm.Type.getInt8PtrTy(this.context), 0));
         }
         const funcType = llvm.FunctionType.get(retType, paramLTypes, false);
-        const func = llvm.Function.Create(funcType, llvm.Function.LinkageTypes.ExternalLinkage, funName, this.module);
+        const linkage = llvm.GlobalValue.LinkageTypes.ExternalLinkage
+        const func = llvm.Function.Create(funcType, linkage, funName, this.module);
         return func;
     }
 
@@ -948,6 +953,7 @@ export class Compiler implements ExprVisitor<GValue>, StmtVisitor<void> {
         name: string,
         type: GrusType
     }[] | null): void {
+
         // 保存旧的返回类型，设置新的返回类型
         const oldReturnType = this.currentFunction.returnType;
         this.currentFunction = {
@@ -1006,12 +1012,16 @@ export class Compiler implements ExprVisitor<GValue>, StmtVisitor<void> {
         // 编译函数体
         for (const bodyStmt of body) {
             if (funName == "main") {
+
                 this.globalVariables.forEach((v, key) => {
                     const value = v.valueExpr.accept(this);
                     const allocType = v.allocType;
                     const lvalue = this.promoteType(value.val, allocType);
+
                     this.builder.CreateStore(lvalue, key);
+
                 });
+
             }
             this.compileStmt(bodyStmt);
         }

@@ -1,13 +1,8 @@
-let b =23;
-let a=1+b;
 fun main() i32 {
-  printf("%d",a);
-  let a=7;
-  printf("%d",a);
-  printf("%d",b);
-  return 0;
-}
+  let i32 i = 0;
+  while (false) {
+    printf("%d\\n", i);
 
-struct A {
-  i32 a;
+  }
+  return 0;
 }

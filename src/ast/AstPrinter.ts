@@ -1,4 +1,4 @@
-import { AddressExpr, ArrayExpr, AssignExpr, BinaryExpr, CallExpr, CastExpr, ConditionalExpr, DereferenceExpr, Expr, ExprVisitor, GetExpr, ImplicitCastExpr, LambdaExpr, LiteralExpr, LogicalExpr, PointExpr, PostfixExpr, PrefixExpr, StructExpr, ThisExpr, UnaryExpr, VariableExpr } from "@/ast/Expr";
+import { ArrayExpr, AssignExpr, BinaryExpr, CallExpr, CastExpr, CommaExpr, ConditionalExpr, Expr, ExprVisitor, GetExpr, ImplicitCastExpr, IndexExpr, LambdaExpr, LiteralExpr, LogicalExpr, PointExpr, PostfixExpr, PrefixExpr, StructExpr, ThisExpr, UnaryExpr, VariableExpr } from "@/ast/Expr";
 
 
 
@@ -70,11 +70,11 @@ export class AstPrinter implements ExprVisitor<string> {
     visitImplicitCastExpr(expr: ImplicitCastExpr): string {
         return expr.source.accept(this);
     }
-    visitDereferenceExpr(expr: DereferenceExpr): string {
-        return this.parenthesize("*", expr.target.accept(this));
+    visitCommaExpr(expr: CommaExpr): string {
+        return expr.left.accept(this) + ", " + expr.right.accept(this);
     }
-    visitAddressExpr(expr: AddressExpr): string {
-        return this.parenthesize("&", expr.target.accept(this));
+    visitIndexExpr(expr: IndexExpr): string {
+        return this.parenthesize("[", expr.array.accept(this), expr.index.accept(this));
     }
 
     private parenthesize(name: string, ...exprs: (Expr | string)[]): string {

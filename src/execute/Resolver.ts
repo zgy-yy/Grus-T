@@ -1,5 +1,5 @@
 import { ArrayExpr, AssignExpr, BinaryExpr, CallExpr, CastExpr, CommaExpr, ConditionalExpr, Expr, ExprVisitor, GetExpr, ImplicitCastExpr, IndexExpr, LambdaExpr, LExpr, LiteralExpr, LogicalExpr, PointExpr, PostfixExpr, PrefixExpr, StructExpr, ThisExpr, UnaryExpr, VariableExpr } from "@/ast/Expr";
-import { BlockStmt, BreakStmt, ClassStmt, ContinueStmt, DoWhileStmt, ExpressionStmt, Field, ForStmt, FunctionStmt, GotoStmt, GSymbol, IfStmt, LabelStmt, LoopStmt, Parameter, ReturnStmt, Stmt, StmtVisitor, StructStmt, Variable, VarStmt, WhileStmt } from "@/ast/Stmt";
+import { BlockStmt, BreakStmt, ClassStmt, ContinueStmt, DoWhileStmt, ExpressionStmt, Field, ForStmt, FunctionStmt, GotoStmt, GSymbol, IfStmt, ImportStmt, LabelStmt, LoopStmt, Parameter, programStmtSortKey, ReturnStmt, Stmt, StmtVisitor, StructStmt, Variable, VarStmt, WhileStmt } from "@/ast/Stmt";
 import { Token } from "@/ast/Token";
 import { ParserErrorHandler } from "@/parser/ErrorHandler";
 import { TokenType } from "@/ast/TokenType";
@@ -95,9 +95,12 @@ export class Resolver implements ExprVisitor<GrusType>, TypeExprVisitor<GrusType
             this.currentScope.set("void", new Member('type', "void", new SimpleType("void"), true));
 
             this.currentScope.set("printf", new Member('func', "printf", new FunctionType(new SimpleType("i32"), [new SimpleType("string"), new TempOmittedType()], false), true));
+            stmts.sort((a, b) => programStmtSortKey(a) - programStmtSortKey(b));
             stmts.forEach(stmt => {
                 if (stmt instanceof FunctionStmt) {
                     this.declare('func', stmt.name);
+                    const returnType = stmt.returnType.accept(this);
+                    this.define(stmt.name, returnType);
                 } else {
                     this.resolveStmt(stmt);
                 }
@@ -120,6 +123,12 @@ export class Resolver implements ExprVisitor<GrusType>, TypeExprVisitor<GrusType
         return node.accept(this);
     }
 
+    visitImportStmt(stmt: ImportStmt): void {
+        for (const import_ of stmt.imports) {
+            this.declare('var', import_.name);
+        }
+    }
+
     visitStructStmt(stmt: StructStmt): void {
         const fieldNames: Set<string> = new Set<string>();
         for (const field of stmt.fields) {
@@ -134,7 +143,7 @@ export class Resolver implements ExprVisitor<GrusType>, TypeExprVisitor<GrusType
             return { name: field.name.lexeme, type: type, isConst: false };
         }).sort((a, b) => a.name.localeCompare(b.name));
         const structType = new StructType(fieldTypes);
-        this.declare('type', stmt.name, structType);
+        this.declare('type', stmt.name);
         this.define(stmt.name, structType);
     }
 
@@ -142,6 +151,7 @@ export class Resolver implements ExprVisitor<GrusType>, TypeExprVisitor<GrusType
         for (const _var of stmt.vars) {
             this.declare('var', _var.name);
             if (_var.operator.type === TokenType.Equal) {
+                // debugger
                 let initType = _var.defaultValue.accept(this)
                 if (_var.typeExpr) {
                     const varType = _var.typeExpr.accept(this)
@@ -583,8 +593,8 @@ export class Resolver implements ExprVisitor<GrusType>, TypeExprVisitor<GrusType
         this.beginFunction(returnType);
         for (const param of expr.parameters) {
             const paramType = param.typeExpr.accept(this);
-            this.declare('param', param.name, paramType);
-            this.define(param.name);
+            this.declare('param', param.name);
+            this.define(param.name, paramType);
         }
         for (const bodyStmt of expr.body) {
             this.resolveStmt(bodyStmt);
@@ -620,8 +630,8 @@ export class Resolver implements ExprVisitor<GrusType>, TypeExprVisitor<GrusType
         this.beginFunction(returnType);
         for (const param of stmt.parameters) {
             const paramType = param.typeExpr.accept(this);
-            this.declare('param', param.name, paramType);
-            this.define(param.name);
+            this.declare('param', param.name);
+            this.define(param.name, paramType);
         }
         for (const bodyStmt of stmt.body) {
             this.resolveStmt(bodyStmt);
@@ -666,23 +676,21 @@ export class Resolver implements ExprVisitor<GrusType>, TypeExprVisitor<GrusType
         this.endScope();
     }
 
-    declare(id: 'var' | 'param' | 'func' | 'type', name: Token, type?: GrusType): void {
+    declare(id: 'var' | 'param' | 'func' | 'type', name: Token): void {
         if (this.currentScope) {
             if (this.currentScope.has(name.lexeme)) {
                 throw this.error(name, `Variable with this name ${name.lexeme} already declared in this scope.`);
             }
-            type = type ?? new SimpleType("void");
+            let type = new SimpleType("void");
             this.currentScope.set(name.lexeme, new Member(id, name.lexeme, type, false));
         }
     }
-    define(name: Token, type?: GrusType): void {
+    define(name: Token, type: GrusType): void {
         if (this.currentScope) {
             const declared = this.currentScope.get(name.lexeme);
             if (declared) {
                 declared.defined = true;
-                if (type) {
-                    declared.type = type;
-                }
+                declared.type = type;
                 this.compiler?.resolveIdentifier(name, declared.type);
             } else {
                 throw this.error(name, `Variable with this name ${name.lexeme} not declared in this scope.`);
@@ -699,8 +707,9 @@ export class Resolver implements ExprVisitor<GrusType>, TypeExprVisitor<GrusType
             const identifier = scope.get(vname.lexeme);
             if (identifier) {
                 const distance = this.scopes.length - 1 - i;
+
                 if (i == 0) { // 全局变量，编译时在主函数进行赋值
-                    this.compiler?.resolve(expr, 1);
+                    this.compiler?.resolve(expr, distance+1);
                 } else {
                     this.compiler?.resolve(expr, distance);
                 }
