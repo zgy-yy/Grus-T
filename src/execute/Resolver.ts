@@ -126,6 +126,7 @@ export class Resolver implements ExprVisitor<GrusType>, TypeExprVisitor<GrusType
     visitImportStmt(stmt: ImportStmt): void {
         for (const import_ of stmt.imports) {
             this.declare('var', import_.name);
+            this.define(import_.name, new SimpleType("i32"));
         }
     }
 

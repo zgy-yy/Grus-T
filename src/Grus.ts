@@ -3,32 +3,36 @@ import { Parser } from "./parser/Parser";
 import { Scanner } from "./parser/Scanner";
 import { Compiler } from "./execute/compiler";
 import { Resolver } from "./execute/Resolver";
+import llvm from "@wangziwenhk/llvm-bindings";
 
 
 export class Grus {
-    constructor(private readonly source: string, readonly reportError: (line: number, column: number) => void) {
+    constructor(private readonly source: string[], readonly reportError: (line: number, column: number) => void) {
         this.source = source;
         this.reportError = reportError;
     }
 
     run(): string {
-        const scanner = new Scanner(this.source, this.scnnerErrorHandler.bind(this));
-        const tokens = scanner.scanTokens();
-        const parser = new Parser(tokens, this.parserErrorHandler.bind(this));
-        const statements = parser.parse();
-        if (!statements) {
-            throw new Error('解析失败');
-        }
-        const compiler = new Compiler(this.compilerErrorHandler.bind(this));
-        const resolver = new Resolver(this.resolverErrorHandler.bind(this), compiler);
-        try {
+        const modules: llvm.Module[] = [];
+        for (const source of this.source) {
+            const compiler = new Compiler(this.compilerErrorHandler.bind(this));
+            const scanner = new Scanner(this.scnnerErrorHandler.bind(this));
+            const parser = new Parser(this.parserErrorHandler.bind(this));
+            const tokens = scanner.scanTokens(source);
+            const statements = parser.parse(tokens);
+            const resolver = new Resolver(this.resolverErrorHandler.bind(this), compiler);
+            if (!statements) {
+                throw new Error('解析失败');
+            }
             resolver.resolveProgram(statements);
-        } catch (error) {
-            console.error(error);
-            return "";
+            const module = compiler.compileProgram(statements);
+            modules.push(module);
         }
-    
-        return compiler.compileProgram(statements);
+        let destModule = modules[0];
+        for (let i = 1; i < modules.length; i++) {
+            llvm.Linker.linkModules(destModule, modules[i]);
+        }
+        return destModule.print();
     }
 
     scnnerErrorHandler(line: number, column: number, message: string) {

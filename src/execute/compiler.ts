@@ -7,6 +7,11 @@ import llvm from "@wangziwenhk/llvm-bindings";
 import { ArrayType, FunctionType, GrusType, PointerType, SimpleType, StructType, TempOmittedType } from "@/ast/GrusTypes";
 import { TokenType } from "@/ast/TokenType";
 import { Environment } from "./Environment";
+import { nanoid } from 'nanoid/non-secure'
+
+
+const context = new llvm.LLVMContext();
+
 
 export class CompilerError extends Error {
     public token: Token;
@@ -42,7 +47,7 @@ export class Compiler implements ExprVisitor<GValue>, StmtVisitor<void> {
         returnType: llvm.Type,
     }
 
-    private context: llvm.LLVMContext;
+    context: llvm.LLVMContext;
     private module: llvm.Module;
     private builder: llvm.IRBuilder;
     private constantTypes: {
@@ -62,11 +67,12 @@ export class Compiler implements ExprVisitor<GValue>, StmtVisitor<void> {
     private globalVariables: Map<llvm.GlobalVariable, {
         valueExpr: Expr,
         allocType: llvm.Type,
-    }> = new Map();
+    }> = new Map();;
 
     constructor(private readonly errorHandler: CompilerErrorHandler) {
-        this.context = new llvm.LLVMContext();
-        this.module = new llvm.Module('demo_module', this.context);
+        this.context = context;
+
+        this.module = new llvm.Module("module" + nanoid().slice(0, 8), this.context);
         this.builder = new llvm.IRBuilder(this.context);
         this.constantTypes = {
             void: llvm.Type.getVoidTy(this.context),
@@ -102,7 +108,7 @@ export class Compiler implements ExprVisitor<GValue>, StmtVisitor<void> {
         this.locals.set(expr, depth);
     }
 
-    compileProgram(stmts: Stmt[]): string {
+    compileProgram(stmts: Stmt[]): llvm.Module {
         //默认声明printf
         const LType = llvm.FunctionType.get(this.constantTypes.i32, [this.constantTypes.ptr], true);
         const printf = llvm.Function.Create(LType, llvm.Function.LinkageTypes.ExternalLinkage, "printf", this.module);
@@ -134,8 +140,7 @@ export class Compiler implements ExprVisitor<GValue>, StmtVisitor<void> {
                 this.compileStmt(stmt);
             }
         }
-        const code = this.module.print();
-        return code;
+        return this.module;
     }
 
     compileStmt(stmt: Stmt): void {
@@ -144,7 +149,17 @@ export class Compiler implements ExprVisitor<GValue>, StmtVisitor<void> {
 
     // StmtVisitor methods
     visitImportStmt(stmt: ImportStmt): void {
-        throw new Error("Method not implemented.");
+        for (const import_ of stmt.imports) {
+            // const importType = this.IdentifierType.get(import_.name);
+            const importType = this.llvmType(new SimpleType("i32"));
+            const importAddr = new llvm.GlobalVariable(this.module, importType,
+                false, llvm.GlobalValue.LinkageTypes.ExternalLinkage, null, import_.name.lexeme);
+            // this.globalVariables.set(importAddr, {
+            //     valueExpr: imports[0].name,
+            //     allocType: importType,
+            // });
+            this.define(import_.name.lexeme, importAddr, new SimpleType("i32"));
+        }
     }
     visitBlockStmt(stmt: BlockStmt): void {
         this.beginScope();
@@ -173,8 +188,10 @@ export class Compiler implements ExprVisitor<GValue>, StmtVisitor<void> {
             const linkage = llvm.GlobalValue.LinkageTypes.ExternalLinkage;
             if (this.environment == this.globalEnv) {
                 const zero = llvm.ConstantInt.get(allocType, 0);
+                // const name = nanoid().slice(0, 8);
                 const allocAddr = new llvm.GlobalVariable(this.module, allocType,
-                    false, linkage, zero, varName);
+                    false, linkage, zero, `${varName}`);
+                // console.log(name);
                 this.define(varName, allocAddr, varType);
                 this.globalVariables.set(allocAddr, {
                     valueExpr: variable.defaultValue,
@@ -204,7 +221,7 @@ export class Compiler implements ExprVisitor<GValue>, StmtVisitor<void> {
 
         const retType = this.llvmType(funType.returnType);
         const funcType = llvm.FunctionType.get(retType, paramLTypes, false);
-        const linkage = stmt.expose ? llvm.GlobalValue.LinkageTypes.ExternalLinkage : llvm.GlobalValue.LinkageTypes.InternalLinkage;
+        const linkage = llvm.GlobalValue.LinkageTypes.ExternalLinkage;
         const wfunc = llvm.Function.Create(funcType, linkage, `${funName}_wrapper`, this.module);
         const bb = llvm.BasicBlock.Create(this.context, 'entry', wfunc);  // 修复：应该为 wfunc 创建基本块，而不是 func
         this.builder.SetInsertPoint(bb);
@@ -831,7 +848,6 @@ export class Compiler implements ExprVisitor<GValue>, StmtVisitor<void> {
 
     visitVariableExpr(expr: VariableExpr): GValue {
         const value = this.lookupVariable(expr.name, expr);
-        console.log("visitVariableExpr", expr.name, value);
         if (value.gType instanceof FunctionType) {
             if (value.gType.isLocal) {
                 return value;

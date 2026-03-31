@@ -38,14 +38,15 @@ export class Scanner {
   private current = 0;
   private line = 1;
   private column = 0;
+  private source: string = '';
   private error: ScannerErrorHandler;
-  constructor(private source: string, _error: ScannerErrorHandler) {
-    this.source = source;
+  constructor(_error: ScannerErrorHandler) {
     this.error = _error;
   }
 
   // 扫描所有 token
-  scanTokens(): Token[] {
+  scanTokens(source: string): Token[] {
+    this.source = source;
     while (!this.isAtEnd()) {
       this.start = this.current;
       this.scanToken();

@@ -40,7 +40,7 @@ export class ImportStmt extends Stmt {
     }[]) {
         super();
         this.path = path;
-        this.imports = [];
+        this.imports = imports;
     }
     accept<R>(visitor: StmtVisitor<R>): R {
         return visitor.visitImportStmt(this);

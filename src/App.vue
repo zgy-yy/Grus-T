@@ -33,14 +33,14 @@ const reportError = (line: number, column: number) => {
 };
 
 try {
-    const scanner = new Scanner(content, reportError);
-    const tokens = scanner.scanTokens();
-    const parser = new Parser(tokens, (token, message) => {
+    const scanner = new Scanner(reportError);
+    const tokens = scanner.scanTokens(content);
+    const parser = new Parser((token, message) => {
         reportError(token.line, token.column);
         console.error(`parser error [${token.line}:${token.column}] ${message}`);
     });
     console.log(tokens)
-    const statements = parser.parse();
+    const statements = parser.parse(tokens);
     if (statements) {
         const resolver = new Resolver((token, message) => {
             reportError(token.line, token.column);
@@ -48,7 +48,7 @@ try {
         });
         console.log(statements);
         resolver.resolveProgram(statements);
-        
+
 
     }
 } catch (e) {

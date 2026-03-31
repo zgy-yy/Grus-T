@@ -51,7 +51,7 @@ type ParseRule = [
 
 export class Parser {
     private current: number = 0;
-    private readonly tokens: Token[];
+    private tokens: Token[]=[];
     public errorHandler: ParserErrorHandler;
     private PARSE_ERROR: boolean = false;
 
@@ -146,8 +146,8 @@ export class Parser {
         [TokenType.As]: [null, null, Precedence.NONE],// as
     };
 
-    constructor(tokens: Token[], errorHandler: ParserErrorHandler) {
-        this.tokens = tokens;
+    constructor(errorHandler: ParserErrorHandler) {
+
         this.errorHandler = errorHandler;
     }
 
@@ -157,7 +157,8 @@ export class Parser {
  * 程序由变量声明和函数声明组成
  * @returns 解析后的语句列表，如果解析失败则返回 null
  */
-    public parse(): Stmt[] | null {
+    public parse(tokens: Token[],): Stmt[] | null {
+        this.tokens = tokens;
         const statements: Stmt[] = [];
         while (!this.isAtEnd()) {
             const stmt = this.declaration(true);
@@ -233,7 +234,6 @@ export class Parser {
             imports.push({ name, alias });
         } while (this.match(TokenType.Comma));
         this.consume(TokenType.Semicolon, "Expect ';' after import declaration.");
-
         return new ImportStmt(path, imports);
     }
 
@@ -306,7 +306,7 @@ export class Parser {
         }
         this.consume(TokenType.RightParen, "Expect ')' after parameters.");
         let returnType = this.typeExpr();
-    
+
         this.consume(TokenType.LeftBrace, "Expect '{' after parameters.");
         const body = this.block();
         return new FunctionStmt(name, parameters, returnType, body);

@@ -21,6 +21,7 @@
   },
   "dependencies": {
     "@wangziwenhk/llvm-bindings": "^0.5.0",
+    "nanoid": "^5.1.7",
     "vue": "^3.5.24"
   }
 }
