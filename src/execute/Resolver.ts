@@ -95,21 +95,9 @@ export class Resolver implements ExprVisitor<GrusType>, TypeExprVisitor<GrusType
             this.currentScope.set("void", new Member('type', "void", new SimpleType("void"), true));
 
             this.currentScope.set("printf", new Member('func', "printf", new FunctionType(new SimpleType("i32"), [new SimpleType("string"), new TempOmittedType()], false), true));
-            stmts.sort((a, b) => programStmtSortKey(a) - programStmtSortKey(b));
             stmts.forEach(stmt => {
-                if (stmt instanceof FunctionStmt) {
-                    this.declare('func', stmt.name);
-                    const returnType = stmt.returnType.accept(this);
-                    this.define(stmt.name, returnType);
-                } else {
-                    this.resolveStmt(stmt);
-                }
+                this.resolveStmt(stmt);
             });
-            for (const stmt of stmts) {
-                if (stmt instanceof FunctionStmt) {
-                    this.resolveStmt(stmt);
-                }
-            }
             this.endScope();
         } catch (error) {
             throw error;
@@ -149,9 +137,16 @@ export class Resolver implements ExprVisitor<GrusType>, TypeExprVisitor<GrusType
     }
 
     visitVarStmt(stmt: VarStmt): void {
+        const isGlobal = this.scopes.length === 1;
         for (const _var of stmt.vars) {
             this.declare('var', _var.name);
             if (_var.operator.type === TokenType.Equal) {
+                if (isGlobal) {
+                    if (!this.checkConstant(_var.defaultValue)) {
+                        throw this.error(_var.operator, `Expression is not constant`);
+                    }
+                }
+
                 // debugger
                 let initType = _var.defaultValue.accept(this)
                 if (_var.typeExpr) {
@@ -201,9 +196,10 @@ export class Resolver implements ExprVisitor<GrusType>, TypeExprVisitor<GrusType
     }
 
     visitFunctionStmt(stmt: FunctionStmt): void {
-        const returnType = stmt?.returnType?.accept(this) ?? new SimpleType("void");
+        const returnType = stmt.returnType.accept(this);
         const paramTypes = stmt.parameters.map(param => param.typeExpr.accept(this));
         const funcType = new FunctionType(returnType, paramTypes, true);
+        this.declare('func', stmt.name);
         this.define(stmt.name, funcType);
         this.resolveFunction(stmt);
     }
@@ -490,6 +486,7 @@ export class Resolver implements ExprVisitor<GrusType>, TypeExprVisitor<GrusType
         if (calleeType instanceof FunctionType) {
             let retType = calleeType.returnType;
             const lastParamType = calleeType.paramTypes[calleeType.paramTypes.length - 1];
+
             for (const i in expr.arguments) {
                 const paramType = calleeType.paramTypes[i] ?? lastParamType;//形参类型
                 let argType = expr.arguments[i].accept(this);//实参类型
@@ -608,7 +605,11 @@ export class Resolver implements ExprVisitor<GrusType>, TypeExprVisitor<GrusType
     }
 
     visitGeneralTypeExpr(expr: GeneralTypeExpr): GrusType {
-        return this.findIdentifier(expr.name).type;
+        const typeInfo = this.findIdentifier(expr.name)
+        if (typeInfo.id === 'type') {
+            return typeInfo.type;
+        }
+        throw this.error(expr.name, `Type ${expr.name.lexeme} not found`);
     }
     visitFunctionTypeExpr(expr: FunctionTypeExpr): GrusType {
         let retType: GrusType = new SimpleType("void");
@@ -710,7 +711,7 @@ export class Resolver implements ExprVisitor<GrusType>, TypeExprVisitor<GrusType
                 const distance = this.scopes.length - 1 - i;
 
                 if (i == 0) { // 全局变量，编译时在主函数进行赋值
-                    this.compiler?.resolve(expr, distance+1);
+                    this.compiler?.resolve(expr, distance + 1);
                 } else {
                     this.compiler?.resolve(expr, distance);
                 }
@@ -757,6 +758,22 @@ export class Resolver implements ExprVisitor<GrusType>, TypeExprVisitor<GrusType
             }
         }
         return value;
+    }
+
+    checkConstant(expr: Expr) {
+        if (expr instanceof LiteralExpr) {
+            return true
+        }
+        if (expr instanceof StructExpr) {
+            for (const field of expr.fields) {
+                const constant = this.checkConstant(field.value);
+                if (!constant) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
     }
 
 
@@ -853,3 +870,4 @@ function checkFloatType(type: GrusType): boolean {
     return false;
 
 }
+
