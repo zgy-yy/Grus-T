@@ -230,7 +230,7 @@ export class Parser {
         }[] = [];
         do {
             const name = this.consume(TokenType.Identifier, "Expect import name.");
-            const alias = this.match(TokenType.As) ? this.consume(TokenType.As, "Expect 'as' after import name.") : name;
+            const alias = this.match(TokenType.As) ? this.consume(TokenType.Identifier, "Expect name after as.") : name;
             imports.push({ name, alias });
         } while (this.match(TokenType.Comma));
         this.consume(TokenType.Semicolon, "Expect ';' after import declaration.");

@@ -38,7 +38,7 @@ export class Compiler implements ExprVisitor<GValue>, StmtVisitor<void> {
         breakBb: llvm.BasicBlock,
     }[] = [];
     private labelMap: Map<string, llvm.BasicBlock> = new Map<string, llvm.BasicBlock>();
-    private IdentifierType: Map<Token, GrusType> = new Map<Token, GrusType>()
+    public IdentifierType: Map<Token, GrusType> = new Map<Token, GrusType>()
     private typeMap: Map<GrusType, llvm.Type> = new Map<GrusType, llvm.Type>()
     readonly globalEnv: Environment = new Environment(null);
     private environment: Environment = this.globalEnv;
@@ -64,10 +64,6 @@ export class Compiler implements ExprVisitor<GValue>, StmtVisitor<void> {
     }
     private mallocFunc: llvm.FunctionCallee;
     private fatFuncs: Map<llvm.Function, llvm.Value>;
-    // private globalVariables: Map<llvm.GlobalVariable, {
-    //     valueExpr: Expr,
-    //     allocType: llvm.Type,
-    // }> = new Map();;
 
     constructor(private readonly errorHandler: CompilerErrorHandler) {
         this.context = context;
@@ -126,7 +122,7 @@ export class Compiler implements ExprVisitor<GValue>, StmtVisitor<void> {
                     const fun = this.declareFunction(funName, retLType, paramLTypes, false);
                     this.define(funName, fun, funType);
                 } else {
-                    throw new Error("Function type not found");
+                    throw new Error("Function type not found: " + funName);
                 }
             } else {
                 this.compileStmt(stmt);
@@ -151,14 +147,44 @@ export class Compiler implements ExprVisitor<GValue>, StmtVisitor<void> {
     visitImportStmt(stmt: ImportStmt): void {
         for (const import_ of stmt.imports) {
             // const importType = this.IdentifierType.get(import_.name);
-            const importType = this.llvmType(new SimpleType("i32"));
-            const importAddr = new llvm.GlobalVariable(this.module, importType,
-                false, llvm.GlobalValue.LinkageTypes.ExternalLinkage, null, import_.name.lexeme);
-            // this.globalVariables.set(importAddr, {
-            //     valueExpr: imports[0].name,
-            //     allocType: importType,
-            // });
-            this.define(import_.name.lexeme, importAddr, new SimpleType("i32"));
+            const importType = this.IdentifierType.get(import_.alias);
+            if (!importType) {
+                throw new Error("Import type not found");
+            }
+            if (import_.id === 'func') {
+                // llvmType(FunctionType) 是闭包结构体，不能传给 Function.Create；需显式构造 LLVM 函数类型
+                if (!(importType instanceof FunctionType)) {
+                    throw new Error("Import type is not function");
+                }
+                const retLType = this.llvmType(importType.returnType);
+                const lastParamType = importType.paramTypes[importType.paramTypes.length - 1];
+                let paramLTypes: llvm.Type[];
+                let isVarArgs = false;
+                if (lastParamType instanceof TempOmittedType) {
+                    paramLTypes = importType.paramTypes.slice(0, -1).map((t) => this.llvmType(t));
+                    isVarArgs = true;
+                } else {
+                    paramLTypes = importType.paramTypes.map((t) => this.llvmType(t));
+                }
+                const funcType = llvm.FunctionType.get(retLType, paramLTypes, isVarArgs);
+                const func = llvm.Function.Create(
+                    funcType,
+                    llvm.Function.LinkageTypes.ExternalLinkage,
+                    import_.name.lexeme,
+                    this.module
+                );
+                this.define(import_.alias.lexeme, func, importType);
+            } else if (import_.id === 'type') {
+                throw new Error("Import type is struct");
+            } else if (import_.id === 'var') {
+                const llvmType = this.llvmType(importType);
+                const importAddr = new llvm.GlobalVariable(this.module, llvmType,
+                    false, llvm.GlobalValue.LinkageTypes.ExternalLinkage, null, import_.name.lexeme);
+                this.define(import_.alias.lexeme, importAddr, importType);
+            } else {
+                throw new Error("Import type not found");
+            }
+
         }
     }
     visitBlockStmt(stmt: BlockStmt): void {

@@ -5,6 +5,16 @@ export interface GrusType {
 export type literalType = 'void' | 'float' | 'double' | 'i8' | 'i16' | 'i32' | 'i64' | 'string' | 'bool' | 'null';
 
 
+export class UnknownType implements GrusType {
+    isConst: boolean;
+    constructor() {
+        this.isConst = false;
+    }
+    toString(): string {
+        return "unknown";
+    }
+}
+
 
 export class SimpleType implements GrusType {
     type: literalType;

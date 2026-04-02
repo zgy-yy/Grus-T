@@ -3,9 +3,11 @@ import { BlockStmt, BreakStmt, ClassStmt, ContinueStmt, DoWhileStmt, ExpressionS
 import { Token } from "@/ast/Token";
 import { ParserErrorHandler } from "@/parser/ErrorHandler";
 import { TokenType } from "@/ast/TokenType";
-import { ArrayType, GrusType, SimpleType, FunctionType, TempOmittedType, PointerType, literalType, StructType } from "../ast/GrusTypes";
+import { ArrayType, GrusType, SimpleType, FunctionType, TempOmittedType, PointerType, literalType, StructType, UnknownType } from "../ast/GrusTypes";
 import { Compiler } from "./compiler";
 import { ArrayTypeExpr, FunctionTypeExpr, GeneralTypeExpr, PointerTypeExpr, TypeExprVisitor } from "@/ast/TypeExpr";
+import path from "path";
+// import path from "path";
 
 class FunEnv {
     returnType: GrusType;
@@ -58,8 +60,15 @@ class Member {
         this.defined = defined;
     }
 }
+
+export const GLobalDeclaration = new Map<string, Map<string, {
+    id: 'type' | 'func' | 'var',
+    type: GrusType,
+}>>();
+
 export class Resolver implements ExprVisitor<GrusType>, TypeExprVisitor<GrusType>, StmtVisitor<void> {
 
+    private codePath: string;
     private compiler: Compiler | null = null;
     //循环深度，用于判断break和continue是否合法
     // private typeScopes: Map<string, GrusType>[] = [];
@@ -74,13 +83,21 @@ export class Resolver implements ExprVisitor<GrusType>, TypeExprVisitor<GrusType
     private errorHandler: ParserErrorHandler;
     // private currentClass: ClassType = "NONE";
     private escaped: Set<GSymbol> = new Set<GSymbol>();
-    constructor(errorHandler: ParserErrorHandler, compiler?: Compiler) {
+    exposed: Map<string, {
+        id: 'type' | 'func' | 'var',
+        type: GrusType,
+    }> = new Map();
+
+    private ind: 0 | 1 = 0; //第n次扫描
+    constructor(errorHandler: ParserErrorHandler, codePath: string, compiler?: Compiler) {
         this.errorHandler = errorHandler;
         this.compiler = compiler ?? null;
-
+        this.codePath = codePath;
+        GLobalDeclaration.set(this.codePath, this.exposed);
     }
 
-    resolveProgram(stmts: Stmt[]): void {
+
+    resolveProgram(stmts: Stmt[], ind: 0 | 1 = 0) {
         try {
             this.beginScope();
             this.currentScope.set("i8", new Member('type', "i8", new SimpleType("i8"), true));
@@ -95,10 +112,12 @@ export class Resolver implements ExprVisitor<GrusType>, TypeExprVisitor<GrusType
             this.currentScope.set("void", new Member('type', "void", new SimpleType("void"), true));
 
             this.currentScope.set("printf", new Member('func', "printf", new FunctionType(new SimpleType("i32"), [new SimpleType("string"), new TempOmittedType()], false), true));
+            console.log("globalScope", this.currentScope);
             stmts.forEach(stmt => {
                 this.resolveStmt(stmt);
             });
-            this.endScope();
+
+            this.endScope()
         } catch (error) {
             throw error;
         }
@@ -112,9 +131,23 @@ export class Resolver implements ExprVisitor<GrusType>, TypeExprVisitor<GrusType
     }
 
     visitImportStmt(stmt: ImportStmt): void {
+        const curDir = path.dirname(this.codePath);
+        const importPath = stmt.path.lexeme.replace(/["']/g, "");
+        const targetPath = path.join(curDir, importPath);
+        const importedDeclaration = GLobalDeclaration.get(targetPath);
         for (const import_ of stmt.imports) {
-            this.declare('var', import_.name);
-            this.define(import_.name, new SimpleType("i32"));
+            this.declare('var', import_.alias);
+            if (importedDeclaration) {
+                const declaration = importedDeclaration.get(import_.name.lexeme);
+                if (declaration) {
+                    this.define(import_.alias, declaration.type);
+                    import_.id = declaration.id;
+                } else {
+                    this.define(import_.alias, new UnknownType());
+                }
+            } else {
+                this.define(import_.alias, new UnknownType());
+            }
         }
     }
 
@@ -126,6 +159,7 @@ export class Resolver implements ExprVisitor<GrusType>, TypeExprVisitor<GrusType
             }
             fieldNames.add(field.name.lexeme);
         }
+
         let fieldTypes: { name: string, type: GrusType, isConst: boolean }[] = [];
         fieldTypes = stmt.fields.map(field => {
             let type = field.typeExpr.accept(this);
@@ -134,6 +168,12 @@ export class Resolver implements ExprVisitor<GrusType>, TypeExprVisitor<GrusType
         const structType = new StructType(fieldTypes);
         this.declare('type', stmt.name);
         this.define(stmt.name, structType);
+        if (stmt.expose) {
+            this.exposed.set(stmt.name.lexeme, {
+                id: 'type',
+                type: structType,
+            });
+        }
     }
 
     visitVarStmt(stmt: VarStmt): void {
@@ -154,13 +194,19 @@ export class Resolver implements ExprVisitor<GrusType>, TypeExprVisitor<GrusType
                     if ((varType instanceof PointerType)) {
                         throw this.error(_var.operator, `Type mismatch: ${varType} != pointer type`);
                     }
-                    if (!checkSameType(varType, initType)) {
-                        throw this.error(_var.operator, `Type mismatch`)
+                    if (!this.checkSameType(varType, initType)) {
+                        console.log("varType", varType, _var.defaultValue);
+                        console.log("initType", initType, this.scopes);
+                        throw this.error(_var.operator, `Type mismatch: ${varType} != ${initType}`)
                     }
-
-                    this.define(_var.name, varType);
-                } else {
-                    this.define(_var.name, initType);
+                    initType = varType;
+                }
+                this.define(_var.name, initType);
+                if (stmt.expose) {
+                    this.exposed.set(_var.name.lexeme, {
+                        id: 'var',
+                        type: initType,
+                    });
                 }
 
             }
@@ -176,12 +222,20 @@ export class Resolver implements ExprVisitor<GrusType>, TypeExprVisitor<GrusType
                     if (!(varType instanceof PointerType)) {
                         throw this.error(_var.operator, `Type mismatch: ${varType} != pointer type`);
                     }
-                    if (!checkSameType(varType, initType)) {
+                    if (!this.checkSameType(varType, initType)) {
                         throw this.error(_var.operator, `Type mismatch`)
                     }
-                    this.define(_var.name, varType);
-                } else {
+                    initType = varType;
                     this.define(_var.name, initType);
+                } else {
+                    initType = new PointerType(initType);
+                    this.define(_var.name, initType);
+                }
+                if (stmt.expose) {
+                    this.exposed.set(_var.name.lexeme, {
+                        id: 'var',
+                        type: initType,
+                    });
                 }
             }
         }
@@ -196,11 +250,7 @@ export class Resolver implements ExprVisitor<GrusType>, TypeExprVisitor<GrusType
     }
 
     visitFunctionStmt(stmt: FunctionStmt): void {
-        const returnType = stmt.returnType.accept(this);
-        const paramTypes = stmt.parameters.map(param => param.typeExpr.accept(this));
-        const funcType = new FunctionType(returnType, paramTypes, true);
-        this.declare('func', stmt.name);
-        this.define(stmt.name, funcType);
+        this.declareFunction(stmt);
         this.resolveFunction(stmt);
     }
 
@@ -320,7 +370,7 @@ export class Resolver implements ExprVisitor<GrusType>, TypeExprVisitor<GrusType
                 throw this.error(stmt.keyword, `Function with return type must return a value.`);
             }
             const returnType = stmt.value.accept(this)
-            if (!checkSameType(this.currentFun.returnType, returnType)) {
+            if (!this.checkSameType(this.currentFun.returnType, returnType)) {
                 throw this.error(stmt.keyword, `Type mismatch: ${returnType} != ${this.currentFun.returnType}`);
             }
             if (this.currentFun.returnType instanceof PointerType) {
@@ -351,7 +401,7 @@ export class Resolver implements ExprVisitor<GrusType>, TypeExprVisitor<GrusType
     visitAssignExpr(expr: AssignExpr): GrusType {
         let leftType = expr.target.accept(this);
         let rightType = expr.value.accept(this);
-        if (!checkSameType(leftType, rightType)) {
+        if (!this.checkSameType(leftType, rightType)) {
             throw this.error(expr.equal, `Type mismatch: ${leftType} != ${rightType}`);
         }
         expr.value = this.implicitTypeConversion(expr.value, leftType);
@@ -364,7 +414,7 @@ export class Resolver implements ExprVisitor<GrusType>, TypeExprVisitor<GrusType
             throw this.error(expr.arrow, `Type mismatch: ${targetType.toString()} != pointer type`);
         }
         let valueType = expr.value.accept(this);
-        if (!checkSameType(targetType, valueType)) {
+        if (!this.checkSameType(targetType, valueType)) {
             throw this.error(expr.arrow, `Type mismatch: ${targetType} != ${valueType}`);
         }
         return targetType;
@@ -394,7 +444,7 @@ export class Resolver implements ExprVisitor<GrusType>, TypeExprVisitor<GrusType
             expr.left = this.implicitTypeConversion(expr.left, rightType);
             expr.right = this.implicitTypeConversion(expr.right, leftType);
         } else if (['!=', '==', '>', '>=', '<', '<='].includes(expr.operator.lexeme)) {
-            if (!checkSameType(leftType, rightType)) {
+            if (!this.checkSameType(leftType, rightType)) {
                 throw this.error(expr.operator, `Type mismatch: ${leftType} != ${rightType}`);
             }
             if (checkNumberType(leftType) && checkNumberType(rightType)) {
@@ -493,7 +543,7 @@ export class Resolver implements ExprVisitor<GrusType>, TypeExprVisitor<GrusType
                 if (paramType instanceof TempOmittedType) {
                     continue;
                 }
-                if (!checkSameType(paramType, argType)) {
+                if (!this.checkSameType(paramType, argType)) {
                     throw this.error(expr.paren, `Type mismatch: ${paramType} != ${argType}`);
                 }
                 if (paramType instanceof PointerType) {
@@ -606,6 +656,9 @@ export class Resolver implements ExprVisitor<GrusType>, TypeExprVisitor<GrusType
 
     visitGeneralTypeExpr(expr: GeneralTypeExpr): GrusType {
         const typeInfo = this.findIdentifier(expr.name)
+        if (!typeInfo.defined) {
+            throw this.error(expr.name, `Type ${expr.name.lexeme} not in this scope`);
+        }
         if (typeInfo.id === 'type') {
             return typeInfo.type;
         }
@@ -627,8 +680,22 @@ export class Resolver implements ExprVisitor<GrusType>, TypeExprVisitor<GrusType
         return new ArrayType(elementType, expr.size);
     }
 
+    declareFunction(stmt: FunctionStmt): void {
+        const returnType = stmt.returnType.accept(this);
+        const paramTypes = stmt.parameters.map(param => param.typeExpr.accept(this));
+        const funcType = new FunctionType(returnType, paramTypes, true);
+        this.declare('func', stmt.name);
+        this.define(stmt.name, funcType);
+        if (stmt.expose) {
+            this.exposed.set(stmt.name.lexeme, {
+                id: 'func',
+                type: funcType,
+            });
+        }
+    }
+
     resolveFunction(stmt: FunctionStmt): void {
-        const returnType = stmt.returnType?.accept(this) ?? new SimpleType("void");
+        const returnType = stmt.returnType.accept(this)
         this.beginFunction(returnType);
         for (const param of stmt.parameters) {
             const paramType = param.typeExpr.accept(this);
@@ -776,6 +843,53 @@ export class Resolver implements ExprVisitor<GrusType>, TypeExprVisitor<GrusType
 
     }
 
+    checkSameType(left: GrusType, right: GrusType, strict: boolean = false): boolean {
+        if (left instanceof UnknownType || right instanceof UnknownType) {
+            if (this.ind == 0) {
+                return true;
+            }
+            return false;
+        }
+        if (!strict) {
+            if (checkNumberType(left) && checkNumberType(right)) {
+                return true;
+            }
+        }
+        if (left instanceof SimpleType && right instanceof SimpleType) {
+            return left.type === right.type;
+        }
+        if (left instanceof PointerType || right instanceof PointerType) {
+            const leftType = left instanceof PointerType ? left.oriType : left;
+            const rightType = right instanceof PointerType ? right.oriType : right;
+            return this.checkSameType(leftType, rightType, true);
+        }
+        if (left instanceof ArrayType && right instanceof ArrayType) {
+            return this.checkSameType(left.elementType, right.elementType, true) && left.size === right.size;
+        }
+        if (left instanceof StructType && right instanceof StructType) {
+            if (left.fields.length !== right.fields.length) {
+                return false;
+            }
+            for (let i = 0; i < left.fields.length; i++) {
+                const leftField = left.fields[i];
+                const rightField = right.fields[i];
+                if (leftField.name !== rightField.name) {
+                    return false;
+                }
+                if (!this.checkSameType(leftField.type, rightField.type, true)) {
+                    return false;
+                }
+            }
+            return true;
+        }
+        if (left instanceof FunctionType && right instanceof FunctionType) {
+            return this.checkSameType(left.returnType, right.returnType) && left.paramTypes.every((param: GrusType, index: number) => this.checkSameType(param, right.paramTypes[index]));
+        } else {
+            // throw new ResolverError(left, `Type mismatch: ${left} != ${right}`);
+            return false;
+        }
+    }
+
 
     error(token: Token, message: string): ResolverError {
         this.errorHandler(token, message);
@@ -806,46 +920,7 @@ function widthOf(t: literalType): number {
     }
 }
 
-function checkSameType(left: GrusType, right: GrusType, strict: boolean = false): boolean {
-    if (!strict) {
-        if (checkNumberType(left) && checkNumberType(right)) {
-            return true;
-        }
-    }
-    if (left instanceof SimpleType && right instanceof SimpleType) {
-        return left.type === right.type;
-    }
-    if (left instanceof PointerType || right instanceof PointerType) {
-        const leftType = left instanceof PointerType ? left.oriType : left;
-        const rightType = right instanceof PointerType ? right.oriType : right;
-        return checkSameType(leftType, rightType, true);
-    }
-    if (left instanceof ArrayType && right instanceof ArrayType) {
-        return checkSameType(left.elementType, right.elementType, true) && left.size === right.size;
-    }
-    if (left instanceof StructType && right instanceof StructType) {
-        if (left.fields.length !== right.fields.length) {
-            return false;
-        }
-        for (let i = 0; i < left.fields.length; i++) {
-            const leftField = left.fields[i];
-            const rightField = right.fields[i];
-            if (leftField.name !== rightField.name) {
-                return false;
-            }
-            if (!checkSameType(leftField.type, rightField.type, true)) {
-                return false;
-            }
-        }
-        return true;
-    }
-    if (left instanceof FunctionType && right instanceof FunctionType) {
-        return checkSameType(left.returnType, right.returnType) && left.paramTypes.every((param: GrusType, index: number) => checkSameType(param, right.paramTypes[index]));
-    } else {
-        // throw new ResolverError(left, `Type mismatch: ${left} != ${right}`);
-        return false;
-    }
-}
+
 
 function checkBooleanType(type: GrusType): boolean {
     return type instanceof SimpleType && type.type === "bool";

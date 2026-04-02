@@ -45,9 +45,11 @@ try {
         const resolver = new Resolver((token, message) => {
             reportError(token.line, token.column);
             console.error(`resolver error [${token.line}:${token.column}] ${message}`);
-        });
+        }, "");
         console.log(statements);
+
         resolver.resolveProgram(statements);
+
 
 
     }

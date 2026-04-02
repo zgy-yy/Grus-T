@@ -33,6 +33,7 @@ export class ImportStmt extends Stmt {
     imports: {
         name: Token,
         alias: Token,
+        id: 'func' | 'var' | 'type' | 'none',
     }[]
     constructor(path: Token, imports: {
         name: Token,
@@ -40,7 +41,11 @@ export class ImportStmt extends Stmt {
     }[]) {
         super();
         this.path = path;
-        this.imports = imports;
+        this.imports = imports.map(i => ({
+            name: i.name,
+            alias: i.alias,
+            id: 'none',
+        }));
     }
     accept<R>(visitor: StmtVisitor<R>): R {
         return visitor.visitImportStmt(this);
@@ -240,7 +245,7 @@ export class FunctionStmt extends Stmt {
     name: Token;
     parameters: Parameter[];
     body: Stmt[];
-    returnType: TypeExpr ;
+    returnType: TypeExpr;
     constructor(name: Token, parameters: Parameter[], returnType: TypeExpr, body: Stmt[]) {
         super();
         this.expose = false;
