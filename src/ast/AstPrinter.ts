@@ -8,10 +8,10 @@ export class AstPrinter implements ExprVisitor<string> {
         return expr.accept(this);
     }
     visitAssignExpr(expr: AssignExpr): string {
-        return this.parenthesize("=", expr.target.accept(this), expr.value.accept(this));
+        return this.parenthesize("=", expr.left.accept(this), expr.value.accept(this));
     }
     visitPointExpr(expr: PointExpr): string {
-        return this.parenthesize("=>", expr.target.accept(this), expr.value.accept(this));
+        return this.parenthesize("=>", expr.left.accept(this), expr.value.accept(this));
     }
     visitConditionalExpr(expr: ConditionalExpr): string {
         return this.parenthesize("?", expr.condition.accept(this), expr.trueExpr.accept(this), expr.falseExpr.accept(this));

@@ -1,6 +1,6 @@
 import { Expr } from "@/ast/Expr";
 import { Token } from "@/ast/Token";
-import { FunctionTypeExpr, TypeExpr } from "./TypeExpr";
+import { TypeExpr } from "./TypeExpr";
 
 export abstract class Stmt {
     abstract accept<R>(visitor: StmtVisitor<R>): R;

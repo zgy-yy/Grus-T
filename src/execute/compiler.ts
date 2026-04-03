@@ -146,7 +146,6 @@ export class Compiler implements ExprVisitor<GValue>, StmtVisitor<void> {
     // StmtVisitor methods
     visitImportStmt(stmt: ImportStmt): void {
         for (const import_ of stmt.imports) {
-            // const importType = this.IdentifierType.get(import_.name);
             const importType = this.IdentifierType.get(import_.alias);
             if (!importType) {
                 throw new Error("Import type not found");
@@ -446,12 +445,12 @@ export class Compiler implements ExprVisitor<GValue>, StmtVisitor<void> {
     // ExprVisitor methods
     visitAssignExpr(expr: AssignExpr): GValue {
         const value = expr.value.accept(this);
-        const target = expr.target.accept(this);
+        const target = expr.left.accept(this);
         this.builder.CreateStore(value.val, target.val);
         return value;
     }
     visitPointExpr(expr: PointExpr): GValue {
-        const target = expr.target.accept(this);
+        const target = expr.left.accept(this);
         const value = expr.value.accept(this);
         this.builder.CreateStore(value.val, target.val);
         return value;
@@ -725,7 +724,7 @@ export class Compiler implements ExprVisitor<GValue>, StmtVisitor<void> {
                 const closureFuncPtr = this.builder.CreateExtractValue(callee.val, [0], "closure.funcPtr");
                 const closureEnvPtr = this.builder.CreateExtractValue(callee.val, [1], "closure.envPtr");
                 args.unshift(closureEnvPtr);
-                callee.val = closureFuncPtr;
+                callee.val = closureFuncPtr;    
             }
             const returnLType = this.llvmType(callee.gType.returnType);
             const lastParamType = callee.gType.paramTypes[callee.gType.paramTypes.length - 1];

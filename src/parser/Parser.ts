@@ -10,7 +10,6 @@ class SyntaxError extends Error {
     constructor(token: Token, message: string) {
         super(message);
         this.token = token;
-
     }
 }
 
@@ -51,7 +50,7 @@ type ParseRule = [
 
 export class Parser {
     private current: number = 0;
-    private tokens: Token[]=[];
+    private tokens: Token[] = [];
     public errorHandler: ParserErrorHandler;
     private PARSE_ERROR: boolean = false;
 
@@ -182,8 +181,7 @@ export class Parser {
         if (global) {
             if (this.match(TokenType.Expose)) {
                 expose = true;
-            }
-            if (this.match(TokenType.Link)) {
+            } else if (this.match(TokenType.Link)) {
                 return this.importDeclaration();
             }
         }
@@ -207,7 +205,7 @@ export class Parser {
                     stmt.expose = expose;
                     return stmt;
                 }
-                throw this.error(this.peek(), "Expect global declaration.");
+                throw this.error(this.peek(), "Expect global function declaration.");
             }
             return this.statement();
         }
@@ -215,9 +213,9 @@ export class Parser {
             if (error instanceof SyntaxError) {
                 this.synchronize();
                 return null
-            } else {
-                throw error;
             }
+            throw error;
+
         }
 
     }
@@ -230,7 +228,7 @@ export class Parser {
         }[] = [];
         do {
             const name = this.consume(TokenType.Identifier, "Expect import name.");
-            const alias = this.match(TokenType.As) ? this.consume(TokenType.Identifier, "Expect name after as.") : name;
+            const alias = this.match(TokenType.As) ? this.consume(TokenType.Identifier, "Expect alias after as.") : name;
             imports.push({ name, alias });
         } while (this.match(TokenType.Comma));
         this.consume(TokenType.Semicolon, "Expect ';' after import declaration.");
@@ -266,7 +264,6 @@ export class Parser {
                 const initializer = this.expression(Precedence.ASSIGNMENT);
                 vars.push(new Variable(name, decType, initializer, operator));
             }
-
         } while (this.match(TokenType.Comma));
         this.consume(TokenType.Semicolon, "Expect ';' after variable declaration.");
         return new VarStmt(vars);
@@ -818,10 +815,8 @@ export class Parser {
     private synchronize(): void {
         this.advance();
         while (!this.isAtEnd()) {
-            const token = this.previous();
-            console.log("synchronize", token.type);
-            if (token.type === TokenType.Semicolon) return;
-            switch (token.type) {
+            if (this.previous().type === TokenType.Semicolon) return;
+            switch (this.peek().type) {
                 case TokenType.Class:
                 case TokenType.Fun:
                 case TokenType.Let:
@@ -839,8 +834,6 @@ export class Parser {
     private error(token: Token, message: string) {
         this.PARSE_ERROR = true;
         this.errorHandler(token, message);
-        this.synchronize();
-
         return new SyntaxError(token, message);
     }
 

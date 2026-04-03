@@ -2,7 +2,7 @@ import { Token } from "@/ast/Token";
 import { Parser } from "./parser/Parser";
 import { Scanner } from "./parser/Scanner";
 import { Compiler } from "./execute/compiler";
-import { GLobalDeclaration, Resolver } from "./execute/Resolver";
+import {  Resolver } from "./execute/Resolver";
 import llvm from "@wangziwenhk/llvm-bindings";
 import { Stmt } from "./ast/Stmt";
 

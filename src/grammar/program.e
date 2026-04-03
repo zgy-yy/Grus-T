@@ -1,5 +1,9 @@
 link "./b.e"  k as d,foo;
-let a =213;
+let a =23;
+
+fun fc()void{
+
+}
 
 fun main() i32 {
   foo();

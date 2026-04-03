@@ -43,16 +43,16 @@ export abstract class LExpr extends Expr {
  * 赋值表达式
  */
 export class AssignExpr extends Expr {
-    target: LExpr;
+    left: LExpr;
     value: Expr;
     equal: Token;
 
-    constructor(target: LExpr, value: Expr, equal: Token) {
+    constructor(left: LExpr, value: Expr, equal: Token) {
         super();
-        this.target = target;
+        this.left = left;
         this.value = value;
         this.equal = equal;
-        this.target.setIsLeftValue(true);
+        this.left.setIsLeftValue(true);
     }
     accept<R>(visitor: ExprVisitor<R>): R {
         return visitor.visitAssignExpr(this);
@@ -60,16 +60,16 @@ export class AssignExpr extends Expr {
 }
 //指向表达式
 export class PointExpr extends Expr {
-    target: LExpr;
+    left: LExpr;
     value: LExpr;
     arrow: Token;
-    constructor(target: LExpr, value: LExpr, arrow: Token) {
+    constructor(left: LExpr, value: LExpr, arrow: Token) {
         super();
-        this.target = target;
+        this.left = left;
         this.value = value;
         this.arrow = arrow;
-        target.setArrow(true);
-        target.setIsLeftValue(true);
+        left.setArrow(true);
+        left.setIsLeftValue(true);
         value.setArrow(true);
         value.setIsLeftValue(false);
     }
